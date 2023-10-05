@@ -1,8 +1,11 @@
 package impl
 
 import (
+	"errors"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
+	"golang.org/x/xerrors"
+	"time"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -10,7 +13,7 @@ import (
 func NewPeer(conf peer.Configuration) peer.Peer {
 	// here you must return a struct that implements the peer.Peer functions.
 	// Therefore, you are free to rename and change it as you want.
-	return &node{}
+	return &node{conf: conf}
 }
 
 // node implements a peer to build a Peerster system
@@ -18,18 +21,46 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 // - implements peer.Peer
 type node struct {
 	peer.Peer
-	// You probably want to keep the peer.Configuration on this struct:
-	//conf peer.Configuration
+	conf peer.Configuration
+
+	// false by default, becomes true once Stop has been called
+	mustStop bool
+}
+
+func loop(n *node) {
+	for !n.mustStop {
+		pkt, err := n.conf.Socket.Recv(time.Second * 1)
+		if errors.Is(err, transport.TimeoutError(0)) {
+			continue
+		}
+
+		if err != nil {
+			xerrors.Errorf("failed to receive message: %v", err)
+		}
+
+		// The packet is for us
+		if pkt.Header.Destination == n.conf.Socket.GetAddress() {
+			err := n.conf.MessageRegistry.ProcessPacket(pkt)
+			if err != nil {
+				xerrors.Errorf("failed to process packet: %v", err)
+			}
+		} else { // We must transfert the packet
+			// TODO update pkt.Header.RelayedBy
+			panic("routing not implemented")
+		}
+	}
 }
 
 // Start implements peer.Service
 func (n *node) Start() error {
-	panic("to be implemented in HW0")
+	go loop(n)
+	return nil
 }
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
-	panic("to be implemented in HW0")
+	n.mustStop = true
+	return nil
 }
 
 // Unicast implements peer.Messaging
