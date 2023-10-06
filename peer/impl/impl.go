@@ -100,8 +100,12 @@ func (n *node) Start() error {
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
-	n.mustStop <- true
-	n.isRunning = false
+	// Only stop the peer if it is running
+	// TODO error otherwise?
+	if n.isRunning {
+		n.mustStop <- true
+		n.isRunning = false
+	}
 	return nil
 }
 
