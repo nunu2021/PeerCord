@@ -11,9 +11,8 @@ import (
 // NewPeer creates a new peer. You can change the content and location of this
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
-	// here you must return a struct that implements the peer.Peer functions.
-	// Therefore, you are free to rename and change it as you want.
-	return &node{conf: conf}
+	routingTable := make(map[string]string)
+	return &node{conf: conf, routingTable: safeRoutingTable{rt: routingTable}}
 }
 
 // node implements a peer to build a Peerster system
@@ -23,8 +22,11 @@ type node struct {
 	peer.Peer
 	conf peer.Configuration
 
-	// false by default, becomes true once Stop has been called
+	// Indicates whether the main loop must be stopped
 	mustStop bool
+
+	// Routing table of the node
+	routingTable safeRoutingTable
 }
 
 func loop(n *node) {
@@ -38,14 +40,29 @@ func loop(n *node) {
 			xerrors.Errorf("failed to receive message: %v", err)
 		}
 
+		dest := pkt.Header.Destination
+
 		// The packet is for us
-		if pkt.Header.Destination == n.conf.Socket.GetAddress() {
+		if dest == n.conf.Socket.GetAddress() {
 			err := n.conf.MessageRegistry.ProcessPacket(pkt)
 			if err != nil {
 				xerrors.Errorf("failed to process packet: %v", err)
 			}
-		} else { // We must transfert the packet
-			// TODO update pkt.Header.RelayedBy
+		} else if pkt.Header.TTL > 0 { // We must transfer the packet
+			// Update the header
+			pkt.Header.TTL -= 1
+			pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+
+			next, isMissing := n.routingTable.get(dest)
+			if isMissing {
+				xerrors.Errorf("can't transfer packet: unknown route") // TODO not an error, only log
+				continue
+			}
+
+			err := n.conf.Socket.Send(next, pkt, time.Second)
+			if err != nil {
+				xerrors.Errorf("failed to transfer packet: %v", err)
+			}
 			panic("routing not implemented")
 		}
 	}
@@ -53,6 +70,9 @@ func loop(n *node) {
 
 // Start implements peer.Service
 func (n *node) Start() error {
+	// Add an entry to the routing table
+	n.routingTable.set(n.conf.Socket.GetAddress(), n.conf.Socket.GetAddress())
+
 	go loop(n)
 	return nil
 }
@@ -69,16 +89,22 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 }
 
 // AddPeer implements peer.Service
-func (n *node) AddPeer(addr ...string) {
-	panic("to be implemented in HW0")
+func (n *node) AddPeer(addresses ...string) {
+	for _, addr := range addresses {
+		if addr != n.conf.Socket.GetAddress() {
+			// We have a new neighbour
+			n.routingTable.set(addr, addr)
+		}
+	}
 }
 
 // GetRoutingTable implements peer.Service
+// Returns a copy of the  node's routing table
 func (n *node) GetRoutingTable() peer.RoutingTable {
-	panic("to be implemented in HW0")
+	return n.routingTable.cloneRoutingTable()
 }
 
 // SetRoutingEntry implements peer.Service
 func (n *node) SetRoutingEntry(origin, relayAddr string) {
-	panic("to be implemented in HW0")
+	n.routingTable.set(origin, relayAddr)
 }
