@@ -16,7 +16,12 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	// Add an entry to the routing table
 	routingTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
 
-	return &node{conf: conf, routingTable: safeRoutingTable{rt: routingTable}, mustStop: make(chan bool, 1)}
+	return &node{
+		conf:         conf,
+		routingTable: safeRoutingTable{rt: routingTable},
+		isRunning:    false,
+		mustStop:     make(chan bool, 1),
+	}
 }
 
 // node implements a peer to build a Peerster system
@@ -25,6 +30,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 type node struct {
 	peer.Peer
 	conf peer.Configuration
+
+	// Indicates whether the peer is currently running
+	isRunning bool
 
 	// Channel used to send a message to stop the worker
 	mustStop chan bool
@@ -81,13 +89,19 @@ func loop(n *node) {
 
 // Start implements peer.Service
 func (n *node) Start() error {
-	go loop(n)
+	// Only start the peer if it is not already running
+	// TODO error otherwise?
+	if !n.isRunning {
+		n.isRunning = true
+		go loop(n)
+	}
 	return nil
 }
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
 	n.mustStop <- true
+	n.isRunning = false
 	return nil
 }
 
