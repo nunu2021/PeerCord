@@ -12,6 +12,10 @@ import (
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
 	routingTable := make(map[string]string)
+
+	// Add an entry to the routing table
+	routingTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
+
 	return &node{conf: conf, routingTable: safeRoutingTable{rt: routingTable}, mustStop: make(chan bool, 1)}
 }
 
@@ -77,9 +81,6 @@ func loop(n *node) {
 
 // Start implements peer.Service
 func (n *node) Start() error {
-	// Add an entry to the routing table
-	n.routingTable.set(n.conf.Socket.GetAddress(), n.conf.Socket.GetAddress())
-
 	go loop(n)
 	return nil
 }

@@ -25,7 +25,11 @@ func (srt *safeRoutingTable) set(key, val string) {
 	srt.mutex.Lock()
 	defer srt.mutex.Unlock()
 
-	srt.rt[key] = val
+	if val == "" { // Delete the entry
+		delete(srt.rt, key)
+	} else {
+		srt.rt[key] = val
+	}
 }
 
 // Returns a copy of the internal routing table
