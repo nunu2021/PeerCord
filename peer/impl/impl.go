@@ -61,7 +61,7 @@ func loop(n *node) {
 			}
 		} else if pkt.Header.TTL > 0 { // We must transfer the packet
 			// Update the header
-			pkt.Header.TTL -= 1
+			pkt.Header.TTL--
 			pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
 
 			next, isMissing := n.routingTable.get(dest)
