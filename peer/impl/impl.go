@@ -12,7 +12,7 @@ import (
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
 	routingTable := make(map[string]string)
-	return &node{conf: conf, routingTable: safeRoutingTable{rt: routingTable}}
+	return &node{conf: conf, routingTable: safeRoutingTable{rt: routingTable}, mustStop: make(chan bool, 1)}
 }
 
 // node implements a peer to build a Peerster system
@@ -22,15 +22,22 @@ type node struct {
 	peer.Peer
 	conf peer.Configuration
 
-	// Indicates whether the main loop must be stopped
-	mustStop bool
+	// Channel used to send a message to stop the worker
+	mustStop chan bool
 
 	// Routing table of the node
 	routingTable safeRoutingTable
 }
 
 func loop(n *node) {
-	for !n.mustStop {
+	for {
+		// Stop the worker if needed
+		select {
+		case <-n.mustStop:
+			return
+		default:
+		}
+
 		pkt, err := n.conf.Socket.Recv(time.Second * 1)
 		if errors.Is(err, transport.TimeoutError(0)) {
 			continue
@@ -79,7 +86,7 @@ func (n *node) Start() error {
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
-	n.mustStop = true
+	n.mustStop <- true
 	return nil
 }
 
