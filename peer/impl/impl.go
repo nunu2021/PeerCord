@@ -92,7 +92,16 @@ func (n *node) Stop() error {
 
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
-	panic("to be implemented in HW0")
+	header := transport.NewHeader(n.conf.Socket.GetAddress(), "", dest, 0)
+	pkt := transport.Packet{Header: &header, Msg: &msg}
+
+	next, isMissing := n.routingTable.get(dest)
+
+	if isMissing {
+		panic("TODO")
+	}
+
+	return n.conf.Socket.Send(next, pkt, time.Second)
 }
 
 // AddPeer implements peer.Service
