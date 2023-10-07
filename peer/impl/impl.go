@@ -122,8 +122,11 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 	next, exists := n.routingTable.get(dest)
 
 	if !exists {
-		println("Can't find routing to", dest)
-		panic("TODO")
+		err := RoutingError{SourceAddr: n.conf.Socket.GetAddress(), DestAddr: dest}
+
+		// TODO log
+
+		return err
 	}
 
 	return n.conf.Socket.Send(next, pkt, time.Second)
