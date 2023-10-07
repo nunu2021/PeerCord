@@ -7,7 +7,7 @@ import (
 	"go.dedis.ch/cs438/transport"
 )
 
-const bufSize = 65000
+const bufferSize = 65000
 
 // NewUDP returns a new udp transport implementation.
 func NewUDP() transport.Transport {
@@ -52,14 +52,51 @@ func (s *Socket) Close() error {
 
 // Send implements transport.Socket
 func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) error {
-	panic("to be implemented in HW0")
+	addr, err := net.ResolveUDPAddr("udp", dest)
+	if err != nil {
+		return err
+	}
+
+	rawData, err := pkt.Marshal()
+	if err != nil {
+		return err
+	}
+
+	n, _, err := s.conn.WriteMsgUDP(rawData, nil, addr)
+	if err != nil {
+		return err
+	}
+
+	println("Sent", n)
+
+	return nil
 }
 
 // Recv implements transport.Socket. It blocks until a packet is received, or
 // the timeout is reached. In the case the timeout is reached, return a
 // TimeoutErr.
 func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
-	panic("to be implemented in HW0")
+	// Set the timeout. It may have an impact on other packets
+	err := s.conn.SetReadDeadline(time.Time.Add(time.Now(), timeout))
+	if err != nil {
+		return transport.Packet{}, err
+	}
+
+	// Receive a buffer
+	buffer := make([]byte, bufferSize)
+	buffSize, _, err := s.conn.ReadFromUDP(buffer)
+	if err != nil {
+		return transport.Packet{}, err
+	}
+
+	// Build a packet
+	pkt := transport.Packet{}
+	err = pkt.Unmarshal(buffer[:buffSize])
+	if err != nil {
+		return transport.Packet{}, err
+	}
+
+	return pkt, nil
 }
 
 // GetAddress implements transport.Socket. It returns the address assigned. Can
