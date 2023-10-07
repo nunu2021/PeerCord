@@ -24,12 +24,12 @@ type UDP struct {
 func (n *UDP) CreateSocket(address string) (transport.ClosableSocket, error) {
 	addressData, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
-		panic("TODO 1")
+		return nil, err
 	}
 
 	conn, err := net.ListenUDP("udp", addressData)
 	if err != nil {
-		panic("TODO 2")
+		return nil, err
 	}
 
 	socket := Socket{conn: conn}
