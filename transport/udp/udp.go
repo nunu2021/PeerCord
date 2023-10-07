@@ -1,6 +1,7 @@
 package udp
 
 import (
+	"errors"
 	"net"
 	"time"
 
@@ -85,7 +86,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 // TimeoutErr.
 func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	// Set the timeout. It may have an impact on other packets
-	err := s.conn.SetReadDeadline(time.Time.Add(time.Now(), timeout))
+	err := s.conn.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
 		return transport.Packet{}, err
 	}
@@ -94,6 +95,10 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	buffer := make([]byte, bufferSize)
 	buffSize, _, err := s.conn.ReadFromUDP(buffer)
 	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			return transport.Packet{}, transport.TimeoutError(timeout)
+		}
 		return transport.Packet{}, err
 	}
 
