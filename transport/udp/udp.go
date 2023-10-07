@@ -42,7 +42,14 @@ func (n *UDP) CreateSocket(address string) (transport.ClosableSocket, error) {
 // - implements transport.Socket
 // - implements transport.ClosableSocket
 type Socket struct {
+	// Connection
 	conn *net.UDPConn
+
+	// Past sent packets. The most recent packets are at the end of the slice.
+	sentPackets []transport.Packet
+
+	// Past received packets. The most recent packets are at the end of the slice.
+	receivedPackets []transport.Packet
 }
 
 // Close implements transport.Socket. It returns an error if already closed.
@@ -62,12 +69,13 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 		return err
 	}
 
-	n, _, err := s.conn.WriteMsgUDP(rawData, nil, addr)
+	_, _, err = s.conn.WriteMsgUDP(rawData, nil, addr)
 	if err != nil {
 		return err
 	}
 
-	println("Sent", n)
+	// Add the packet to the history
+	s.sentPackets = append(s.sentPackets, pkt)
 
 	return nil
 }
@@ -96,6 +104,9 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 		return transport.Packet{}, err
 	}
 
+	// Add the packet to the history
+	s.receivedPackets = append(s.receivedPackets, pkt)
+
 	return pkt, nil
 }
 
@@ -108,10 +119,10 @@ func (s *Socket) GetAddress() string {
 
 // GetIns implements transport.Socket
 func (s *Socket) GetIns() []transport.Packet {
-	panic("to be implemented in HW0")
+	return s.receivedPackets
 }
 
 // GetOuts implements transport.Socket
 func (s *Socket) GetOuts() []transport.Packet {
-	panic("to be implemented in HW0")
+	return s.sentPackets
 }
