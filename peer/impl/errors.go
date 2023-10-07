@@ -13,5 +13,5 @@ type RoutingError struct {
 
 // Error implements error. Returns the error string.
 func (err RoutingError) Error() string {
-	return fmt.Sprintf("peer at %s can't route to %s", err.sourceAddr, err.destAddr)
+	return fmt.Sprintf("peer at %s can't route to %s", err.SourceAddr, err.DestAddr)
 }
