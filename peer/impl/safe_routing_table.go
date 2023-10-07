@@ -16,8 +16,8 @@ func (srt *safeRoutingTable) get(key string) (string, bool) {
 	srt.mutex.Lock()
 	defer srt.mutex.Unlock()
 
-	val, err := srt.rt[key]
-	return val, err
+	val, exists := srt.rt[key]
+	return val, exists
 }
 
 // Safely set a value of the routing table

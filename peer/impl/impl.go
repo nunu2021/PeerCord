@@ -114,9 +114,10 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 	header := transport.NewHeader(n.conf.Socket.GetAddress(), "", dest, 0)
 	pkt := transport.Packet{Header: &header, Msg: &msg}
 
-	next, isMissing := n.routingTable.get(dest)
+	next, exists := n.routingTable.get(dest)
 
-	if isMissing {
+	if !exists {
+		println("Can't find routing to", dest)
 		panic("TODO")
 	}
 
