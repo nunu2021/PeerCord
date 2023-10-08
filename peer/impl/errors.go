@@ -21,7 +21,7 @@ type AlreadyRunningError struct{}
 
 // Error implements error. Returns the error string.
 func (err AlreadyRunningError) Error() string {
-	return fmt.Sprintf("can't start peer: already running")
+	return "can't start peer: already running"
 }
 
 // NotRunningError occurs when trying to stop a peer that is not running
@@ -29,5 +29,5 @@ type NotRunningError struct{}
 
 // Error implements error. Returns the error string.
 func (err NotRunningError) Error() string {
-	return fmt.Sprintf("can't stop peer: not running")
+	return "can't stop peer: not running"
 }
