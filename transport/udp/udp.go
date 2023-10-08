@@ -80,7 +80,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 
 	// Add the packet to the history
 	s.sentPacketsMutex.Lock()
-	s.sentPackets = append(s.sentPackets, pkt)
+	s.sentPackets = append(s.sentPackets, pkt.Copy())
 	s.sentPacketsMutex.Unlock()
 
 	return nil
@@ -116,7 +116,7 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 
 	// Add the packet to the history
 	s.receivedPacketsMutex.Lock()
-	s.receivedPackets = append(s.receivedPackets, pkt)
+	s.receivedPackets = append(s.receivedPackets, pkt.Copy())
 	s.receivedPacketsMutex.Unlock()
 
 	return pkt, nil
@@ -129,22 +129,26 @@ func (s *Socket) GetAddress() string {
 	return s.conn.LocalAddr().String()
 }
 
-// GetIns implements transport.Socket. It returns a copy of all messages
+// GetIns implements transport.Socket. It returns a copy of all the messages
 // previously received.
 func (s *Socket) GetIns() []transport.Packet {
 	s.receivedPacketsMutex.Lock()
 	pkts := make([]transport.Packet, len(s.receivedPackets))
-	copy(pkts, s.receivedPackets)
+	for i, v := range s.receivedPackets {
+		pkts[i] = v.Copy()
+	}
 	s.receivedPacketsMutex.Unlock()
 	return pkts
 }
 
-// GetOuts implements transport.Socket. It returns a copy of all messages
-// // previously sent.
+// GetOuts implements transport.Socket. It returns a copy of all the messages
+// previously sent.
 func (s *Socket) GetOuts() []transport.Packet {
 	s.sentPacketsMutex.Lock()
 	pkts := make([]transport.Packet, len(s.sentPackets))
-	copy(pkts, s.sentPackets)
+	for i, v := range s.sentPackets {
+		pkts[i] = v.Copy()
+	}
 	s.sentPacketsMutex.Unlock()
 	return pkts
 }
