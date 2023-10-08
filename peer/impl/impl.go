@@ -81,30 +81,11 @@ func loop(n *node) {
 			n.logger.Warn().Err(err).Msg("failed to receive message")
 		}
 
-		dest := pkt.Header.Destination
-
 		// The packet is for us
-		if dest == n.conf.Socket.GetAddress() {
-			err := n.conf.MessageRegistry.ProcessPacket(pkt)
-			if err != nil {
-				n.logger.Warn().Err(err).Msg("failed to process packet")
-			}
+		if pkt.Header.Destination == n.conf.Socket.GetAddress() {
+			n.processPacket(pkt)
 		} else if pkt.Header.TTL > 0 { // We must transfer the packet
-			// Update the header
-			pkt.Header.TTL--
-			pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
-
-			next, exists := n.routingTable.get(dest)
-			if !exists {
-				err := RoutingError{SourceAddr: n.conf.Socket.GetAddress(), DestAddr: dest}
-				n.logger.Warn().Err(err).Msg("can't transfer packet: unknown route")
-				continue
-			}
-
-			err := n.conf.Socket.Send(next, pkt, time.Second)
-			if err != nil {
-				n.logger.Warn().Err(err).Msg("failed to transfer packet")
-			}
+			n.transferPacket(pkt)
 		} else {
 			n.logger.Info().Msg("dropped packet with TTL=0")
 		}
@@ -177,4 +158,31 @@ func (n *node) GetRoutingTable() peer.RoutingTable {
 // SetRoutingEntry implements peer.Service
 func (n *node) SetRoutingEntry(origin, relayAddr string) {
 	n.routingTable.set(origin, relayAddr)
+}
+
+// Called when the peer has received a new packet.
+func (n *node) processPacket(pkt transport.Packet) {
+	err := n.conf.MessageRegistry.ProcessPacket(pkt)
+	if err != nil {
+		n.logger.Warn().Err(err).Msg("failed to process packet")
+	}
+}
+
+// Called when the peer needs to transfer a packet to a neighbour
+func (n *node) transferPacket(pkt transport.Packet) {
+	// Update the header
+	pkt.Header.TTL--
+	pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+
+	next, exists := n.routingTable.get(pkt.Header.Destination)
+	if !exists {
+		err := RoutingError{SourceAddr: n.conf.Socket.GetAddress(), DestAddr: pkt.Header.Destination}
+		n.logger.Warn().Err(err).Msg("can't transfer packet: unknown route")
+		return
+	}
+
+	err := n.conf.Socket.Send(next, pkt, time.Second)
+	if err != nil {
+		n.logger.Warn().Err(err).Msg("failed to transfer packet")
+	}
 }
