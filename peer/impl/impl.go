@@ -50,7 +50,7 @@ func loop(n *node) {
 		default:
 		}
 
-		pkt, err := n.conf.Socket.Recv(time.Second * 1)
+		pkt, err := n.conf.Socket.Recv(time.Second)
 		if errors.Is(err, transport.TimeoutError(0)) {
 			continue
 		}
