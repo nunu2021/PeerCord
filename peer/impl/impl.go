@@ -72,8 +72,8 @@ func loop(n *node) {
 			pkt.Header.TTL--
 			pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
 
-			next, isMissing := n.routingTable.get(dest)
-			if isMissing {
+			next, exists := n.routingTable.get(dest)
+			if !exists {
 				xerrors.Errorf("can't transfer packet: unknown route") // TODO not an error, only log
 				continue
 			}
@@ -82,7 +82,6 @@ func loop(n *node) {
 			if err != nil {
 				xerrors.Errorf("failed to transfer packet: %v", err)
 			}
-			panic("routing not implemented")
 		}
 	}
 }
