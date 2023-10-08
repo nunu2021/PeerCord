@@ -2,15 +2,34 @@ package impl
 
 import (
 	"errors"
+	"github.com/rs/zerolog"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
-	"golang.org/x/xerrors"
+	"os"
 	"time"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
 // function but you MUST NOT change its signature and package location.
 func NewPeer(conf peer.Configuration) peer.Peer {
+
+	// Choose the log level. No logs if $GLOG=no
+	logLevel := zerolog.DebugLevel
+
+	val, isDefined := os.LookupEnv("GLOG")
+	if isDefined && val == "no" {
+		logLevel = zerolog.Disabled
+	}
+
+	// Initialize the logger
+	var logger = zerolog.New(zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		TimeFormat: time.RFC3339,
+	}).Level(logLevel).With().
+		Str("peer", conf.Socket.GetAddress()).
+		Timestamp().
+		Logger()
+
 	routingTable := make(map[string]string)
 
 	// Add an entry to the routing table
@@ -21,6 +40,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		routingTable: safeRoutingTable{rt: routingTable},
 		isRunning:    false,
 		mustStop:     make(chan bool, 1),
+		logger:       logger,
 	}
 }
 
@@ -39,6 +59,9 @@ type node struct {
 
 	// Routing table of the node
 	routingTable safeRoutingTable
+
+	// Logger instance
+	logger zerolog.Logger
 }
 
 func loop(n *node) {
@@ -54,9 +77,8 @@ func loop(n *node) {
 		if errors.Is(err, transport.TimeoutError(0)) {
 			continue
 		}
-
 		if err != nil {
-			xerrors.Errorf("failed to receive message: %v", err)
+			n.logger.Warn().Err(err).Msg("failed to receive message")
 		}
 
 		dest := pkt.Header.Destination
@@ -65,7 +87,7 @@ func loop(n *node) {
 		if dest == n.conf.Socket.GetAddress() {
 			err := n.conf.MessageRegistry.ProcessPacket(pkt)
 			if err != nil {
-				xerrors.Errorf("failed to process packet: %v", err)
+				n.logger.Warn().Err(err).Msg("failed to process packet")
 			}
 		} else if pkt.Header.TTL > 0 { // We must transfer the packet
 			// Update the header
@@ -74,14 +96,17 @@ func loop(n *node) {
 
 			next, exists := n.routingTable.get(dest)
 			if !exists {
-				xerrors.Errorf("can't transfer packet: unknown route") // TODO not an error, only log
+				err := RoutingError{SourceAddr: n.conf.Socket.GetAddress(), DestAddr: dest}
+				n.logger.Warn().Err(err).Msg("can't transfer packet: unknown route")
 				continue
 			}
 
 			err := n.conf.Socket.Send(next, pkt, time.Second)
 			if err != nil {
-				xerrors.Errorf("failed to transfer packet: %v", err)
+				n.logger.Warn().Err(err).Msg("failed to transfer packet")
 			}
+		} else {
+			n.logger.Info().Msg("dropped packet with TTL=0")
 		}
 	}
 }
@@ -89,22 +114,26 @@ func loop(n *node) {
 // Start implements peer.Service
 func (n *node) Start() error {
 	// Only start the peer if it is not already running
-	// TODO error otherwise?
-	if !n.isRunning {
-		n.isRunning = true
-		go loop(n)
+	if n.isRunning {
+		n.logger.Error().Msg("can't start peer: already running")
+		return nil // TODO
 	}
+
+	n.isRunning = true
+	go loop(n)
 	return nil
 }
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
 	// Only stop the peer if it is running
-	// TODO error otherwise?
-	if n.isRunning {
-		n.mustStop <- true
-		n.isRunning = false
+	if !n.isRunning {
+		n.logger.Error().Msg("can't stop peer: not running")
+		return nil // TODO
 	}
+
+	n.mustStop <- true
+	n.isRunning = false
 	return nil
 }
 
@@ -122,9 +151,7 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 
 	if !exists {
 		err := RoutingError{SourceAddr: n.conf.Socket.GetAddress(), DestAddr: dest}
-
-		// TODO log
-
+		n.logger.Warn().Err(err).Msg("can't send packet: unknown route")
 		return err
 	}
 
