@@ -97,7 +97,7 @@ func (n *node) Start() error {
 	// Only start the peer if it is not already running
 	if n.isRunning {
 		n.logger.Error().Msg("can't start peer: already running")
-		return nil // TODO
+		return AlreadyRunningError{}
 	}
 
 	n.isRunning = true
@@ -110,7 +110,7 @@ func (n *node) Stop() error {
 	// Only stop the peer if it is running
 	if !n.isRunning {
 		n.logger.Error().Msg("can't stop peer: not running")
-		return nil // TODO
+		return NotRunningError{}
 	}
 
 	n.mustStop <- true

@@ -15,3 +15,19 @@ type RoutingError struct {
 func (err RoutingError) Error() string {
 	return fmt.Sprintf("peer at %s can't route to %s", err.SourceAddr, err.DestAddr)
 }
+
+// AlreadyRunningError occurs when trying to start a peer that is already running
+type AlreadyRunningError struct{}
+
+// Error implements error. Returns the error string.
+func (err AlreadyRunningError) Error() string {
+	return fmt.Sprintf("can't start peer: already running")
+}
+
+// NotRunningError occurs when trying to stop a peer that is not running
+type NotRunningError struct{}
+
+// Error implements error. Returns the error string.
+func (err NotRunningError) Error() string {
+	return fmt.Sprintf("can't stop peer: not running")
+}
