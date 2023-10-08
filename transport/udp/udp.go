@@ -3,12 +3,13 @@ package udp
 import (
 	"errors"
 	"net"
+	"sync"
 	"time"
 
 	"go.dedis.ch/cs438/transport"
 )
 
-const bufferSize = 65000
+const bufferSize = 65535 // Maximal size of an UDP packet
 
 // NewUDP returns a new udp transport implementation.
 func NewUDP() transport.Transport {
@@ -38,7 +39,7 @@ func (n *UDP) CreateSocket(address string) (transport.ClosableSocket, error) {
 	return &socket, nil
 }
 
-// Socket implements a network socket using UDP.
+// Socket implements a network socket using UDP. It is thread-safe.
 //
 // - implements transport.Socket
 // - implements transport.ClosableSocket
@@ -47,10 +48,12 @@ type Socket struct {
 	conn *net.UDPConn
 
 	// Past sent packets. The most recent packets are at the end of the slice.
-	sentPackets []transport.Packet
+	sentPacketsMutex sync.Mutex
+	sentPackets      []transport.Packet
 
 	// Past received packets. The most recent packets are at the end of the slice.
-	receivedPackets []transport.Packet
+	receivedPacketsMutex sync.Mutex
+	receivedPackets      []transport.Packet
 }
 
 // Close implements transport.Socket. It returns an error if already closed.
@@ -76,7 +79,9 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 	}
 
 	// Add the packet to the history
+	s.sentPacketsMutex.Lock()
 	s.sentPackets = append(s.sentPackets, pkt)
+	s.sentPacketsMutex.Unlock()
 
 	return nil
 }
@@ -110,7 +115,9 @@ func (s *Socket) Recv(timeout time.Duration) (transport.Packet, error) {
 	}
 
 	// Add the packet to the history
+	s.receivedPacketsMutex.Lock()
 	s.receivedPackets = append(s.receivedPackets, pkt)
+	s.receivedPacketsMutex.Unlock()
 
 	return pkt, nil
 }
@@ -122,12 +129,22 @@ func (s *Socket) GetAddress() string {
 	return s.conn.LocalAddr().String()
 }
 
-// GetIns implements transport.Socket
+// GetIns implements transport.Socket. It returns a copy of all messages
+// previously received.
 func (s *Socket) GetIns() []transport.Packet {
-	return s.receivedPackets
+	s.receivedPacketsMutex.Lock()
+	pkts := make([]transport.Packet, len(s.receivedPackets))
+	copy(pkts, s.receivedPackets)
+	s.receivedPacketsMutex.Unlock()
+	return pkts
 }
 
-// GetOuts implements transport.Socket
+// GetOuts implements transport.Socket. It returns a copy of all messages
+// // previously sent.
 func (s *Socket) GetOuts() []transport.Packet {
-	return s.sentPackets
+	s.sentPacketsMutex.Lock()
+	pkts := make([]transport.Packet, len(s.sentPackets))
+	copy(pkts, s.sentPackets)
+	s.sentPacketsMutex.Unlock()
+	return pkts
 }
