@@ -5,6 +5,7 @@ import (
 	"github.com/rs/zerolog"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 	"os"
 	"time"
 )
@@ -34,6 +35,19 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	// Add an entry to the routing table
 	routingTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
+
+	// Register the different kinds of messages
+	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, func(msg types.Message, pkt transport.Packet) error {
+		chatMsg := msg.(*types.ChatMessage)
+
+		// Log the message
+		logger.Info().
+			Str("from", pkt.Header.Source).
+			Str("content", chatMsg.String()).
+			Msg("message received")
+
+		return nil
+	})
 
 	return &node{
 		conf:         conf,
