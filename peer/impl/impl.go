@@ -38,7 +38,10 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, func(msg types.Message, pkt transport.Packet) error {
-		chatMsg := msg.(*types.ChatMessage)
+		chatMsg, ok := msg.(*types.ChatMessage)
+		if !ok {
+			logger.Error().Msg("not a chat message")
+		}
 
 		// Log the message
 		logger.Info().
