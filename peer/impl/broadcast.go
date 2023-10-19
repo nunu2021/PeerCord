@@ -3,6 +3,7 @@ package impl
 import (
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"math/rand"
 	"time"
 )
 
@@ -29,9 +30,11 @@ func (n *node) Broadcast(msg transport.Message) error {
 	}
 
 	// Send it to a random neighbour
-	dest := n.routingTable.randomNeighbor()
+	neighbors := n.routingTable.neighbors(n.GetAddress())
+	
+	if len(neighbors) != 0 {
+		dest := neighbors[rand.Intn(len(neighbors))]
 
-	if dest != "" {
 		header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
 		pkt := transport.Packet{Header: &header, Msg: &marshaledRumors}
 
