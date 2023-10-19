@@ -209,67 +209,7 @@ func (n *node) processMessage(msg transport.Message) {
 	pkt := transport.Packet{Header: &header, Msg: &msg}
 
 	// Process the packet
-	err := n.conf.MessageRegistry.ProcessPacket(pkt)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't process the packet")
-	}
-}
-
-// Unicast implements peer.Messaging
-func (n *node) Unicast(dest string, msg transport.Message) error {
-	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
-	pkt := transport.Packet{Header: &header, Msg: &msg}
-
-	next, exists := n.routingTable.get(dest)
-
-	if !exists {
-		err := RoutingError{SourceAddr: n.GetAddress(), DestAddr: dest}
-		n.logger.Warn().Err(err).Msg("can't send packet: unknown route")
-		return err
-	}
-
-	return n.conf.Socket.Send(next, pkt, time.Second)
-}
-
-// Broadcast implements peer.Messaging
-func (n *node) Broadcast(msg transport.Message) error {
-	// Create the rumor
-	rumor := types.Rumor{
-		Origin:   n.GetAddress(),
-		Sequence: n.nextSequence,
-		Msg:      &msg,
-	}
-	n.nextSequence++
-
-	rumorsMsg := types.RumorsMessage{
-		Rumors: []types.Rumor{rumor},
-	}
-
-	marshaledRumors, err := n.conf.MessageRegistry.MarshalMessage(rumorsMsg)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't marshal the rumors message")
-		return err
-	}
-
-	// Send it to a random neighbour
-	dest := n.routingTable.randomNeighbor()
-
-	if dest != "" {
-		header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
-		pkt := transport.Packet{Header: &header, Msg: &marshaledRumors}
-
-		err := n.conf.Socket.Send(dest, pkt, time.Second)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Process the rumor locally
-	n.processMessage(msg)
-
-	n.logger.Info().Uint("sequence", rumor.Sequence).Msg("started a broadcast")
-
-	return nil
+	n.processPacket(pkt)
 }
 
 // AddPeer implements peer.Service
@@ -298,24 +238,5 @@ func (n *node) processPacket(pkt transport.Packet) {
 	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
 		n.logger.Warn().Err(err).Msg("failed to process packet")
-	}
-}
-
-// Called when the peer needs to transfer a packet to a neighbour
-func (n *node) transferPacket(pkt transport.Packet) {
-	// Update the header
-	pkt.Header.TTL--
-	pkt.Header.RelayedBy = n.GetAddress()
-
-	next, exists := n.routingTable.get(pkt.Header.Destination)
-	if !exists {
-		err := RoutingError{SourceAddr: n.GetAddress(), DestAddr: pkt.Header.Destination}
-		n.logger.Warn().Err(err).Msg("can't transfer packet: unknown route")
-		return
-	}
-
-	err := n.conf.Socket.Send(next, pkt, time.Second)
-	if err != nil {
-		n.logger.Warn().Err(err).Msg("failed to transfer packet")
 	}
 }
