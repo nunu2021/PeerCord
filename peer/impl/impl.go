@@ -36,11 +36,23 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	// Add an entry to the routing table
 	routingTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
 
+	// Create the node
+	n := &node{
+		conf:          conf,
+		routingTable:  safeRoutingTable{rt: routingTable},
+		isRunning:     false,
+		mustStop:      make(chan bool, 1),
+		logger:        logger,
+		statusMessage: make(types.StatusMessage),
+		nextSequence:  1,
+	}
+
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, func(msg types.Message, pkt transport.Packet) error {
 		chatMsg, ok := msg.(*types.ChatMessage)
 		if !ok {
 			logger.Error().Msg("not a chat message")
+			// TODO return error
 		}
 
 		// Log the message
@@ -52,14 +64,57 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		return nil
 	})
 
-	return &node{
-		conf:         conf,
-		routingTable: safeRoutingTable{rt: routingTable},
-		isRunning:    false,
-		mustStop:     make(chan bool, 1),
-		logger:       logger,
-		nextSequence: 1,
-	}
+	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, func(msg types.Message, mkt transport.Packet) error {
+		rumorMsg, ok := msg.(*types.RumorsMessage)
+		if !ok {
+			logger.Error().Msg("not a rumors message")
+			// TODO return error
+		}
+
+		for _, rumor := range rumorMsg.Rumors {
+
+			n.processMessage(*rumor.Msg)
+		}
+
+		// Send ACK
+		ack := types.AckMessage{
+			AckedPacketID: mkt.Header.PacketID,
+			Status:        n.statusMessage,
+		}
+
+		marshaled, err := n.conf.MessageRegistry.MarshalMessage(ack)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't marshal the ACK message")
+			// TODO return error
+		}
+
+		header := transport.NewHeader(n.GetAddress(), n.GetAddress(), mkt.Header.Source, 0)
+		pkt := transport.Packet{Header: &header, Msg: &marshaled}
+
+		err = n.conf.Socket.Send(mkt.Header.Source, pkt, time.Second)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't send packet")
+			// TODO return error
+		}
+
+		// TODO transfer rumor
+
+		return nil
+	})
+
+	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, func(msg types.Message, mkt transport.Packet) error {
+		_ /*ackMsg*/, ok := msg.(*types.AckMessage)
+		if !ok {
+			logger.Error().Msg("not an ACK message")
+			// TODO return error
+		}
+
+		println("ACK", mkt.Header.Source, mkt.Header.Destination)
+
+		return nil
+	})
+
+	return n
 }
 
 // node implements a peer to build a Peerster system
@@ -80,6 +135,9 @@ type node struct {
 
 	// Logger instance
 	logger zerolog.Logger
+
+	// Current status: for each peer, the last rumor ID received by the peer
+	statusMessage types.StatusMessage
 
 	// The sequence number of the next rumor to be created.
 	nextSequence uint
@@ -144,14 +202,22 @@ func (n *node) Stop() error {
 	return nil
 }
 
+// Wrap a message in a fake packet to process it
+func (n *node) processMessage(msg transport.Message) {
+	// Wrap the message in a fake paket
+	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), n.GetAddress(), 0)
+	pkt := transport.Packet{Header: &header, Msg: &msg}
+
+	// Process the packet
+	err := n.conf.MessageRegistry.ProcessPacket(pkt)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't process the packet")
+	}
+}
+
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
-	header := transport.NewHeader(
-		n.GetAddress(),
-		n.GetAddress(),
-		dest,
-		0,
-	)
+	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
 	pkt := transport.Packet{Header: &header, Msg: &msg}
 
 	next, exists := n.routingTable.get(dest)
@@ -199,14 +265,9 @@ func (n *node) Broadcast(msg transport.Message) error {
 	}
 
 	// Process the rumor locally
-	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), n.GetAddress(), 0)
-	pkt := transport.Packet{Header: &header, Msg: &msg}
+	n.processMessage(msg)
 
-	err = n.conf.MessageRegistry.ProcessPacket(pkt)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't process the rumor locally")
-		return err
-	}
+	n.logger.Info().Uint("sequence", rumor.Sequence).Msg("started a broadcast")
 
 	return nil
 }
