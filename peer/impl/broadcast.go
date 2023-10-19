@@ -16,6 +16,8 @@ func (n *node) Broadcast(msg transport.Message) error {
 	}
 	n.nextSequence++
 
+	n.logger.Info().Uint("sequence", rumor.Sequence).Msg("started a broadcast")
+
 	rumorsMsg := types.RumorsMessage{
 		Rumors: []types.Rumor{rumor},
 	}
@@ -37,12 +39,12 @@ func (n *node) Broadcast(msg transport.Message) error {
 		if err != nil {
 			return err
 		}
+	} else {
+		n.logger.Info().Msg("no neighbor to transfer the rumor to")
 	}
 
 	// Process the rumor locally
 	n.processMessage(msg)
-
-	n.logger.Info().Uint("sequence", rumor.Sequence).Msg("started a broadcast")
 
 	return nil
 }
