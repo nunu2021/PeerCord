@@ -74,6 +74,13 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 				Str("source", rumor.Origin).
 				Msg("rumor processed")
 
+			// Update the routing table
+			n.SetRoutingEntry(rumor.Origin, pkt.Header.RelayedBy)
+			n.logger.Info().
+				Str("dest", rumor.Origin).
+				Str("next", pkt.Header.RelayedBy).
+				Msg("routing table updated")
+
 			n.statusMessage[rumor.Origin] = rumor.Sequence
 			n.processMessage(*rumor.Msg)
 		}
