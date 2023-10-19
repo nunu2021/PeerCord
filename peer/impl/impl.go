@@ -58,6 +58,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		isRunning:    false,
 		mustStop:     make(chan bool, 1),
 		logger:       logger,
+		nextSequence: 1,
 	}
 }
 
@@ -79,6 +80,14 @@ type node struct {
 
 	// Logger instance
 	logger zerolog.Logger
+
+	// The sequence number of the next rumor to be created.
+	nextSequence uint
+}
+
+// GetAddress returns the address of the node
+func (n *node) GetAddress() string {
+	return n.conf.Socket.GetAddress()
 }
 
 func loop(n *node) {
@@ -99,7 +108,7 @@ func loop(n *node) {
 		}
 
 		// The packet is for us
-		if pkt.Header.Destination == n.conf.Socket.GetAddress() {
+		if pkt.Header.Destination == n.GetAddress() {
 			n.processPacket(pkt)
 		} else if pkt.Header.TTL > 0 { // We must transfer the packet
 			n.transferPacket(pkt)
@@ -138,8 +147,8 @@ func (n *node) Stop() error {
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
 	header := transport.NewHeader(
-		n.conf.Socket.GetAddress(),
-		n.conf.Socket.GetAddress(),
+		n.GetAddress(),
+		n.GetAddress(),
 		dest,
 		0,
 	)
@@ -148,7 +157,7 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 	next, exists := n.routingTable.get(dest)
 
 	if !exists {
-		err := RoutingError{SourceAddr: n.conf.Socket.GetAddress(), DestAddr: dest}
+		err := RoutingError{SourceAddr: n.GetAddress(), DestAddr: dest}
 		n.logger.Warn().Err(err).Msg("can't send packet: unknown route")
 		return err
 	}
@@ -156,10 +165,56 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 	return n.conf.Socket.Send(next, pkt, time.Second)
 }
 
+// Broadcast implements peer.Messaging
+func (n *node) Broadcast(msg transport.Message) error {
+	// Create the rumor
+	rumor := types.Rumor{
+		Origin:   n.GetAddress(),
+		Sequence: n.nextSequence,
+		Msg:      &msg,
+	}
+	n.nextSequence++
+
+	rumorsMsg := types.RumorsMessage{
+		Rumors: []types.Rumor{rumor},
+	}
+
+	marshaledRumors, err := n.conf.MessageRegistry.MarshalMessage(rumorsMsg)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't marshal the rumors message")
+		return err
+	}
+
+	// Send it to a random neighbour
+	dest := n.routingTable.randomNeighbor()
+
+	if dest != "" {
+		header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
+		pkt := transport.Packet{Header: &header, Msg: &marshaledRumors}
+
+		err := n.conf.Socket.Send(dest, pkt, time.Second)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Process the rumor locally
+	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), n.GetAddress(), 0)
+	pkt := transport.Packet{Header: &header, Msg: &msg}
+
+	err = n.conf.MessageRegistry.ProcessPacket(pkt)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't process the rumor locally")
+		return err
+	}
+
+	return nil
+}
+
 // AddPeer implements peer.Service
 func (n *node) AddPeer(addresses ...string) {
 	for _, addr := range addresses {
-		if addr != n.conf.Socket.GetAddress() {
+		if addr != n.GetAddress() {
 			// We have a new neighbour
 			n.routingTable.set(addr, addr)
 		}
@@ -189,11 +244,11 @@ func (n *node) processPacket(pkt transport.Packet) {
 func (n *node) transferPacket(pkt transport.Packet) {
 	// Update the header
 	pkt.Header.TTL--
-	pkt.Header.RelayedBy = n.conf.Socket.GetAddress()
+	pkt.Header.RelayedBy = n.GetAddress()
 
 	next, exists := n.routingTable.get(pkt.Header.Destination)
 	if !exists {
-		err := RoutingError{SourceAddr: n.conf.Socket.GetAddress(), DestAddr: pkt.Header.Destination}
+		err := RoutingError{SourceAddr: n.GetAddress(), DestAddr: pkt.Header.Destination}
 		n.logger.Warn().Err(err).Msg("can't transfer packet: unknown route")
 		return
 	}

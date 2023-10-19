@@ -2,6 +2,7 @@ package impl
 
 import (
 	"go.dedis.ch/cs438/peer"
+	"math/rand"
 	"sync"
 )
 
@@ -44,4 +45,26 @@ func (srt *safeRoutingTable) cloneRoutingTable() peer.RoutingTable {
 	}
 
 	return routingTable
+}
+
+// Returns a random neighbor of the node, or "" if there is no neighbor
+func (srt *safeRoutingTable) randomNeighbor() string {
+	srt.mutex.Lock()
+	defer srt.mutex.Unlock()
+
+	// Find neighbors
+	neighbours := make([]string, 0)
+
+	for key, val := range srt.rt {
+		if key == val {
+			neighbours = append(neighbours, key)
+		}
+	}
+
+	if len(neighbours) == 0 {
+		return ""
+	}
+
+	// Choose and return a random neighbor
+	return neighbours[rand.Intn(len(neighbours))]
 }
