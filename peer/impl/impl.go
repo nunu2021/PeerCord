@@ -48,74 +48,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	}
 
 	// Register the different kinds of messages
-	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, func(msg types.Message, pkt transport.Packet) error {
-		chatMsg, ok := msg.(*types.ChatMessage)
-		if !ok {
-			logger.Error().Msg("not a chat message")
-			// TODO return error
-		}
-
-		// Log the message
-		logger.Info().
-			Str("from", pkt.Header.Source).
-			Str("content", chatMsg.String()).
-			Msg("chat message received")
-
-		return nil
-	})
-
-	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, func(msg types.Message, pkt transport.Packet) error {
-		rumorMsg, ok := msg.(*types.RumorsMessage)
-		if !ok {
-			logger.Error().Msg("not a rumors message")
-			// TODO return error
-		}
-
-		// Log the message
-		logger.Info().Msg("rumor received")
-
-		for _, rumor := range rumorMsg.Rumors {
-
-			n.processMessage(*rumor.Msg)
-		}
-
-		// Send ACK
-		ack := types.AckMessage{
-			AckedPacketID: pkt.Header.PacketID,
-			Status:        n.statusMessage,
-		}
-
-		marshaled, err := n.conf.MessageRegistry.MarshalMessage(ack)
-		if err != nil {
-			n.logger.Error().Err(err).Msg("can't marshal the ACK message")
-			// TODO return error
-		}
-
-		header := transport.NewHeader(n.GetAddress(), n.GetAddress(), pkt.Header.Source, 0)
-		ackPkt := transport.Packet{Header: &header, Msg: &marshaled}
-
-		err = n.conf.Socket.Send(pkt.Header.Source, ackPkt, time.Second)
-		if err != nil {
-			n.logger.Error().Err(err).Msg("can't send packet")
-			// TODO return error
-		}
-
-		// TODO transfer rumor
-
-		return nil
-	})
-
-	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, func(msg types.Message, pkt transport.Packet) error {
-		_ /*ackMsg*/, ok := msg.(*types.AckMessage)
-		if !ok {
-			logger.Error().Msg("not an ACK message")
-			// TODO return error
-		}
-
-		n.logger.Info().Str("source", pkt.Header.Source).Msg("ACK received")
-
-		return nil
-	})
+	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.receiveRumor)
+	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, n.receiveAck)
 
 	return n
 }

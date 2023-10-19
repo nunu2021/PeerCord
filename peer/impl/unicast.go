@@ -2,6 +2,7 @@ package impl
 
 import (
 	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 	"time"
 )
 
@@ -38,4 +39,20 @@ func (n *node) transferPacket(pkt transport.Packet) {
 	if err != nil {
 		n.logger.Warn().Err(err).Msg("failed to transfer packet")
 	}
+}
+
+func (n *node) receiveChatMessage(msg types.Message, pkt transport.Packet) error {
+	chatMsg, ok := msg.(*types.ChatMessage)
+	if !ok {
+		n.logger.Error().Msg("not a chat message")
+		// TODO return error
+	}
+
+	// Log the message
+	n.logger.Info().
+		Str("from", pkt.Header.Source).
+		Str("content", chatMsg.String()).
+		Msg("chat message received")
+
+	return nil
 }
