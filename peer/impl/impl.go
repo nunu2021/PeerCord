@@ -105,14 +105,14 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		return nil
 	})
 
-	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, func(msg types.Message, mkt transport.Packet) error {
+	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, func(msg types.Message, pkt transport.Packet) error {
 		_ /*ackMsg*/, ok := msg.(*types.AckMessage)
 		if !ok {
 			logger.Error().Msg("not an ACK message")
 			// TODO return error
 		}
 
-		println("ACK", mkt.Header.Source, mkt.Header.Destination)
+		n.logger.Info().Str("source", pkt.Header.Source).Msg("ACK received")
 
 		return nil
 	})
