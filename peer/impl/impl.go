@@ -59,17 +59,20 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		logger.Info().
 			Str("from", pkt.Header.Source).
 			Str("content", chatMsg.String()).
-			Msg("message received")
+			Msg("chat message received")
 
 		return nil
 	})
 
-	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, func(msg types.Message, mkt transport.Packet) error {
+	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, func(msg types.Message, pkt transport.Packet) error {
 		rumorMsg, ok := msg.(*types.RumorsMessage)
 		if !ok {
 			logger.Error().Msg("not a rumors message")
 			// TODO return error
 		}
+
+		// Log the message
+		logger.Info().Msg("rumor received")
 
 		for _, rumor := range rumorMsg.Rumors {
 
@@ -78,7 +81,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 		// Send ACK
 		ack := types.AckMessage{
-			AckedPacketID: mkt.Header.PacketID,
+			AckedPacketID: pkt.Header.PacketID,
 			Status:        n.statusMessage,
 		}
 
@@ -88,10 +91,10 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 			// TODO return error
 		}
 
-		header := transport.NewHeader(n.GetAddress(), n.GetAddress(), mkt.Header.Source, 0)
-		pkt := transport.Packet{Header: &header, Msg: &marshaled}
+		header := transport.NewHeader(n.GetAddress(), n.GetAddress(), pkt.Header.Source, 0)
+		ackPkt := transport.Packet{Header: &header, Msg: &marshaled}
 
-		err = n.conf.Socket.Send(mkt.Header.Source, pkt, time.Second)
+		err = n.conf.Socket.Send(pkt.Header.Source, ackPkt, time.Second)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't send packet")
 			// TODO return error
