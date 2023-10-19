@@ -52,7 +52,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 	return nil
 }
 
-func (n *node) receiveRumor(msg types.Message, pkt transport.Packet) error {
+func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	rumorMsg, ok := msg.(*types.RumorsMessage)
 	if !ok {
 		n.logger.Error().Msg("not a rumors message")
@@ -60,14 +60,26 @@ func (n *node) receiveRumor(msg types.Message, pkt transport.Packet) error {
 	}
 
 	// Log the message
-	n.logger.Info().Msg("rumor received")
+	n.logger.Info().Msg("rumors received")
 
 	for _, rumor := range rumorMsg.Rumors {
+		previousSequence, exists := n.statusMessage[rumor.Origin]
+		if !exists {
+			previousSequence = 0
+		}
 
-		n.processMessage(*rumor.Msg)
+		if rumor.Sequence == previousSequence+1 {
+			n.logger.Info().
+				Uint("sequence", rumor.Sequence).
+				Str("source", rumor.Origin).
+				Msg("rumor processed")
+
+			n.statusMessage[rumor.Origin] = rumor.Sequence
+			n.processMessage(*rumor.Msg)
+		}
 	}
 
-	// Send ACK
+	// Send back ACK
 	ack := types.AckMessage{
 		AckedPacketID: pkt.Header.PacketID,
 		Status:        n.statusMessage,

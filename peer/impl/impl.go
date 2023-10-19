@@ -49,7 +49,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
-	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.receiveRumor)
+	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.receiveRumors)
 	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, n.receiveAck)
 
 	return n
