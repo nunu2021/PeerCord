@@ -132,28 +132,12 @@ func loop(n *node) {
 			n.logger.Info().Msg("using anti-entropy mechanism")
 			lastAntiEntropy = time.Now()
 
-			// Create the status to send
-			n.statusMutex.Lock()
-			marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(n.status)
-			n.statusMutex.Unlock()
-			if err != nil {
-				n.logger.Error().Err(err).Msg("can't marshal status")
-			}
-
 			// Send the status to a random neighbour if possible
 			neighbors := n.routingTable.neighbors(n.GetAddress())
 
 			if len(neighbors) != 0 {
 				dest := neighbors[rand.Intn(len(neighbors))]
-
-				header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
-				pkt := transport.Packet{Header: &header, Msg: &marshaledStatus}
-
-				err := n.conf.Socket.Send(dest, pkt, time.Second)
-				if err != nil {
-					n.logger.Error().Err(err).Msg("can't send status")
-					continue
-				}
+				n.sendStatus(dest)
 			}
 		}
 

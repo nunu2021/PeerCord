@@ -22,6 +22,27 @@ func (n *node) newSequence() uint {
 	return next
 }
 
+// Sends the status to a neighbor
+func (n *node) sendStatus(neighbor string) {
+	// Create the status to send
+	n.statusMutex.Lock()
+	marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(n.status)
+	n.statusMutex.Unlock()
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't marshal status")
+		// TODO return
+	}
+
+	// Send the status to the neighbor
+	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), neighbor, 0)
+	pkt := transport.Packet{Header: &header, Msg: &marshaledStatus}
+
+	err = n.conf.Socket.Send(neighbor, pkt, time.Second)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't send status")
+	}
+}
+
 // Broadcast implements peer.Messaging
 // Broadcast is thread-safe
 func (n *node) Broadcast(msg transport.Message) error {
@@ -179,16 +200,18 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 		// TODO return error
 	}
 
-	// TODO Check if the remote peer has new rumors
+	// Check if the remote peer has new rumors
+	mustSendStatus := false
 	for addr, lastSeq := range *statusMsg {
 		mySeq, exists := n.status[addr]
-		if addr == n.GetAddress() {
-			continue
-		}
 
 		if !exists || mySeq < lastSeq {
-
+			mustSendStatus = true
 		}
+	}
+
+	if mustSendStatus {
+		n.sendStatus(pkt.Header.Source)
 	}
 
 	// TODO continue
