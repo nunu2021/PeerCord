@@ -6,6 +6,7 @@ import (
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -39,13 +40,13 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	// Create the node
 	n := &node{
-		conf:          conf,
-		routingTable:  safeRoutingTable{rt: routingTable},
-		isRunning:     false,
-		mustStop:      make(chan bool, 1),
-		logger:        logger,
-		statusMessage: make(types.StatusMessage),
-		nextSequence:  1,
+		conf:         conf,
+		routingTable: safeRoutingTable{rt: routingTable},
+		isRunning:    false,
+		mustStop:     make(chan bool, 1),
+		logger:       logger,
+		status:       make(types.StatusMessage),
+		nextSequence: 1,
 	}
 
 	// Register the different kinds of messages
@@ -79,7 +80,7 @@ type node struct {
 	logger zerolog.Logger
 
 	// Current status: for each peer, the last rumor ID received by the peer
-	statusMessage types.StatusMessage
+	status types.StatusMessage
 
 	// The sequence number of the next rumor to be created.
 	nextSequence      uint
@@ -93,6 +94,15 @@ func (n *node) GetAddress() string {
 
 func loop(n *node) {
 	lastHeartbeat := time.Now().Add(-2 * n.conf.HeartbeatInterval) // Start the heartbeat immediately
+	lastAntiEntropy := time.Now().Add(-2 * n.conf.AntiEntropyInterval)
+
+	timeoutLoop := time.Second
+	if n.conf.HeartbeatInterval != 0 {
+		timeoutLoop = min(timeoutLoop, n.conf.HeartbeatInterval/10)
+	}
+	if n.conf.AntiEntropyInterval != 0 {
+		timeoutLoop = min(timeoutLoop, n.conf.AntiEntropyInterval/10)
+	}
 
 	for {
 		// Stop the worker if needed
@@ -105,6 +115,7 @@ func loop(n *node) {
 		// Send the heartbeat if needed
 		if n.conf.HeartbeatInterval != 0 && time.Now().After(lastHeartbeat.Add(n.conf.HeartbeatInterval)) {
 			n.logger.Info().Msg("sending heartbeat")
+			lastHeartbeat = time.Now()
 
 			emptyMsg := types.EmptyMessage{}
 			marshaledEmptyMsg, err := n.conf.MessageRegistry.MarshalMessage(emptyMsg)
@@ -116,11 +127,38 @@ func loop(n *node) {
 			if err != nil {
 				n.logger.Error().Err(err).Msg("can't broadcast")
 			}
-
-			lastHeartbeat = time.Now()
 		}
 
-		pkt, err := n.conf.Socket.Recv(time.Second)
+		// Use the anti-entropy mechanism if needed
+		if n.conf.AntiEntropyInterval != 0 && time.Now().After(lastAntiEntropy.Add(n.conf.AntiEntropyInterval)) {
+			n.logger.Info().Msg("using anti-entropy mechanism")
+			lastAntiEntropy = time.Now()
+
+			marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(n.status)
+			if err != nil {
+				n.logger.Error().Err(err).Msg("can't marshal status")
+			}
+
+			// TODO add ourself
+
+			// Send the status to a random neighbour if possible
+			neighbors := n.routingTable.neighbors(n.GetAddress())
+
+			if len(neighbors) != 0 {
+				dest := neighbors[rand.Intn(len(neighbors))]
+
+				header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
+				pkt := transport.Packet{Header: &header, Msg: &marshaledStatus}
+
+				err := n.conf.Socket.Send(dest, pkt, time.Second)
+				if err != nil {
+					n.logger.Error().Err(err).Msg("can't send status")
+					continue
+				}
+			}
+		}
+
+		pkt, err := n.conf.Socket.Recv(timeoutLoop)
 		if errors.Is(err, transport.TimeoutError(0)) {
 			continue
 		}

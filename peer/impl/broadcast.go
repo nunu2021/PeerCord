@@ -69,7 +69,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	hasExpectedRumor := false
 
 	for _, rumor := range rumorsMsg.Rumors {
-		previousSequence, exists := n.statusMessage[rumor.Origin]
+		previousSequence, exists := n.status[rumor.Origin]
 		if !exists {
 			previousSequence = 0
 		}
@@ -89,7 +89,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 				Str("next", pkt.Header.RelayedBy).
 				Msg("routing table updated")
 
-			n.statusMessage[rumor.Origin] = rumor.Sequence
+			n.status[rumor.Origin] = rumor.Sequence
 			n.processMessage(*rumor.Msg)
 		}
 	}
@@ -97,7 +97,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	// Send back ACK
 	ack := types.AckMessage{
 		AckedPacketID: pkt.Header.PacketID,
-		Status:        n.statusMessage,
+		Status:        n.status,
 	}
 
 	marshaled, err := n.conf.MessageRegistry.MarshalMessage(ack)
