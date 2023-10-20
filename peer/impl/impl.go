@@ -134,12 +134,19 @@ func loop(n *node) {
 			n.logger.Info().Msg("using anti-entropy mechanism")
 			lastAntiEntropy = time.Now()
 
-			marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(n.status)
+			// Create the status to send
+			status := make(types.StatusMessage)
+			for key, val := range n.status {
+				status[key] = val
+			}
+			if n.nextSequence > 1 {
+				status[n.GetAddress()] = n.nextSequence - 1
+			}
+
+			marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(status)
 			if err != nil {
 				n.logger.Error().Err(err).Msg("can't marshal status")
 			}
-
-			// TODO add ourself
 
 			// Send the status to a random neighbour if possible
 			neighbors := n.routingTable.neighbors(n.GetAddress())
