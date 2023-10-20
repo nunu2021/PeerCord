@@ -152,5 +152,31 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 
 	n.logger.Info().Str("source", pkt.Header.Source).Msg("ACK received")
 
+	// TODO
+
+	return nil
+}
+
+func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
+	statusMsg, ok := msg.(*types.StatusMessage)
+	if !ok {
+		n.logger.Error().Msg("not a status message")
+		// TODO return error
+	}
+
+	// TODO Check if the remote peer has new rumors
+	for addr, lastSeq := range *statusMsg {
+		mySeq, exists := n.status[addr]
+		if addr == n.GetAddress() {
+			continue
+		}
+
+		if !exists || mySeq < lastSeq {
+
+		}
+	}
+
+	// TODO continue
+
 	return nil
 }

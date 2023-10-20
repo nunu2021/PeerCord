@@ -53,6 +53,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.receiveRumors)
 	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, n.receiveAck)
+	conf.MessageRegistry.RegisterMessageCallback(types.StatusMessage{}, n.receiveStatus)
 	conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, func(message types.Message, packet transport.Packet) error {
 		return nil
 	})
