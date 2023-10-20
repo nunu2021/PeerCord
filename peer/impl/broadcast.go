@@ -53,7 +53,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 }
 
 func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
-	rumorMsg, ok := msg.(*types.RumorsMessage)
+	rumorsMsg, ok := msg.(*types.RumorsMessage)
 	if !ok {
 		n.logger.Error().Msg("not a rumors message")
 		// TODO return error
@@ -62,13 +62,18 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	// Log the message
 	n.logger.Info().Msg("rumors received")
 
-	for _, rumor := range rumorMsg.Rumors {
+	// Process the rumors
+	hasExpectedRumor := false
+
+	for _, rumor := range rumorsMsg.Rumors {
 		previousSequence, exists := n.statusMessage[rumor.Origin]
 		if !exists {
 			previousSequence = 0
 		}
 
 		if rumor.Sequence == previousSequence+1 {
+			hasExpectedRumor = true
+
 			n.logger.Info().
 				Uint("sequence", rumor.Sequence).
 				Str("source", rumor.Origin).
@@ -107,7 +112,30 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 		// TODO return error
 	}
 
-	// TODO transfer rumor
+	// Transfer the rumor to another neighbor if needed and possible
+	if hasExpectedRumor {
+		neighbors := n.routingTable.neighbors(n.GetAddress())
+
+		if len(neighbors) > 1 {
+			dest := neighbors[rand.Intn(len(neighbors))]
+			for dest == ackPkt.Header.Source {
+				dest = neighbors[rand.Intn(len(neighbors))]
+			}
+
+			marshaledRumors, err := n.conf.MessageRegistry.MarshalMessage(rumorsMsg)
+			if err != nil {
+				// TODO
+			}
+
+			transferredHeader := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
+			transferredPkt := transport.Packet{Header: &transferredHeader, Msg: &marshaledRumors}
+
+			err = n.conf.Socket.Send(dest, transferredPkt, time.Second)
+			if err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }
