@@ -7,18 +7,30 @@ import (
 	"time"
 )
 
+// Returns the next sequence number that the node must use, and increments the
+// counter.
+func (n *node) newSequence() uint {
+	n.statusMutex.Lock()
+	defer n.statusMutex.Unlock()
+
+	last, exists := n.status[n.GetAddress()]
+	next := uint(1)
+	if exists {
+		next = last + 1
+	}
+	n.status[n.GetAddress()] = next
+	return next
+}
+
 // Broadcast implements peer.Messaging
 // Broadcast is thread-safe
 func (n *node) Broadcast(msg transport.Message) error {
 	// Create the rumor
-	n.nextSequenceMutex.Lock()
 	rumor := types.Rumor{
 		Origin:   n.GetAddress(),
-		Sequence: n.nextSequence,
+		Sequence: n.newSequence(),
 		Msg:      &msg,
 	}
-	n.nextSequence++
-	n.nextSequenceMutex.Unlock()
 
 	n.logger.Info().Uint("sequence", rumor.Sequence).Msg("started a broadcast")
 
@@ -56,6 +68,9 @@ func (n *node) Broadcast(msg transport.Message) error {
 }
 
 func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
+	n.statusMutex.Lock()
+	defer n.statusMutex.Unlock()
+
 	rumorsMsg, ok := msg.(*types.RumorsMessage)
 	if !ok {
 		n.logger.Error().Msg("not a rumors message")

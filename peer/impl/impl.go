@@ -46,7 +46,6 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		mustStop:     make(chan bool, 1),
 		logger:       logger,
 		status:       make(types.StatusMessage),
-		nextSequence: 1,
 	}
 
 	// Register the different kinds of messages
@@ -81,11 +80,9 @@ type node struct {
 	logger zerolog.Logger
 
 	// Current status: for each peer, the last rumor ID received by the peer
-	status types.StatusMessage
-
-	// The sequence number of the next rumor to be created.
-	nextSequence      uint
-	nextSequenceMutex sync.Mutex
+	// Also contains the last rumor ID sent by the node
+	status      types.StatusMessage
+	statusMutex sync.Mutex
 }
 
 // GetAddress returns the address of the node
@@ -136,15 +133,9 @@ func loop(n *node) {
 			lastAntiEntropy = time.Now()
 
 			// Create the status to send
-			status := make(types.StatusMessage)
-			for key, val := range n.status {
-				status[key] = val
-			}
-			if n.nextSequence > 1 {
-				status[n.GetAddress()] = n.nextSequence - 1
-			}
-
-			marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(status)
+			n.statusMutex.Lock()
+			marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(n.status)
+			n.statusMutex.Unlock()
 			if err != nil {
 				n.logger.Error().Err(err).Msg("can't marshal status")
 			}
