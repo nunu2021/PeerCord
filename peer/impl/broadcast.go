@@ -214,7 +214,9 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 		n.sendStatus(pkt.Header.Source)
 	}
 
-	// TODO continue
+	// TODO Check if we have rumors that the peer needs
+
+	// TODO ContinueMongering
 
 	return nil
 }
