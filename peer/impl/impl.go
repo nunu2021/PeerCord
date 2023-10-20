@@ -51,6 +51,14 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.receiveRumors)
 	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, n.receiveAck)
+	conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, func(message types.Message, packet transport.Packet) error {
+		return nil
+	})
+
+	// Start the heartbeat if needed
+	if n.conf.HeartbeatInterval != 0 {
+
+	}
 
 	return n
 }
@@ -87,12 +95,32 @@ func (n *node) GetAddress() string {
 }
 
 func loop(n *node) {
+	lastHeartbeat := time.Now().Add(-2 * n.conf.HeartbeatInterval) // Start the heartbeat immediately
+
 	for {
 		// Stop the worker if needed
 		select {
 		case <-n.mustStop:
 			return
 		default:
+		}
+
+		// Send the heartbeat if needed
+		if n.conf.HeartbeatInterval != 0 && time.Now().After(lastHeartbeat.Add(n.conf.HeartbeatInterval)) {
+			n.logger.Info().Msg("sending heartbeat")
+
+			emptyMsg := types.EmptyMessage{}
+			marshaledEmptyMsg, err := n.conf.MessageRegistry.MarshalMessage(emptyMsg)
+			if err != nil {
+				n.logger.Error().Err(err).Msg("can't marshal empty message")
+			}
+
+			err = n.Broadcast(marshaledEmptyMsg)
+			if err != nil {
+				n.logger.Error().Err(err).Msg("can't broadcast")
+			}
+
+			lastHeartbeat = time.Now()
 		}
 
 		pkt, err := n.conf.Socket.Recv(time.Second)
