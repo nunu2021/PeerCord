@@ -55,11 +55,6 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		return nil
 	})
 
-	// Start the heartbeat if needed
-	if n.conf.HeartbeatInterval != 0 {
-
-	}
-
 	return n
 }
 
