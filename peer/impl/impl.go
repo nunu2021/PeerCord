@@ -7,6 +7,7 @@ import (
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -81,7 +82,8 @@ type node struct {
 	statusMessage types.StatusMessage
 
 	// The sequence number of the next rumor to be created.
-	nextSequence uint
+	nextSequence      uint
+	nextSequenceMutex sync.Mutex
 }
 
 // GetAddress returns the address of the node

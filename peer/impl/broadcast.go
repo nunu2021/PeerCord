@@ -8,14 +8,17 @@ import (
 )
 
 // Broadcast implements peer.Messaging
+// Broadcast is thread-safe
 func (n *node) Broadcast(msg transport.Message) error {
 	// Create the rumor
+	n.nextSequenceMutex.Lock()
 	rumor := types.Rumor{
 		Origin:   n.GetAddress(),
 		Sequence: n.nextSequence,
 		Msg:      &msg,
 	}
 	n.nextSequence++
+	n.nextSequenceMutex.Unlock()
 
 	n.logger.Info().Uint("sequence", rumor.Sequence).Msg("started a broadcast")
 
