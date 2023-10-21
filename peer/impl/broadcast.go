@@ -249,7 +249,19 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 		}
 	}
 
-	// TODO ContinueMongering
+	// Continue Mongering
+	if !mustSendStatus && len(rumors.Rumors) == 0 && rand.Float64() < n.conf.ContinueMongering {
+		neighbors := n.routingTable.neighbors(n.GetAddress())
+
+		if len(neighbors) >= 2 {
+			dest := neighbors[rand.Intn(len(neighbors))]
+			for dest == neighbor {
+				dest = neighbors[rand.Intn(len(neighbors))]
+			}
+
+			n.sendStatus(dest)
+		}
+	}
 
 	return nil
 }

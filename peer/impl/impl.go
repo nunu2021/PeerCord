@@ -40,12 +40,13 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	// Create the node
 	n := &node{
-		conf:         conf,
-		routingTable: safeRoutingTable{rt: routingTable},
-		isRunning:    false,
-		mustStop:     make(chan bool, 1),
-		logger:       logger,
-		status:       make(types.StatusMessage),
+		conf:           conf,
+		routingTable:   safeRoutingTable{rt: routingTable},
+		isRunning:      false,
+		mustStop:       make(chan bool, 1),
+		logger:         logger,
+		status:         make(types.StatusMessage),
+		rumorsReceived: make(map[string][]types.Rumor),
 	}
 
 	// Register the different kinds of messages
