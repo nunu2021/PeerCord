@@ -99,6 +99,9 @@ type node struct {
 	// Also contains the last rumor ID sent by the node
 	status      types.StatusMessage
 	statusMutex sync.Mutex
+
+	// For each node, all the rumors that we have received from it
+	rumorsReceived map[string][]types.Rumor
 }
 
 // GetAddress returns the address of the node
@@ -239,4 +242,18 @@ func (n *node) processPacket(pkt transport.Packet) {
 	if err != nil {
 		n.logger.Warn().Err(err).Msg("failed to process packet")
 	}
+}
+
+// Sends a message to a neighbor of the node.
+func (n *node) sendMsgToNeighbor(msg types.Message, dest string) error {
+	marshaled, err := n.conf.MessageRegistry.MarshalMessage(msg)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't marshal the message")
+		return err
+	}
+
+	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
+	pkt := transport.Packet{Header: &header, Msg: &marshaled}
+
+	return n.conf.Socket.Send(dest, pkt, time.Second)
 }

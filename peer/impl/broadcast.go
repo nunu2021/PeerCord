@@ -125,6 +125,14 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 				Str("next", pkt.Header.RelayedBy).
 				Msg("routing table updated")
 
+			// Save the rumor
+			if rumor.Sequence == 1 {
+				n.rumorsReceived[rumor.Origin] = []types.Rumor{rumor}
+			} else {
+				n.rumorsReceived[rumor.Origin] = append(n.rumorsReceived[rumor.Origin], rumor)
+			}
+
+			// Process it
 			n.status[rumor.Origin] = rumor.Sequence
 			n.processMessage(*rumor.Msg)
 		}
@@ -200,6 +208,8 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 		// TODO return error
 	}
 
+	neighbor := pkt.Header.Source
+
 	// Check if the remote peer has new rumors
 	mustSendStatus := false
 	for addr, lastSeq := range *statusMsg {
@@ -211,10 +221,33 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	}
 
 	if mustSendStatus {
-		n.sendStatus(pkt.Header.Source)
+		n.sendStatus(neighbor)
 	}
 
-	// TODO Check if we have rumors that the peer needs
+	// Check if we have rumors that the peer needs
+	rumors := types.RumorsMessage{Rumors: make([]types.Rumor, 0)}
+
+	for addr, lastSeq := range n.status {
+		otherSeq, exists := (*statusMsg)[addr]
+
+		var firstToSend uint
+		if !exists {
+			firstToSend = 0
+		} else {
+			firstToSend = otherSeq
+		}
+
+		for i := firstToSend; i < lastSeq; i++ {
+			rumors.Rumors = append(rumors.Rumors, n.rumorsReceived[addr][i])
+		}
+	}
+
+	if len(rumors.Rumors) > 0 {
+		err := n.sendMsgToNeighbor(rumors, neighbor)
+		if err != nil {
+			return err
+		}
+	}
 
 	// TODO ContinueMongering
 
