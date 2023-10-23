@@ -341,7 +341,7 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 			n.ackChannelsMutex.Unlock()
 
 			select {
-			case _ = <-channel:
+			case <-channel:
 				return
 
 			case <-time.After(n.conf.AckTimeout):
