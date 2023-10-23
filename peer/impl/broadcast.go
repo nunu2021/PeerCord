@@ -171,6 +171,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 		AckedPacketID: pkt.Header.PacketID,
 		Status:        n.status,
 	}
+	n.logger.Info().Str("dest", pkt.Header.Source).Msg("sending ACK")
 	_, err := n.sendMsgToNeighbor(ack, pkt.Header.Source)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't send ack to neighbor")
@@ -206,10 +207,11 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 	}
 
 	// Tell the goroutine in charge of the rumor that we have received the ACK
-	channel, exists := n.ackChannels[pkt.Header.PacketID]
+	channel, exists := n.ackChannels[ackMsg.AckedPacketID]
 	if !exists {
 		n.logger.Warn().
 			Str("source", pkt.Header.Source).
+			Str("Packet ID", ackMsg.AckedPacketID).
 			Msg("unexpected ACK received")
 		return nil
 	}
@@ -329,14 +331,15 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 	// Wait for the ACK
 	if n.conf.AckTimeout != 0 {
 		go func() {
-			channel := n.ackChannels[packetID]
+			channel := make(chan bool)
+			n.ackChannels[packetID] = channel
 
 			select {
 			case _ = <-channel:
 				return
 
 			case <-time.After(n.conf.AckTimeout):
-				n.logger.Info().Msg("ACK not received in time")
+				n.logger.Info().Str("Packet ID", packetID).Msg("ACK not received in time")
 				newDest, exists := n.randomDifferentNeighbor(neighbor)
 
 				if exists {
