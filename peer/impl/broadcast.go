@@ -316,7 +316,7 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 
 			select {
 			case <-channel:
-				return
+				// Do nothing
 
 			case <-time.After(n.conf.AckTimeout):
 				n.logger.Info().Str("Packet ID", packetID).Msg("ACK not received in time")
@@ -329,6 +329,11 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 					}
 				}
 			}
+
+			// Delete the channel
+			n.ackChannelsMutex.Lock()
+			delete(n.ackChannels, packetID)
+			n.ackChannelsMutex.Unlock()
 		}()
 	}
 
