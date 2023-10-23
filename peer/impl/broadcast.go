@@ -208,13 +208,20 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 }
 
 func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
-	_ /*ackMsg*/, ok := msg.(*types.AckMessage)
+	ackMsg, ok := msg.(*types.AckMessage)
 	if !ok {
 		n.logger.Error().Msg("not an ACK message")
 		// TODO return error
 	}
 
 	n.logger.Info().Str("source", pkt.Header.Source).Msg("ACK received")
+
+	// Process the status
+	err := n.receiveStatus(&ackMsg.Status, pkt)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't receive the status")
+		return err
+	}
 
 	// TODO
 
