@@ -6,6 +6,7 @@ import (
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -47,6 +48,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		logger:          logger,
 		lastHeartbeat:   time.Now().Add(-2 * conf.HeartbeatInterval),   // Start the heartbeat immediately
 		lastAntiEntropy: time.Now().Add(-2 * conf.AntiEntropyInterval), // Start the anti-entropy immediately
+		ackChannels:     make(map[string]chan bool),
 		status:          make(types.StatusMessage),
 		rumorsReceived:  make(map[string][]types.Rumor),
 	}
@@ -89,6 +91,10 @@ type node struct {
 
 	// This mutex must be locked before using status and rumorsReceived
 	rumorMutex sync.Mutex
+
+	// For each ACK packet that we are waiting for, a channel. When the ACK is
+	// received, true is sent to that channel
+	ackChannels map[string]chan bool // TODO make safe
 
 	// Current status: for each peer, the last rumor ID received by the peer
 	// Also contains the last rumor ID sent by the node
@@ -214,16 +220,34 @@ func (n *node) processPacket(pkt transport.Packet) {
 	}
 }
 
-// Sends a message to a neighbor of the node.
-func (n *node) sendMsgToNeighbor(msg types.Message, dest string) error {
+// Sends a message to a neighbor of the node. Returns the ID of the packet sent.
+func (n *node) sendMsgToNeighbor(msg types.Message, dest string) (string, error) {
 	marshaled, err := n.conf.MessageRegistry.MarshalMessage(msg)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't marshal the message")
-		return err
+		return "", err
 	}
 
 	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
 	pkt := transport.Packet{Header: &header, Msg: &marshaled}
 
-	return n.conf.Socket.Send(dest, pkt, time.Second)
+	return header.PacketID, n.conf.Socket.Send(dest, pkt, time.Second)
+}
+
+// Returns a random neighbor with an address different from the given address
+// If such a neighbor exists, returns (addr, true).
+// Otherwise, returns ("", false).
+func (n *node) randomDifferentNeighbor(forbiddenAddr string) (string, bool) {
+	neighbors := n.routingTable.neighbors(n.GetAddress())
+
+	if len(neighbors) >= 2 {
+		dest := neighbors[rand.Intn(len(neighbors))]
+		for dest == forbiddenAddr {
+			dest = neighbors[rand.Intn(len(neighbors))]
+		}
+
+		return dest, true
+	} else {
+		return "", false
+	}
 }

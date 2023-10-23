@@ -171,7 +171,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 		AckedPacketID: pkt.Header.PacketID,
 		Status:        n.status,
 	}
-	err := n.sendMsgToNeighbor(ack, pkt.Header.Source)
+	_, err := n.sendMsgToNeighbor(ack, pkt.Header.Source)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't send ack to neighbor")
 		return err
@@ -179,7 +179,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 
 	// Transfer the rumor to another neighbor if needed and possible
 	if hasExpectedRumor {
-		neighbors := n.routingTable.neighbors(n.GetAddress())
+		neighbors := n.routingTable.neighbors(n.GetAddress()) // TODO simplify
 
 		if len(neighbors) > 1 {
 			dest := neighbors[rand.Intn(len(neighbors))]
@@ -205,6 +205,17 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 		// TODO return error
 	}
 
+	// Tell the goroutine in charge of the rumor that we have received the ACK
+	channel, exists := n.ackChannels[pkt.Header.PacketID]
+	if !exists {
+		n.logger.Warn().
+			Str("source", pkt.Header.Source).
+			Msg("unexpected ACK received")
+		return nil
+	}
+	channel <- true
+
+	// Log the ACK
 	n.logger.Info().Str("source", pkt.Header.Source).Msg("ACK received")
 
 	// Process the status
@@ -310,10 +321,31 @@ func (n *node) receivePrivateMsg(msg types.Message, packet transport.Packet) err
 
 // Sends a rumors message to a neighbor
 func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
-	err := n.sendMsgToNeighbor(msg, neighbor)
+	packetID, err := n.sendMsgToNeighbor(msg, neighbor)
 	if err != nil {
 		return err
 	}
+
+	// Wait for the ACK
+	go func() {
+		channel := n.ackChannels[packetID]
+
+		select {
+		case _ = <-channel:
+			return
+
+		case <-time.After(n.conf.AckTimeout):
+			n.logger.Info().Msg("ACK not received in time")
+			newDest, exists := n.randomDifferentNeighbor(neighbor)
+
+			if exists {
+				err := n.sendRumorsMsg(msg, newDest)
+				if err != nil {
+					n.logger.Error().Err(err).Msg("can't transfer the rumor to another neighbor")
+				}
+			}
+		}
+	}()
 
 	return nil
 }
