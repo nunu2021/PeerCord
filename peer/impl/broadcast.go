@@ -7,6 +7,45 @@ import (
 	"time"
 )
 
+// Send the heartbeat if needed
+func (n *node) sendHeartbeat() error {
+	if n.conf.HeartbeatInterval != 0 && time.Now().After(n.lastHeartbeat.Add(n.conf.HeartbeatInterval)) {
+		n.logger.Info().Msg("sending heartbeat")
+		n.lastHeartbeat = time.Now()
+
+		emptyMsg := types.EmptyMessage{}
+		marshaledEmptyMsg, err := n.conf.MessageRegistry.MarshalMessage(emptyMsg)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't marshal empty message")
+			return err
+		}
+
+		err = n.Broadcast(marshaledEmptyMsg)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't broadcast")
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Executes the anti-entropy mechanism if needed
+func (n *node) antiEntropy() {
+	if n.conf.AntiEntropyInterval != 0 && time.Now().After(n.lastAntiEntropy.Add(n.conf.AntiEntropyInterval)) {
+		n.logger.Info().Msg("using anti-entropy mechanism")
+		n.lastAntiEntropy = time.Now()
+
+		// Send the status to a random neighbour if possible
+		neighbors := n.routingTable.neighbors(n.GetAddress())
+
+		if len(neighbors) != 0 {
+			dest := neighbors[rand.Intn(len(neighbors))]
+			n.sendStatus(dest)
+		}
+	}
+}
+
 // Sends the status to a neighbor
 func (n *node) sendStatus(neighbor string) {
 	// Create the status to send
