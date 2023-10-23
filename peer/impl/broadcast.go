@@ -214,8 +214,6 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 		return err
 	}
 
-	// TODO
-
 	return nil
 }
 
