@@ -207,7 +207,10 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 	}
 
 	// Tell the goroutine in charge of the rumor that we have received the ACK
+	n.ackChannelsMutex.Lock()
 	channel, exists := n.ackChannels[ackMsg.AckedPacketID]
+	n.ackChannelsMutex.Unlock()
+
 	if !exists {
 		n.logger.Warn().
 			Str("source", pkt.Header.Source).
@@ -332,7 +335,10 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 	if n.conf.AckTimeout != 0 {
 		go func() {
 			channel := make(chan bool)
+
+			n.ackChannelsMutex.Lock()
 			n.ackChannels[packetID] = channel
+			n.ackChannelsMutex.Unlock()
 
 			select {
 			case _ = <-channel:

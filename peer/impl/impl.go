@@ -94,7 +94,8 @@ type node struct {
 
 	// For each ACK packet that we are waiting for, a channel. When the ACK is
 	// received, true is sent to that channel
-	ackChannels map[string]chan bool // TODO make safe
+	ackChannelsMutex sync.Mutex
+	ackChannels      map[string]chan bool
 
 	// Current status: for each peer, the last rumor ID received by the peer
 	// Also contains the last rumor ID sent by the node
