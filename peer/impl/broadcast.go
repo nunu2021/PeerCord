@@ -50,18 +50,9 @@ func (n *node) antiEntropy() {
 func (n *node) sendStatus(neighbor string) {
 	// Create the status to send
 	n.rumorMutex.Lock()
-	marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(n.status)
+	_, err := n.sendMsgToNeighbor(n.status, neighbor)
 	n.rumorMutex.Unlock()
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't marshal status")
-		// TODO return
-	}
 
-	// Send the status to the neighbor
-	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), neighbor, 0)
-	pkt := transport.Packet{Header: &header, Msg: &marshaledStatus}
-
-	err = n.conf.Socket.Send(neighbor, pkt, time.Second)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't send status")
 	}
