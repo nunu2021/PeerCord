@@ -208,10 +208,10 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 
 	neighbor := pkt.Header.Source
 
-	n.rumorMutex.Lock()
-
 	// Check if the remote peer has new rumors
 	mustSendStatus := false
+
+	n.rumorMutex.Lock()
 	for addr, lastSeq := range *statusMsg {
 		mySeq, exists := n.status[addr]
 
@@ -219,6 +219,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 			mustSendStatus = true
 		}
 	}
+	n.rumorMutex.Unlock()
 
 	if mustSendStatus {
 		n.sendStatus(neighbor)
@@ -227,6 +228,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	// Check if we have rumors that the peer needs
 	rumors := types.RumorsMessage{Rumors: make([]types.Rumor, 0)}
 
+	n.rumorMutex.Lock()
 	for addr, lastSeq := range n.status {
 		otherSeq, exists := (*statusMsg)[addr]
 
@@ -241,7 +243,6 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 			rumors.Rumors = append(rumors.Rumors, n.rumorsReceived[addr][i])
 		}
 	}
-
 	n.rumorMutex.Unlock()
 
 	if len(rumors.Rumors) > 0 {
