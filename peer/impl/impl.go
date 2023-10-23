@@ -241,14 +241,14 @@ func (n *node) sendMsgToNeighbor(msg types.Message, dest string) (string, error)
 func (n *node) randomDifferentNeighbor(forbiddenAddr string) (string, bool) {
 	neighbors := n.routingTable.neighbors(n.GetAddress())
 
-	if len(neighbors) >= 2 {
-		dest := neighbors[rand.Intn(len(neighbors))]
-		for dest == forbiddenAddr {
-			dest = neighbors[rand.Intn(len(neighbors))]
-		}
-
-		return dest, true
-	} else {
+	if len(neighbors) < 2 {
 		return "", false
 	}
+
+	dest := neighbors[rand.Intn(len(neighbors))]
+	for dest == forbiddenAddr {
+		dest = neighbors[rand.Intn(len(neighbors))]
+	}
+
+	return dest, true
 }
