@@ -96,22 +96,13 @@ func (n *node) Broadcast(msg transport.Message) error {
 		Rumors: []types.Rumor{rumor},
 	}
 
-	marshaledRumors, err := n.conf.MessageRegistry.MarshalMessage(rumorsMsg)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't marshal the rumors message")
-		return err
-	}
-
 	// Send it to a random neighbour
 	neighbors := n.routingTable.neighbors(n.GetAddress())
 
 	if len(neighbors) != 0 {
 		dest := neighbors[rand.Intn(len(neighbors))]
 
-		header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
-		pkt := transport.Packet{Header: &header, Msg: &marshaledRumors}
-
-		err := n.conf.Socket.Send(dest, pkt, time.Second)
+		err := n.sendRumorsMsg(rumorsMsg, dest)
 		if err != nil {
 			return err
 		}
@@ -196,7 +187,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 				dest = neighbors[rand.Intn(len(neighbors))]
 			}
 
-			err := n.sendMsgToNeighbor(rumorsMsg, dest)
+			err := n.sendRumorsMsg(*rumorsMsg, dest)
 			if err != nil {
 				n.logger.Error().Err(err).Msg("can't send message to neighbor")
 				return err
@@ -275,7 +266,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	n.rumorMutex.Unlock()
 
 	if len(rumors.Rumors) > 0 {
-		err := n.sendMsgToNeighbor(rumors, neighbor)
+		err := n.sendRumorsMsg(rumors, neighbor)
 		if err != nil {
 			return err
 		}
@@ -312,6 +303,16 @@ func (n *node) receivePrivateMsg(msg types.Message, packet transport.Packet) err
 	_, exists := privateMsg.Recipients[n.conf.Socket.GetAddress()]
 	if exists { // The message is for us
 		n.processMessage(*privateMsg.Msg)
+	}
+
+	return nil
+}
+
+// Sends a rumors message to a neighbor
+func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
+	err := n.sendMsgToNeighbor(msg, neighbor)
+	if err != nil {
+		return err
 	}
 
 	return nil
