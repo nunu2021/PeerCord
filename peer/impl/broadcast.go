@@ -327,25 +327,27 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 	}
 
 	// Wait for the ACK
-	go func() {
-		channel := n.ackChannels[packetID]
+	if n.conf.AckTimeout != 0 {
+		go func() {
+			channel := n.ackChannels[packetID]
 
-		select {
-		case _ = <-channel:
-			return
+			select {
+			case _ = <-channel:
+				return
 
-		case <-time.After(n.conf.AckTimeout):
-			n.logger.Info().Msg("ACK not received in time")
-			newDest, exists := n.randomDifferentNeighbor(neighbor)
+			case <-time.After(n.conf.AckTimeout):
+				n.logger.Info().Msg("ACK not received in time")
+				newDest, exists := n.randomDifferentNeighbor(neighbor)
 
-			if exists {
-				err := n.sendRumorsMsg(msg, newDest)
-				if err != nil {
-					n.logger.Error().Err(err).Msg("can't transfer the rumor to another neighbor")
+				if exists {
+					err := n.sendRumorsMsg(msg, newDest)
+					if err != nil {
+						n.logger.Error().Err(err).Msg("can't transfer the rumor to another neighbor")
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	return nil
 }
