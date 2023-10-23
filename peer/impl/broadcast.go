@@ -196,16 +196,9 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 				dest = neighbors[rand.Intn(len(neighbors))]
 			}
 
-			marshaledRumors, err := n.conf.MessageRegistry.MarshalMessage(rumorsMsg)
+			err := n.sendMsgToNeighbor(rumorsMsg, dest)
 			if err != nil {
-				// TODO
-			}
-
-			transferredHeader := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
-			transferredPkt := transport.Packet{Header: &transferredHeader, Msg: &marshaledRumors}
-
-			err = n.conf.Socket.Send(dest, transferredPkt, time.Second)
-			if err != nil {
+				n.logger.Error().Err(err).Msg("can't send message to neighbor")
 				return err
 			}
 		}
