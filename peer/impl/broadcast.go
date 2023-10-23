@@ -180,20 +180,10 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 		AckedPacketID: pkt.Header.PacketID,
 		Status:        n.status,
 	}
-
-	marshaled, err := n.conf.MessageRegistry.MarshalMessage(ack)
+	err := n.sendMsgToNeighbor(ack, pkt.Header.Source)
 	if err != nil {
-		n.logger.Error().Err(err).Msg("can't marshal the ACK message")
-		// TODO return error
-	}
-
-	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), pkt.Header.Source, 0)
-	ackPkt := transport.Packet{Header: &header, Msg: &marshaled}
-
-	err = n.conf.Socket.Send(pkt.Header.Source, ackPkt, time.Second)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't send packet")
-		// TODO return error
+		n.logger.Error().Err(err).Msg("can't send ack to neighbor")
+		return err
 	}
 
 	// Transfer the rumor to another neighbor if needed and possible
@@ -202,7 +192,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 
 		if len(neighbors) > 1 {
 			dest := neighbors[rand.Intn(len(neighbors))]
-			for dest == ackPkt.Header.Source {
+			for dest == pkt.Header.Source {
 				dest = neighbors[rand.Intn(len(neighbors))]
 			}
 
