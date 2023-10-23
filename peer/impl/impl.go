@@ -89,13 +89,13 @@ type node struct {
 	// Date at which the last anti-entropy check was realized
 	lastAntiEntropy time.Time
 
-	// This mutex must be locked before using status and rumorsReceived
-	rumorMutex sync.Mutex
-
 	// For each ACK packet that we are waiting for, a channel. When the ACK is
 	// received, true is sent to that channel
 	ackChannelsMutex sync.Mutex
 	ackChannels      map[string]chan bool
+
+	// This mutex must be locked before using status and rumorsReceived
+	rumorMutex sync.Mutex
 
 	// Current status: for each peer, the last rumor ID received by the peer
 	// Also contains the last rumor ID sent by the node
