@@ -170,14 +170,9 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 
 	// Transfer the rumor to another neighbor if needed and possible
 	if hasExpectedRumor {
-		neighbors := n.routingTable.neighbors(n.GetAddress()) // TODO simplify
+		dest, ok := n.randomDifferentNeighbor(pkt.Header.Source)
 
-		if len(neighbors) > 1 {
-			dest := neighbors[rand.Intn(len(neighbors))]
-			for dest == pkt.Header.Source {
-				dest = neighbors[rand.Intn(len(neighbors))]
-			}
-
+		if ok {
 			err := n.sendRumorsMsg(*rumorsMsg, dest)
 			if err != nil {
 				n.logger.Error().Err(err).Msg("can't send message to neighbor")
