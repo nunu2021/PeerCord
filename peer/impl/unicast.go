@@ -44,8 +44,7 @@ func (n *node) transferPacket(pkt transport.Packet) {
 func (n *node) receiveChatMessage(msg types.Message, pkt transport.Packet) error {
 	chatMsg, ok := msg.(*types.ChatMessage)
 	if !ok {
-		n.logger.Error().Msg("not a chat message")
-		// TODO return error
+		panic("not a chat message")
 	}
 
 	// Log the message

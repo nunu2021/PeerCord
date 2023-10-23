@@ -122,8 +122,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 
 	rumorsMsg, ok := msg.(*types.RumorsMessage)
 	if !ok {
-		n.logger.Error().Msg("not a rumors message")
-		// TODO return error
+		panic("not a rumors message")
 	}
 
 	// Log the message
@@ -202,8 +201,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 	ackMsg, ok := msg.(*types.AckMessage)
 	if !ok {
-		n.logger.Error().Msg("not an ACK message")
-		// TODO return error
+		panic("not an ACK message")
 	}
 
 	// Tell the goroutine in charge of the rumor that we have received the ACK
@@ -238,8 +236,7 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	statusMsg, ok := msg.(*types.StatusMessage)
 	if !ok {
-		n.logger.Error().Msg("not a status message")
-		// TODO return error
+		panic("not a status message")
 	}
 
 	neighbor := pkt.Header.Source
@@ -312,8 +309,7 @@ func (n *node) receiveEmptyMsg(msg types.Message, pkt transport.Packet) error {
 func (n *node) receivePrivateMsg(msg types.Message, packet transport.Packet) error {
 	privateMsg, ok := msg.(*types.PrivateMessage)
 	if !ok {
-		n.logger.Error().Msg("not a private message")
-		// TODO return error
+		panic("not a private message")
 	}
 
 	_, exists := privateMsg.Recipients[n.conf.Socket.GetAddress()]
