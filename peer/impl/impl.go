@@ -31,6 +31,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	}).Level(logLevel).With().
 		Str("peer", conf.Socket.GetAddress()).
 		Timestamp().
+		//Caller().
 		Logger()
 
 	routingTable := make(map[string]string)
