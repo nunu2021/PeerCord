@@ -97,10 +97,12 @@ type node struct {
 	// Logger instance
 	logger zerolog.Logger
 
+	// This mutex must be locked before using status and rumorsReceived
+	rumorMutex sync.Mutex
+
 	// Current status: for each peer, the last rumor ID received by the peer
 	// Also contains the last rumor ID sent by the node
-	status      types.StatusMessage
-	statusMutex sync.Mutex
+	status types.StatusMessage
 
 	// For each node, all the rumors that we have received from it
 	rumorsReceived map[string][]types.Rumor

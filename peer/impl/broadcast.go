@@ -10,9 +10,9 @@ import (
 // Sends the status to a neighbor
 func (n *node) sendStatus(neighbor string) {
 	// Create the status to send
-	n.statusMutex.Lock()
+	n.rumorMutex.Lock()
 	marshaledStatus, err := n.conf.MessageRegistry.MarshalMessage(n.status)
-	n.statusMutex.Unlock()
+	n.rumorMutex.Unlock()
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't marshal status")
 		// TODO return
@@ -31,8 +31,8 @@ func (n *node) sendStatus(neighbor string) {
 // Broadcast implements peer.Messaging
 // Broadcast is thread-safe
 func (n *node) Broadcast(msg transport.Message) error {
-	n.statusMutex.Lock()
-	defer n.statusMutex.Unlock()
+	n.rumorMutex.Lock()
+	defer n.rumorMutex.Unlock()
 
 	// Increase the sequence number
 	lastSeq, exists := n.status[n.GetAddress()]
@@ -87,8 +87,8 @@ func (n *node) Broadcast(msg transport.Message) error {
 }
 
 func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
-	n.statusMutex.Lock()
-	defer n.statusMutex.Unlock()
+	n.rumorMutex.Lock()
+	defer n.rumorMutex.Unlock()
 
 	rumorsMsg, ok := msg.(*types.RumorsMessage)
 	if !ok {
@@ -208,6 +208,8 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 
 	neighbor := pkt.Header.Source
 
+	n.rumorMutex.Lock()
+
 	// Check if the remote peer has new rumors
 	mustSendStatus := false
 	for addr, lastSeq := range *statusMsg {
@@ -239,6 +241,8 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 			rumors.Rumors = append(rumors.Rumors, n.rumorsReceived[addr][i])
 		}
 	}
+
+	n.rumorMutex.Unlock()
 
 	if len(rumors.Rumors) > 0 {
 		err := n.sendMsgToNeighbor(rumors, neighbor)
