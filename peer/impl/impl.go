@@ -56,25 +56,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.receiveRumors)
 	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, n.receiveAck)
 	conf.MessageRegistry.RegisterMessageCallback(types.StatusMessage{}, n.receiveStatus)
-
-	conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, func(message types.Message, packet transport.Packet) error {
-		return nil
-	})
-
-	conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, func(msg types.Message, packet transport.Packet) error {
-		privateMsg, ok := msg.(*types.PrivateMessage)
-		if !ok {
-			n.logger.Error().Msg("not a private message")
-			// TODO return error
-		}
-
-		_, exists := privateMsg.Recipients[conf.Socket.GetAddress()]
-		if exists { // The message is for us
-			n.processMessage(*privateMsg.Msg)
-		}
-
-		return nil
-	})
+	conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, n.receiveEmptyMsg)
+	conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, n.receivePrivateMsg)
 
 	return n
 }

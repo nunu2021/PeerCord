@@ -297,3 +297,22 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 
 	return nil
 }
+
+func (n *node) receiveEmptyMsg(msg types.Message, pkt transport.Packet) error {
+	return nil
+}
+
+func (n *node) receivePrivateMsg(msg types.Message, packet transport.Packet) error {
+	privateMsg, ok := msg.(*types.PrivateMessage)
+	if !ok {
+		n.logger.Error().Msg("not a private message")
+		// TODO return error
+	}
+
+	_, exists := privateMsg.Recipients[n.conf.Socket.GetAddress()]
+	if exists { // The message is for us
+		n.processMessage(*privateMsg.Msg)
+	}
+
+	return nil
+}
