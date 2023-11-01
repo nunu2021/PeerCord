@@ -51,6 +51,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		ackChannels:     make(map[string]chan bool),
 		status:          make(types.StatusMessage),
 		rumorsReceived:  make(map[string][]types.Rumor),
+		fileSharing:     NewFileSharing(),
 	}
 
 	// Register the different kinds of messages
@@ -103,6 +104,9 @@ type node struct {
 
 	// For each node, all the rumors that we have received from it
 	rumorsReceived map[string][]types.Rumor
+
+	// All the objects used by the file sharing mechanism
+	fileSharing FileSharing
 }
 
 // GetAddress returns the address of the node
@@ -163,6 +167,8 @@ func (n *node) Start() error {
 		n.logger.Error().Msg("can't start peer: already running")
 		return AlreadyRunningError{}
 	}
+
+	println("Start")
 
 	n.isRunning = true
 	go loop(n)
