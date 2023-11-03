@@ -9,11 +9,15 @@ import (
 
 // FileSharing contains all the objects used by the file-sharing system.
 // An instance of this type is a member of node.
-type FileSharing struct{}
+type FileSharing struct {
+	catalog peer.Catalog
+}
 
 // NewFileSharing returns an empty FileSharing object.
 func NewFileSharing() FileSharing {
-	return FileSharing{}
+	return FileSharing{
+		catalog: make(peer.Catalog),
+	}
 }
 
 func (n *node) storeChunk(chunk []byte) string {
@@ -53,4 +57,22 @@ func (n *node) Upload(data io.Reader) (string, error) {
 	}
 
 	return n.storeChunk(metaHash), nil
+}
+
+// GetCatalog implements Peer.DataSharing
+// It is NOT thread-safe
+func (n *node) GetCatalog() peer.Catalog {
+	return n.fileSharing.catalog
+}
+
+// UpdateCatalog implements Peer.DataSharing
+// It is NOT thread-safe
+func (n *node) UpdateCatalog(key string, peer string) {
+	_, ok := n.fileSharing.catalog[key]
+	if !ok {
+		n.fileSharing.catalog[key] = make(map[string]struct{})
+	}
+
+	var empty struct{}
+	n.fileSharing.catalog[key][peer] = empty
 }
