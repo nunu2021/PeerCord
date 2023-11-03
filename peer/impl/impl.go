@@ -168,8 +168,6 @@ func (n *node) Start() error {
 		return AlreadyRunningError{}
 	}
 
-	println("Start")
-
 	n.isRunning = true
 	go loop(n)
 	return nil
