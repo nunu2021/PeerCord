@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 	"io"
 	"strings"
 )
@@ -114,4 +116,35 @@ func (n *node) Download(metahash string) ([]byte, error) {
 	}
 
 	return file, nil
+}
+
+func (n *node) receiveDataRequest(msg types.Message, pkt transport.Packet) error {
+	dataRequestMsg, ok := msg.(*types.DataRequestMessage)
+	if !ok {
+		panic("not a data request message")
+	}
+
+	blobStore := n.conf.Storage.GetDataBlobStore()
+
+	buffer := blobStore.Get(dataRequestMsg.Key) // Can be nil, but this is fine
+
+	reply := types.DataReplyMessage{
+		RequestID: dataRequestMsg.RequestID,
+		Key:       dataRequestMsg.Key,
+		Value:     buffer,
+	}
+
+	marshaledReply, err := n.conf.MessageRegistry.MarshalMessage(reply)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't marshal reply")
+		return err
+	}
+
+	err = n.Unicast(pkt.Header.Source, marshaledReply)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't unicast data reply")
+		return err
+	}
+
+	return nil
 }

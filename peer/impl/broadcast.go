@@ -16,7 +16,6 @@ func (n *node) sendHeartbeat() error {
 		emptyMsg := types.EmptyMessage{}
 		marshaledEmptyMsg, err := n.conf.MessageRegistry.MarshalMessage(emptyMsg)
 		if err != nil {
-			n.logger.Error().Err(err).Msg("can't marshal empty message")
 			return err
 		}
 
