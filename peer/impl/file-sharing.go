@@ -4,15 +4,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"go.dedis.ch/cs438/peer"
-	"go.dedis.ch/dela/core/ordering/cosipbft/blockstore"
 	"io"
 )
 
 // FileSharing contains all the objects used by the file-sharing system.
 // An instance of this type is a member of node.
-type FileSharing struct {
-	blobStore blockstore.BlockStore
-}
+type FileSharing struct{}
 
 // NewFileSharing returns an empty FileSharing object.
 func NewFileSharing() FileSharing {
