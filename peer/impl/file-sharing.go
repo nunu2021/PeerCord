@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"go.dedis.ch/cs438/peer"
 	"io"
+	"strings"
 )
 
 // FileSharing contains all the objects used by the file-sharing system.
@@ -77,13 +78,40 @@ func (n *node) UpdateCatalog(key string, peer string) {
 	n.fileSharing.catalog[key][peer] = empty
 }
 
-func (n *node) Download(metahash string) ([]byte, error) {
-	_, ok := n.fileSharing.catalog[metahash]
+func (n *node) downloadChunk(hash string) ([]byte, error) {
+	blobStore := n.conf.Storage.GetDataBlobStore()
 
-	if !ok {
-		n.logger.Info().Str("meta-hash", metahash).Msg("can't download file: file does not exist")
-		return nil, NonexistentFileError(metahash)
+	// Check if we have the file locally
+	buffer := blobStore.Get(hash)
+	if buffer != nil {
+		return buffer, nil
 	}
 
-	return nil, nil // TODO
+	// Check if another peer has the file
+
+	return nil, NonexistentFileError(hash) // TODO NonexistentChunk
+}
+
+func (n *node) Download(metahash string) ([]byte, error) {
+	chunk, err := n.downloadChunk(metahash)
+	if err != nil {
+		n.logger.Info().Str("meta-hash", metahash).Msg("can't download file: unknown meta-hash")
+		return nil, err
+	}
+
+	hashes := strings.Split(string(chunk), peer.MetafileSep)
+
+	file := make([]byte, 0)
+
+	for _, hash := range hashes {
+		chunk, err := n.downloadChunk(hash)
+		if err != nil {
+			n.logger.Info().Str("hash", hash).Msg("can't download file: unknown hash")
+			return nil, err
+		}
+
+		file = append(file, chunk...)
+	}
+
+	return file, nil
 }
