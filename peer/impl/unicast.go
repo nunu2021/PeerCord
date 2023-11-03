@@ -22,6 +22,20 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 	return n.conf.Socket.Send(next, pkt, time.Second)
 }
 
+func (n *node) marshalAndUnicast(dest string, msg types.Message) error {
+	marshaledMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	err = n.Unicast(dest, marshaledMsg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Called when the peer needs to transfer a packet to a neighbour
 func (n *node) transferPacket(pkt transport.Packet) {
 	// Update the header

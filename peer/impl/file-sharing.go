@@ -126,23 +126,15 @@ func (n *node) receiveDataRequest(msg types.Message, pkt transport.Packet) error
 
 	blobStore := n.conf.Storage.GetDataBlobStore()
 
-	buffer := blobStore.Get(dataRequestMsg.Key) // Can be nil, but this is fine
-
 	reply := types.DataReplyMessage{
 		RequestID: dataRequestMsg.RequestID,
 		Key:       dataRequestMsg.Key,
-		Value:     buffer,
+		Value:     blobStore.Get(dataRequestMsg.Key), // Can be nil, but this is fine
 	}
 
-	marshaledReply, err := n.conf.MessageRegistry.MarshalMessage(reply)
+	err := n.marshalAndUnicast(pkt.Header.Source, reply)
 	if err != nil {
-		n.logger.Error().Err(err).Msg("can't marshal reply")
-		return err
-	}
-
-	err = n.Unicast(pkt.Header.Source, marshaledReply)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't unicast data reply")
+		n.logger.Error().Err(err).Msg("can't send data reply")
 		return err
 	}
 
