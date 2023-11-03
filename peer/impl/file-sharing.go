@@ -76,3 +76,14 @@ func (n *node) UpdateCatalog(key string, peer string) {
 	var empty struct{}
 	n.fileSharing.catalog[key][peer] = empty
 }
+
+func (n *node) Download(metahash string) ([]byte, error) {
+	_, ok := n.fileSharing.catalog[metahash]
+
+	if !ok {
+		n.logger.Info().Str("meta-hash", metahash).Msg("can't download file: file does not exist")
+		return nil, NonexistentFileError(metahash)
+	}
+
+	return nil, nil // TODO
+}
