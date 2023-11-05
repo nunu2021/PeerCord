@@ -159,7 +159,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 		AckedPacketID: pkt.Header.PacketID,
 		Status:        n.status,
 	}
-	n.logger.Info().Str("dest", pkt.Header.Source).Msg("sending ACK")
+	n.logger.Info().Str("dest", pkt.Header.Source).Str("packetID", ack.AckedPacketID).Msg("sending ACK")
 	_, err := n.sendMsgToNeighbor(ack, pkt.Header.Source)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't send ack to neighbor")
@@ -268,7 +268,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 
 	if len(rumors.Rumors) > 0 {
 		n.logger.Info().Int("nb-rumors", len(rumors.Rumors)).Msg("processing status: we have new rumors for the peer")
-		err := n.sendRumorsMsg(rumors, neighbor)
+		err := n.sendRumorsMsg(rumors, neighbor) // TODO we should not expect an ACK here
 		if err != nil {
 			return err
 		}
