@@ -190,7 +190,7 @@ func (n *node) Stop() error {
 // Wrap a message in a fake packet to process it
 func (n *node) processMessage(msg transport.Message) {
 	// Wrap the message in a fake paket
-	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), n.GetAddress(), 0)
+	header := transport.NewHeader("", "", n.GetAddress(), 0)
 	pkt := transport.Packet{Header: &header, Msg: &msg}
 
 	// Process the packet
