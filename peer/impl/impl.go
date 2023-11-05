@@ -200,6 +200,8 @@ func (n *node) processMessage(msg transport.Message) {
 // AddPeer implements peer.Service
 func (n *node) AddPeer(addresses ...string) {
 	for _, addr := range addresses {
+		n.logger.Info().Str("addr", addr).Msg("new neighbor added")
+
 		if addr != n.GetAddress() {
 			// We have a new neighbour
 			n.routingTable.set(addr, addr)
@@ -215,6 +217,8 @@ func (n *node) GetRoutingTable() peer.RoutingTable {
 
 // SetRoutingEntry implements peer.Service
 func (n *node) SetRoutingEntry(origin, relayAddr string) {
+	n.logger.Info().Str("origin", origin).Str("relay", relayAddr).Msg("set routing entry")
+
 	n.routingTable.set(origin, relayAddr)
 }
 
@@ -237,6 +241,7 @@ func (n *node) sendMsgToNeighbor(msg types.Message, dest string) (string, error)
 	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
 	pkt := transport.Packet{Header: &header, Msg: &marshaled}
 
+	n.logger.Info().Str("dest", dest).Msg("sending packet to neighbor")
 	return header.PacketID, n.conf.Socket.Send(dest, pkt, time.Second)
 }
 

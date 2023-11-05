@@ -32,7 +32,6 @@ func (n *node) sendHeartbeat() error {
 // Executes the anti-entropy mechanism if needed
 func (n *node) antiEntropy() {
 	if n.conf.AntiEntropyInterval != 0 && time.Now().After(n.lastAntiEntropy.Add(n.conf.AntiEntropyInterval)) {
-		n.logger.Info().Msg("using anti-entropy mechanism")
 		n.lastAntiEntropy = time.Now()
 
 		// Send the status to a random neighbour if possible
@@ -40,6 +39,7 @@ func (n *node) antiEntropy() {
 
 		if len(neighbors) != 0 {
 			dest := neighbors[rand.Intn(len(neighbors))]
+			n.logger.Info().Str("dest", dest).Msg("using anti-entropy mechanism")
 			n.sendStatus(dest)
 		}
 	}
@@ -116,7 +116,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	}
 
 	// Log the message
-	n.logger.Info().Msg("rumors received")
+	n.logger.Info().Str("from", pkt.Header.Source).Msg("rumors received")
 
 	// Process the rumors
 	hasExpectedRumor := false
@@ -137,10 +137,6 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 
 			// Update the routing table
 			n.SetRoutingEntry(rumor.Origin, pkt.Header.RelayedBy)
-			n.logger.Info().
-				Str("dest", rumor.Origin).
-				Str("next", pkt.Header.RelayedBy).
-				Msg("routing table updated")
 
 			// Save the rumor
 			if rumor.Sequence == 1 {
@@ -204,7 +200,10 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 	channel <- true
 
 	// Log the ACK
-	n.logger.Info().Str("source", pkt.Header.Source).Msg("ACK received")
+	n.logger.Info().
+		Str("source", pkt.Header.Source).
+		Str("packet-ID", ackMsg.AckedPacketID).
+		Msg("ACK received")
 
 	// Process the status
 	err := n.receiveStatus(&ackMsg.Status, pkt)
@@ -222,6 +221,8 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 		panic("not a status message")
 	}
 
+	n.logger.Info().Str("from", pkt.Header.Source).Msg("received status")
+
 	neighbor := pkt.Header.Source
 
 	// Check if the remote peer has new rumors
@@ -238,6 +239,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	n.rumorMutex.Unlock()
 
 	if mustSendStatus {
+		n.logger.Info().Msg("processing status: the peer has new rumors")
 		n.sendStatus(neighbor)
 	}
 
@@ -262,6 +264,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	n.rumorMutex.Unlock()
 
 	if len(rumors.Rumors) > 0 {
+		n.logger.Info().Int("nb-rumors", len(rumors.Rumors)).Msg("processing status: we have new rumors for the peer")
 		err := n.sendRumorsMsg(rumors, neighbor)
 		if err != nil {
 			return err
@@ -271,6 +274,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	// Continue Mongering
 	if !mustSendStatus && len(rumors.Rumors) == 0 && rand.Float64() < n.conf.ContinueMongering {
 		dest, ok := n.randomDifferentNeighbor(neighbor)
+		n.logger.Info().Str("dest", dest).Msg("continue mongering")
 		if ok {
 			n.sendStatus(dest)
 		}
@@ -304,6 +308,8 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 		return err
 	}
 
+	n.logger.Info().Str("packetID", packetID).Str("neighbor", neighbor).Msg("sent rumor to neighbor")
+
 	// Wait for the ACK
 	if n.conf.AckTimeout != 0 {
 		go func() {
@@ -318,9 +324,10 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 				// Do nothing
 
 			case <-time.After(n.conf.AckTimeout):
-				n.logger.Info().Str("Packet ID", packetID).Msg("ACK not received in time")
+				n.logger.Info().Str("packetID", packetID).Msg("ACK not received in time")
 				newDest, exists := n.randomDifferentNeighbor(neighbor)
 
+				// TODO bug: the channel is deleted afterwards?
 				if exists {
 					err := n.sendRumorsMsg(msg, newDest)
 					if err != nil {
