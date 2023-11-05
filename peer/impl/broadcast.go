@@ -136,7 +136,10 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 				Msg("rumor processed")
 
 			// Update the routing table
-			n.SetRoutingEntry(rumor.Origin, pkt.Header.RelayedBy)
+			next, exists := n.routingTable.get(rumor.Origin)
+			if !exists || next != rumor.Origin {
+				n.SetRoutingEntry(rumor.Origin, pkt.Header.RelayedBy)
+			}
 
 			// Save the rumor
 			if rumor.Sequence == 1 {
