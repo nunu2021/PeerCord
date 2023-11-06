@@ -107,9 +107,6 @@ func (n *node) Broadcast(msg transport.Message) error {
 }
 
 func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
-	n.rumorMutex.Lock()
-	defer n.rumorMutex.Unlock()
-
 	rumorsMsg, ok := msg.(*types.RumorsMessage)
 	if !ok {
 		panic("not a rumors message")
@@ -117,6 +114,9 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 
 	// Log the message
 	n.logger.Info().Str("from", pkt.Header.Source).Msg("rumors received")
+
+	n.rumorMutex.Lock()
+	defer n.rumorMutex.Unlock()
 
 	// Process the rumors
 	hasExpectedRumor := false
@@ -317,39 +317,41 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 	n.logger.Info().Str("packetID", header.PacketID).Str("neighbor", neighbor).Msg("sent rumor to neighbor")
 
 	// Wait for the ACK
-	n.ackChannelsMutex.Lock()
+	if n.conf.AckTimeout != 0 {
+		n.ackChannelsMutex.Lock()
 
-	go func() {
-		channel := make(chan bool)
+		go func() {
+			channel := make(chan bool)
 
-		n.ackChannels[header.PacketID] = channel
-		n.ackChannelsMutex.Unlock()
+			n.ackChannels[header.PacketID] = channel
+			n.ackChannelsMutex.Unlock()
 
-		select {
-		case <-channel:
-			// Do nothing
+			select {
+			case <-channel:
+				// Do nothing
 
-		case <-time.After(n.conf.AckTimeout):
-			n.logger.Info().Str("packetID", header.PacketID).Msg("ACK not received in time")
-			newDest, exists := n.randomDifferentNeighbor(neighbor)
+			case <-time.After(n.conf.AckTimeout):
+				n.logger.Info().Str("packetID", header.PacketID).Msg("ACK not received in time")
+				newDest, exists := n.randomDifferentNeighbor(neighbor)
 
-			if exists {
-				err := n.sendRumorsMsg(msg, newDest)
-				if err != nil {
-					n.logger.Error().Err(err).Msg("can't transfer the rumor to another neighbor")
+				if exists {
+					err := n.sendRumorsMsg(msg, newDest)
+					if err != nil {
+						n.logger.Error().Err(err).Msg("can't transfer the rumor to another neighbor")
+					}
 				}
 			}
-		}
 
-		// Delete the channel
+			// Delete the channel
+			n.ackChannelsMutex.Lock()
+			delete(n.ackChannels, header.PacketID)
+			n.ackChannelsMutex.Unlock()
+		}()
+
+		// Make sure that the channel has been created by the goroutine
 		n.ackChannelsMutex.Lock()
-		delete(n.ackChannels, header.PacketID)
 		n.ackChannelsMutex.Unlock()
-	}()
-
-	// Make sure that the channel has been created by the goroutine
-	n.ackChannelsMutex.Lock()
-	n.ackChannelsMutex.Unlock()
+	}
 
 	return n.conf.Socket.Send(neighbor, pkt, time.Second)
 }
