@@ -49,7 +49,7 @@ func (n *node) antiEntropy() {
 func (n *node) sendStatus(neighbor string) {
 	// Create the status to send
 	n.rumorMutex.Lock()
-	_, err := n.sendMsgToNeighbor(n.status, neighbor)
+	err := n.sendMsgToNeighbor(n.status, neighbor)
 	n.rumorMutex.Unlock()
 
 	if err != nil {
@@ -160,7 +160,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 		Status:        n.status,
 	}
 	n.logger.Info().Str("dest", pkt.Header.Source).Str("packetID", ack.AckedPacketID).Msg("sending ACK")
-	_, err := n.sendMsgToNeighbor(ack, pkt.Header.Source)
+	err := n.sendMsgToNeighbor(ack, pkt.Header.Source)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't send ack to neighbor")
 		return err

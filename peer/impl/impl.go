@@ -231,18 +231,18 @@ func (n *node) processPacket(pkt transport.Packet) {
 }
 
 // Sends a message to a neighbor of the node. Returns the ID of the packet sent.
-func (n *node) sendMsgToNeighbor(msg types.Message, dest string) (string, error) {
+func (n *node) sendMsgToNeighbor(msg types.Message, dest string) error {
 	marshaled, err := n.conf.MessageRegistry.MarshalMessage(msg)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't marshal the message")
-		return "", err
+		return err
 	}
 
 	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
 	pkt := transport.Packet{Header: &header, Msg: &marshaled}
 
 	n.logger.Info().Str("dest", dest).Msg("sending packet to neighbor")
-	return header.PacketID, n.conf.Socket.Send(dest, pkt, time.Second)
+	return n.conf.Socket.Send(dest, pkt, time.Second)
 }
 
 // Returns a random neighbor with an address different from the given address
