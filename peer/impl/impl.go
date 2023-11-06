@@ -46,8 +46,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		isRunning:       false,
 		mustStop:        make(chan bool, 1),
 		logger:          logger,
-		lastHeartbeat:   time.Now().Add(-2 * conf.HeartbeatInterval),             // Start immediately
-		lastAntiEntropy: time.Now().Add(-conf.AntiEntropyInterval + time.Second), // Start 1s after
+		lastHeartbeat:   time.Now().Add(-2 * conf.HeartbeatInterval),   // Start immediately
+		lastAntiEntropy: time.Now().Add(-conf.AntiEntropyInterval / 2), // Start a bit after
 		ackChannels:     make(map[string]chan bool),
 		status:          make(types.StatusMessage),
 		rumorsReceived:  make(map[string][]types.Rumor),
