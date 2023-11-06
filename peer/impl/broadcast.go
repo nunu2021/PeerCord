@@ -198,6 +198,7 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 			Str("source", pkt.Header.Source).
 			Str("Packet ID", ackMsg.AckedPacketID).
 			Msg("unexpected ACK received")
+		panic("unexpected ACK")
 		return nil
 	}
 	channel <- true
@@ -306,45 +307,51 @@ func (n *node) receivePrivateMsg(msg types.Message, packet transport.Packet) err
 
 // Sends a rumors message to a neighbor
 func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
-	packetID, err := n.sendMsgToNeighbor(msg, neighbor)
+	marshaled, err := n.conf.MessageRegistry.MarshalMessage(msg)
 	if err != nil {
 		return err
 	}
 
-	n.logger.Info().Str("packetID", packetID).Str("neighbor", neighbor).Msg("sent rumor to neighbor")
+	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), neighbor, 0)
+	pkt := transport.Packet{Header: &header, Msg: &marshaled}
+
+	n.logger.Info().Str("packetID", header.PacketID).Str("neighbor", neighbor).Msg("sent rumor to neighbor")
 
 	// Wait for the ACK
-	if n.conf.AckTimeout != 0 {
-		go func() {
-			channel := make(chan bool)
+	n.ackChannelsMutex.Lock()
 
-			n.ackChannelsMutex.Lock()
-			n.ackChannels[packetID] = channel
-			n.ackChannelsMutex.Unlock()
+	go func() {
+		channel := make(chan bool)
 
-			select {
-			case <-channel:
-				// Do nothing
+		n.ackChannels[header.PacketID] = channel
+		n.ackChannelsMutex.Unlock()
 
-			case <-time.After(n.conf.AckTimeout):
-				n.logger.Info().Str("packetID", packetID).Msg("ACK not received in time")
-				newDest, exists := n.randomDifferentNeighbor(neighbor)
+		select {
+		case <-channel:
+			// Do nothing
 
-				// TODO bug: the channel is deleted afterwards?
-				if exists {
-					err := n.sendRumorsMsg(msg, newDest)
-					if err != nil {
-						n.logger.Error().Err(err).Msg("can't transfer the rumor to another neighbor")
-					}
+		case <-time.After(n.conf.AckTimeout):
+			n.logger.Info().Str("packetID", header.PacketID).Msg("ACK not received in time")
+			newDest, exists := n.randomDifferentNeighbor(neighbor)
+
+			// TODO bug: the channel is deleted afterwards?
+			if exists {
+				err := n.sendRumorsMsg(msg, newDest)
+				if err != nil {
+					n.logger.Error().Err(err).Msg("can't transfer the rumor to another neighbor")
 				}
 			}
+		}
 
-			// Delete the channel
-			n.ackChannelsMutex.Lock()
-			delete(n.ackChannels, packetID)
-			n.ackChannelsMutex.Unlock()
-		}()
-	}
+		// Delete the channel
+		n.ackChannelsMutex.Lock()
+		delete(n.ackChannels, header.PacketID)
+		n.ackChannelsMutex.Unlock()
+	}()
 
-	return nil
+	// Make sure that the channel has been created by the goroutine
+	n.ackChannelsMutex.Lock()
+	n.ackChannelsMutex.Unlock()
+
+	return n.conf.Socket.Send(neighbor, pkt, time.Second)
 }
