@@ -21,7 +21,6 @@ func (n *node) sendHeartbeat() error {
 
 		err = n.Broadcast(marshaledEmptyMsg)
 		if err != nil {
-			n.logger.Error().Err(err).Msg("can't broadcast")
 			return err
 		}
 	}
