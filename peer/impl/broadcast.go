@@ -188,15 +188,15 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 			Str("source", pkt.Header.Source).
 			Str("packetID", ackMsg.AckedPacketID).
 			Msg("unexpected ACK received")
-		return nil
-	}
-	channel <- true
+	} else {
+		channel <- true
 
-	// Log the ACK
-	n.logger.Info().
-		Str("source", pkt.Header.Source).
-		Str("packetID", ackMsg.AckedPacketID).
-		Msg("ACK received")
+		// Log the ACK
+		n.logger.Info().
+			Str("source", pkt.Header.Source).
+			Str("packetID", ackMsg.AckedPacketID).
+			Msg("ACK received")
+	}
 
 	// Process the status
 	err := n.receiveStatus(&ackMsg.Status, pkt)
