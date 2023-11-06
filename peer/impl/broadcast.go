@@ -350,7 +350,7 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 
 		// Make sure that the channel has been created by the goroutine
 		n.ackChannelsMutex.Lock()
-		n.ackChannelsMutex.Unlock()
+		n.ackChannelsMutex.Unlock() //nolint:staticcheck // only check that the channel has been created
 	}
 
 	return n.conf.Socket.Send(neighbor, pkt, time.Second)
