@@ -92,7 +92,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 	if len(neighbors) != 0 {
 		dest := neighbors[rand.Intn(len(neighbors))]
 
-		err := n.sendRumorsMsg(rumorsMsg, dest)
+		err := n.sendRumorsMsg(rumorsMsg, dest, true)
 		if err != nil {
 			return err
 		}
@@ -171,7 +171,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 		dest, ok := n.randomDifferentNeighbor(pkt.Header.Source)
 
 		if ok {
-			err := n.sendRumorsMsg(*rumorsMsg, dest)
+			err := n.sendRumorsMsg(*rumorsMsg, dest, true)
 			if err != nil {
 				n.logger.Error().Err(err).Msg("can't send message to neighbor")
 				return err
@@ -194,9 +194,9 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 	n.ackChannelsMutex.Unlock()
 
 	if !exists {
-		n.logger.Warn().
+		n.logger.Info().
 			Str("source", pkt.Header.Source).
-			Str("Packet ID", ackMsg.AckedPacketID).
+			Str("packetID", ackMsg.AckedPacketID).
 			Msg("unexpected ACK received")
 		return nil
 	}
@@ -205,7 +205,7 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 	// Log the ACK
 	n.logger.Info().
 		Str("source", pkt.Header.Source).
-		Str("packet-ID", ackMsg.AckedPacketID).
+		Str("packetID", ackMsg.AckedPacketID).
 		Msg("ACK received")
 
 	// Process the status
@@ -267,8 +267,8 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	n.rumorMutex.Unlock()
 
 	if len(rumors.Rumors) > 0 {
-		n.logger.Info().Int("nb-rumors", len(rumors.Rumors)).Msg("processing status: we have new rumors for the peer")
-		err := n.sendRumorsMsg(rumors, neighbor) // TODO we should not expect an ACK here
+		n.logger.Info().Int("nbRumors", len(rumors.Rumors)).Msg("processing status: we have new rumors for the peer")
+		err := n.sendRumorsMsg(rumors, neighbor, false)
 		if err != nil {
 			return err
 		}
@@ -305,7 +305,7 @@ func (n *node) receivePrivateMsg(msg types.Message, packet transport.Packet) err
 }
 
 // Sends a rumors message to a neighbor
-func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
+func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string, waitAck bool) error {
 	marshaled, err := n.conf.MessageRegistry.MarshalMessage(msg)
 	if err != nil {
 		return err
@@ -317,7 +317,7 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 	n.logger.Info().Str("packetID", header.PacketID).Str("neighbor", neighbor).Msg("sent rumor to neighbor")
 
 	// Wait for the ACK
-	if n.conf.AckTimeout != 0 {
+	if n.conf.AckTimeout != 0 && waitAck {
 		n.ackChannelsMutex.Lock()
 
 		go func() {
@@ -335,7 +335,7 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 				newDest, exists := n.randomDifferentNeighbor(neighbor)
 
 				if exists {
-					err := n.sendRumorsMsg(msg, newDest)
+					err := n.sendRumorsMsg(msg, newDest, true)
 					if err != nil {
 						n.logger.Error().Err(err).Msg("can't transfer the rumor to another neighbor")
 					}
