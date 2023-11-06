@@ -198,7 +198,6 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 			Str("source", pkt.Header.Source).
 			Str("Packet ID", ackMsg.AckedPacketID).
 			Msg("unexpected ACK received")
-		panic("unexpected ACK")
 		return nil
 	}
 	channel <- true
@@ -334,7 +333,6 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string) error {
 			n.logger.Info().Str("packetID", header.PacketID).Msg("ACK not received in time")
 			newDest, exists := n.randomDifferentNeighbor(neighbor)
 
-			// TODO bug: the channel is deleted afterwards?
 			if exists {
 				err := n.sendRumorsMsg(msg, newDest)
 				if err != nil {
