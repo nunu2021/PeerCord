@@ -122,10 +122,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	hasExpectedRumor := false
 
 	for _, rumor := range rumorsMsg.Rumors {
-		previousSequence, exists := n.status[rumor.Origin]
-		if !exists {
-			previousSequence = 0
-		}
+		previousSequence := n.status[rumor.Origin] // 0 if it doesn't exist
 
 		if rumor.Sequence == previousSequence+1 {
 			hasExpectedRumor = true
@@ -155,24 +152,17 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	}
 
 	// Send back ACK
-	ack := types.AckMessage{
-		AckedPacketID: pkt.Header.PacketID,
-		Status:        n.status,
-	}
+	ack := types.AckMessage{AckedPacketID: pkt.Header.PacketID, Status: n.status}
 	n.logger.Info().Str("dest", pkt.Header.Source).Str("packetID", ack.AckedPacketID).Msg("sending ACK")
-	err := n.sendMsgToNeighbor(ack, pkt.Header.Source)
-	if err != nil {
+	if err := n.sendMsgToNeighbor(ack, pkt.Header.Source); err != nil {
 		n.logger.Error().Err(err).Msg("can't send ack to neighbor")
 		return err
 	}
 
 	// Transfer the rumor to another neighbor if needed and possible
 	if hasExpectedRumor {
-		dest, ok := n.randomDifferentNeighbor(pkt.Header.Source)
-
-		if ok {
-			err := n.sendRumorsMsg(*rumorsMsg, dest, true)
-			if err != nil {
+		if dest, ok := n.randomDifferentNeighbor(pkt.Header.Source); ok {
+			if err := n.sendRumorsMsg(*rumorsMsg, dest, true); err != nil {
 				n.logger.Error().Err(err).Msg("can't send message to neighbor")
 				return err
 			}
