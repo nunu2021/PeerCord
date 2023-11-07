@@ -247,3 +247,15 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 
 	return nil
 }
+
+// Tag implements peer.DataSharing
+func (n *node) Tag(name string, metaHash string) error {
+	n.conf.Storage.GetNamingStore().Set(name, []byte(metaHash))
+	return nil
+}
+
+// Resolve returns the corresponding metahash of a given (file)name. Returns
+// an empty string if not found.
+func (n *node) Resolve(name string) string {
+	return string(n.conf.Storage.GetNamingStore().Get(name))
+}
