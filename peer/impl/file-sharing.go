@@ -213,7 +213,17 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 		panic("not a data reply message")
 	}
 
-	// TODO check the validity message
+	// Check the data
+	sha := sha256.New()
+	sha.Write(dataReplyMsg.Value)
+	receivedHash := hex.EncodeToString(sha.Sum(nil))
+	if receivedHash != dataReplyMsg.Key { // Remove from the catalog
+		entry, exists := n.fileSharing.catalog.getReference(dataReplyMsg.Key)
+		if exists {
+			delete(entry, pkt.Header.Source)
+			n.fileSharing.catalog.unlock()
+		}
+	}
 
 	// Store the data
 	blobStore := n.conf.Storage.GetDataBlobStore()
