@@ -19,14 +19,14 @@ import (
 type FileSharing struct {
 	catalog safeMap[string, map[string]struct{}]
 
-	replyReceived safeMap[string, chan struct{}]
+	chunkRepliesReceived safeMap[string, chan struct{}]
 }
 
 // NewFileSharing returns an empty FileSharing object.
 func NewFileSharing() FileSharing {
 	return FileSharing{
-		catalog:       newSafeMap[string, map[string]struct{}](),
-		replyReceived: newSafeMap[string, chan struct{}](),
+		catalog:              newSafeMap[string, map[string]struct{}](),
+		chunkRepliesReceived: newSafeMap[string, chan struct{}](),
 	}
 }
 
@@ -99,8 +99,8 @@ func (n *node) requestChunk(peer string, hash string, requestID string, currentT
 
 	// Set a up channel to be informed when the reply has been received
 	channel := make(chan struct{})
-	n.fileSharing.replyReceived.set(requestID, channel)
-	defer n.fileSharing.replyReceived.delete(requestID)
+	n.fileSharing.chunkRepliesReceived.set(requestID, channel)
+	defer n.fileSharing.chunkRepliesReceived.delete(requestID)
 
 	// Send the request
 	req := types.DataRequestMessage{RequestID: requestID, Key: hash}
@@ -238,7 +238,7 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 	blobStore.Set(dataReplyMsg.Key, dataReplyMsg.Value)
 
 	// Inform the download thread that a reply has been received
-	channel, exists := n.fileSharing.replyReceived.get(dataReplyMsg.RequestID)
+	channel, exists := n.fileSharing.chunkRepliesReceived.get(dataReplyMsg.RequestID)
 	if !exists {
 		n.logger.Info().Msg("unexpected data reply received")
 		return nil
