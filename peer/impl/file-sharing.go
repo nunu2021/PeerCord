@@ -100,8 +100,9 @@ func (n *node) requestChunk(peer string, hash string, currentTry uint) ([]byte, 
 	requestID := xid.New().String()
 
 	// Set a up channel to be informed when the reply has been received
-	channel := make(chan struct{}) // TODO delete the channel
+	channel := make(chan struct{})
 	n.fileSharing.replyReceived.set(requestID, channel)
+	defer n.fileSharing.replyReceived.delete(requestID)
 
 	// Send the request
 	req := types.DataRequestMessage{RequestID: requestID, Key: hash}
