@@ -19,14 +19,16 @@ import (
 type FileSharing struct {
 	catalog safeMap[string, map[string]struct{}]
 
-	chunkRepliesReceived safeMap[string, chan struct{}]
+	chunkRepliesReceived  safeMap[string, chan struct{}] // RequestID -> channel
+	searchRepliesReceived safeMap[string, chan struct{}] // RequestID -> channel
 }
 
 // NewFileSharing returns an empty FileSharing object.
 func NewFileSharing() FileSharing {
 	return FileSharing{
-		catalog:              newSafeMap[string, map[string]struct{}](),
-		chunkRepliesReceived: newSafeMap[string, chan struct{}](),
+		catalog:               newSafeMap[string, map[string]struct{}](),
+		chunkRepliesReceived:  newSafeMap[string, chan struct{}](),
+		searchRepliesReceived: newSafeMap[string, chan struct{}](),
 	}
 }
 
@@ -270,21 +272,74 @@ func (n *node) Resolve(name string) string {
 
 // SearchAll implements peer.DataSharing
 func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
-	names := make(map[string]struct{})
+	// Send requests to neighbors
+	neighbors := n.routingTable.neighbors(n.GetAddress())
+	if len(neighbors) > 0 {
+		rand.Shuffle(len(neighbors), func(i, j int) {
+			neighbors[i], neighbors[j] = neighbors[j], neighbors[i]
+		})
 
-	// Add the local names
-	n.conf.Storage.GetNamingStore().ForEach(func(key string, val []byte) bool {
-		var empty struct{}
-		if reg.MatchString(key) {
-			names[key] = empty
+		budgetPerRequest := budget / uint(len(neighbors))
+		remainingBudget := budget - budgetPerRequest*uint(len(neighbors))
+
+		for _, neighbor := range neighbors {
+			// Compute the budget available for this neighbor
+			budget := budgetPerRequest
+			if remainingBudget > 0 {
+				budget++
+				remainingBudget--
+			}
+
+			if budget == 0 {
+				break
+			}
+
+			// Send the request
+			req := types.SearchRequestMessage{
+				RequestID: xid.New().String(),
+				Origin:    n.GetAddress(),
+				Pattern:   reg.String(),
+				Budget:    budget,
+			}
+
+			err := n.sendMsgToNeighbor(req, neighbor)
+			if err != nil {
+				n.logger.Error().Err(err).Msg("can't send request")
+			}
+		}
+	}
+
+	// Wait for the answers
+	time.Sleep(10 * time.Second) // TODO change...
+
+	// Return all the names that have been found
+	names := make([]string, 0)
+	n.conf.Storage.GetNamingStore().ForEach(func(name string, _ []byte) bool {
+		if reg.MatchString(name) {
+			names = append(names, name)
 		}
 		return true
 	})
+	return names, nil
+}
 
-	// Return all the names that have been found
-	namesList := make([]string, 0)
-	for name := range names {
-		namesList = append(namesList, name)
+func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error {
+	searchReplyMsg, ok := msg.(*types.SearchReplyMessage)
+	if !ok {
+		panic("not a search reply message")
 	}
-	return namesList, nil
+
+	// Update the naming store and the catalog
+	for _, answer := range searchReplyMsg.Responses {
+		n.conf.Storage.GetNamingStore().Set(answer.Name, []byte(answer.Metahash))
+		n.UpdateCatalog(answer.Metahash, pkt.Header.Source)
+	}
+
+	channel, exists := n.fileSharing.searchRepliesReceived.get(searchReplyMsg.RequestID)
+	if exists {
+		var empty struct{}
+		channel <- empty
+	}
+
+	return nil
 }

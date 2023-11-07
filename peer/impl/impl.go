@@ -63,6 +63,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, n.receivePrivateMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.DataRequestMessage{}, n.receiveDataRequest)
 	conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.receiveDataReply)
+	conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.receiveSearchReply)
 
 	return n
 }
