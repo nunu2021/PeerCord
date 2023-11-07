@@ -9,6 +9,7 @@ import (
 	"go.dedis.ch/cs438/types"
 	"io"
 	"math/rand"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -254,8 +255,36 @@ func (n *node) Tag(name string, metaHash string) error {
 	return nil
 }
 
-// Resolve returns the corresponding metahash of a given (file)name. Returns
-// an empty string if not found.
+// Resolve implements peer.DataSharing
 func (n *node) Resolve(name string) string {
 	return string(n.conf.Storage.GetNamingStore().Get(name))
+}
+
+// TODO supprimer
+// SearchAll returns all the names that exist matching the given regex. It
+// merges results from the local storage and from the search request reply
+// sent to a random neighbor using the provided budget. It makes the peer
+// update its catalog and name storage according to the SearchReplyMessages
+// received. Returns an empty result if nothing found. An error is returned
+// in case of an exceptional event.
+
+// SearchAll implements peer.DataSharing
+func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
+	names := make(map[string]struct{})
+
+	// Add the local names
+	n.conf.Storage.GetNamingStore().ForEach(func(key string, val []byte) bool {
+		var empty struct{}
+		if reg.MatchString(key) {
+			names[key] = empty
+		}
+		return true
+	})
+
+	// Return all the names that have been found
+	namesList := make([]string, 0)
+	for name := range names {
+		namesList = append(namesList, name)
+	}
+	return namesList, nil
 }
