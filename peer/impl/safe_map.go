@@ -25,6 +25,24 @@ func (sm *safeMap[T, U]) get(key T) (U, bool) {
 	return val, exists
 }
 
+// Safely get a value of the map. If the value exists, the safe map's mutex is
+// kept locked until release is called.
+func (sm *safeMap[T, U]) getReference(key T) (U, bool) {
+	sm.mutex.Lock()
+
+	val, exists := sm.data[key]
+
+	if !exists {
+		sm.mutex.Unlock()
+	}
+
+	return val, exists
+}
+
+func (sm *safeMap[T, U]) unlock() {
+	sm.mutex.Unlock()
+}
+
 // Safely set a value of the map
 func (sm *safeMap[T, U]) set(key T, val U) {
 	sm.mutex.Lock()
@@ -38,6 +56,12 @@ func (sm *safeMap[T, U]) set(key T, val U) {
 	}*/
 
 	sm.data[key] = val
+}
+
+func (sm *safeMap[T, U]) delete(key T) {
+	sm.mutex.Lock()
+	delete(sm.data, key)
+	sm.mutex.Unlock()
 }
 
 // Returns the internal map. It is not thread-safe.
