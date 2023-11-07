@@ -89,15 +89,18 @@ func (n *node) UpdateCatalog(key string, peer string) {
 	entries[peer] = empty
 }
 
-// TODO In case the remote peer responds with an empty value, a tampered chunk, or the backoff timeouts, the function must return an error.
-
 // Asks a peer for a chunk. Retry if the peer doesn't answer fast enough.
-func (n *node) requestChunk(peer string, hash string) ([]byte, error) {
+func (n *node) requestChunk(peer string, hash string, currentTry uint) ([]byte, error) {
+	// Too many retries
+	if currentTry == n.conf.BackoffDataRequest.Retry {
+		return nil, NonexistentFileError(hash)
+	}
+
 	// Find a request ID
 	requestID := xid.New().String()
 
 	// Set a up channel to be informed when the reply has been received
-	channel := make(chan struct{})
+	channel := make(chan struct{}) // TODO delete the channel
 	n.fileSharing.replyReceived.set(requestID, channel)
 
 	// Send the request
@@ -105,6 +108,12 @@ func (n *node) requestChunk(peer string, hash string) ([]byte, error) {
 	err := n.marshalAndUnicast(peer, req)
 	if err != nil {
 		return nil, err
+	}
+
+	// Compute the timeout value
+	timeout := n.conf.BackoffDataRequest.Initial
+	for i := uint(0); i < currentTry; i++ {
+		timeout = time.Duration(n.conf.BackoffDataRequest.Factor) * timeout
 	}
 
 	// Wait for the answer
@@ -117,8 +126,8 @@ func (n *node) requestChunk(peer string, hash string) ([]byte, error) {
 		}
 		return buffer, nil
 
-	case <-time.After(time.Second): // TODO timeout
-		return nil, NonexistentFileError(hash)
+	case <-time.After(timeout):
+		return n.requestChunk(peer, hash, currentTry+1)
 	}
 }
 
@@ -149,7 +158,7 @@ func (n *node) downloadChunk(hash string) ([]byte, error) {
 			remaining--
 		}
 
-		return n.requestChunk(target, hash)
+		return n.requestChunk(target, hash, 0)
 	}
 
 	return nil, NonexistentFileError(hash) // TODO NonexistentChunk
