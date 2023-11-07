@@ -93,7 +93,7 @@ func (n *node) UpdateCatalog(key string, peer string) {
 func (n *node) requestChunk(peer string, hash string, currentTry uint) ([]byte, error) {
 	// Too many retries
 	if currentTry == n.conf.BackoffDataRequest.Retry {
-		return nil, NonexistentFileError(hash)
+		return nil, NonexistentChunk(hash)
 	}
 
 	// Find a request ID
@@ -122,7 +122,7 @@ func (n *node) requestChunk(peer string, hash string, currentTry uint) ([]byte, 
 		blobStore := n.conf.Storage.GetDataBlobStore()
 		buffer := blobStore.Get(hash)
 		if buffer == nil {
-			return nil, NonexistentFileError(hash)
+			return nil, NonexistentChunk(hash)
 		}
 		return buffer, nil
 
@@ -161,7 +161,7 @@ func (n *node) downloadChunk(hash string) ([]byte, error) {
 		return n.requestChunk(target, hash, 0)
 	}
 
-	return nil, NonexistentFileError(hash) // TODO NonexistentChunk
+	return nil, NonexistentChunk(hash)
 }
 
 // Download implements peer.DataSharing

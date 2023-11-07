@@ -29,10 +29,10 @@ func (err NotRunningError) Error() string {
 	return "can't stop peer: not running"
 }
 
-// NonexistentFileError occurs when a peer tries to download a file that does
+// NonexistentChunk occurs when a peer tries to download a file that does
 // not appear in its catalog.
-type NonexistentFileError string
+type NonexistentChunk string
 
-func (err NonexistentFileError) Error() string {
+func (err NonexistentChunk) Error() string {
 	return "file does not exists: " + string(err)
 }
