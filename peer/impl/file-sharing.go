@@ -71,7 +71,7 @@ func (n *node) Upload(data io.Reader) (string, error) {
 // GetCatalog implements Peer.DataSharing
 // It is NOT thread-safe
 func (n *node) GetCatalog() peer.Catalog {
-	return peer.Catalog(n.fileSharing.catalog.internalMap())
+	return n.fileSharing.catalog.internalMap()
 }
 
 // UpdateCatalog implements Peer.DataSharing
