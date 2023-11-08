@@ -406,6 +406,12 @@ func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error
 	for _, answer := range searchReplyMsg.Responses {
 		n.GetNamingStore().Set(answer.Name, []byte(answer.Metahash))
 		n.UpdateCatalog(answer.Metahash, pkt.Header.Source)
+
+		for _, chunk := range answer.Chunks {
+			if chunk != nil {
+				n.UpdateCatalog(string(chunk), pkt.Header.Source)
+			}
+		}
 	}
 
 	channel, exists := n.fileSharing.searchRepliesReceived.get(searchReplyMsg.RequestID)
