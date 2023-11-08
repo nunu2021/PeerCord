@@ -151,7 +151,7 @@ func (n *node) downloadChunk(hash string) ([]byte, error) {
 		remaining := rand.Intn(len(entries))
 
 		target := ""
-		for currentPeer, _ := range entries {
+		for currentPeer := range entries {
 			if remaining == 0 {
 				target = currentPeer
 				break
