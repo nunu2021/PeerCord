@@ -64,8 +64,9 @@ func (sm *safeMap[T, U]) delete(key T) {
 	sm.mutex.Unlock()
 }
 
-// Returns the internal map. It is not thread-safe.
+// Returns the internal map. The map must be manually unlocked
 func (sm *safeMap[T, U]) internalMap() map[T]U {
+	sm.mutex.Lock()
 	return sm.data
 }
 
