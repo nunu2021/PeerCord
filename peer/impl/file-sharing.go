@@ -33,7 +33,7 @@ func NewFileSharing() FileSharing {
 }
 
 func (n *node) storeChunk(chunk []byte) string {
-	blobStore := n.conf.Storage.GetDataBlobStore()
+	blobStore := n.GetDataBlobStore()
 
 	sha := sha256.New()
 	sha.Write(chunk)
@@ -120,7 +120,7 @@ func (n *node) requestChunk(peer string, hash string, requestID string, currentT
 	// Wait for the answer
 	select {
 	case <-channel:
-		blobStore := n.conf.Storage.GetDataBlobStore()
+		blobStore := n.GetDataBlobStore()
 		buffer := blobStore.Get(hash)
 		if buffer == nil {
 			return nil, NonexistentChunk(hash)
@@ -133,7 +133,7 @@ func (n *node) requestChunk(peer string, hash string, requestID string, currentT
 }
 
 func (n *node) downloadChunk(hash string) ([]byte, error) {
-	blobStore := n.conf.Storage.GetDataBlobStore()
+	blobStore := n.GetDataBlobStore()
 
 	// Check if we have the file locally
 	buffer := blobStore.Get(hash)
@@ -200,7 +200,7 @@ func (n *node) receiveDataRequest(msg types.Message, pkt transport.Packet) error
 		panic("not a data request message")
 	}
 
-	blobStore := n.conf.Storage.GetDataBlobStore()
+	blobStore := n.GetDataBlobStore()
 
 	reply := types.DataReplyMessage{
 		RequestID: dataRequestMsg.RequestID,
@@ -236,7 +236,7 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 	}
 
 	// Store the data
-	blobStore := n.conf.Storage.GetDataBlobStore()
+	blobStore := n.GetDataBlobStore()
 	blobStore.Set(dataReplyMsg.Key, dataReplyMsg.Value)
 
 	// Inform the download thread that a reply has been received
@@ -253,13 +253,13 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 
 // Tag implements peer.DataSharing
 func (n *node) Tag(name string, metaHash string) error {
-	n.conf.Storage.GetNamingStore().Set(name, []byte(metaHash))
+	n.GetNamingStore().Set(name, []byte(metaHash))
 	return nil
 }
 
 // Resolve implements peer.DataSharing
 func (n *node) Resolve(name string) string {
-	return string(n.conf.Storage.GetNamingStore().Get(name))
+	return string(n.GetNamingStore().Get(name))
 }
 
 // TODO supprimer
@@ -314,13 +314,65 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 
 	// Return all the names that have been found
 	names := make([]string, 0)
-	n.conf.Storage.GetNamingStore().ForEach(func(name string, _ []byte) bool {
+	n.GetNamingStore().ForEach(func(name string, _ []byte) bool {
 		if reg.MatchString(name) {
 			names = append(names, name)
 		}
 		return true
 	})
 	return names, nil
+}
+
+func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) error {
+	searchRequestMsg, ok := msg.(*types.SearchRequestMessage)
+	if !ok {
+		panic("not a search request message")
+	}
+
+	budget := searchRequestMsg.Budget - 1
+	if budget > 0 {
+		// TODO forward the request
+	}
+
+	// TODO start a goroutine to avoid blocking
+
+	// Look for matches
+	responses := make([]types.FileInfo, 0)
+	reg := regexp.MustCompile(searchRequestMsg.Pattern)
+
+	n.GetNamingStore().ForEach(func(name string, metaHash []byte) bool {
+		if !reg.MatchString(name) {
+			return true
+		}
+
+		metaHashStr := string(metaHash)
+		chunks := n.GetDataBlobStore().Get(metaHashStr)
+		if chunks == nil {
+			return true
+		}
+
+		info := types.FileInfo{
+			Name:     name,
+			Metahash: metaHashStr,
+			Chunks:   nil, // TODO
+		}
+		responses = append(responses, info)
+
+		return true
+	})
+
+	// Send the reply
+	reply := types.SearchReplyMessage{
+		RequestID: searchRequestMsg.RequestID,
+		Responses: responses,
+	}
+	err := n.sendMsgToNeighbor(reply, pkt.Header.Source)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't send search reply")
+		return err
+	}
+
+	return nil
 }
 
 func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error {
@@ -331,7 +383,7 @@ func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error
 
 	// Update the naming store and the catalog
 	for _, answer := range searchReplyMsg.Responses {
-		n.conf.Storage.GetNamingStore().Set(answer.Name, []byte(answer.Metahash))
+		n.GetNamingStore().Set(answer.Name, []byte(answer.Metahash))
 		n.UpdateCatalog(answer.Metahash, pkt.Header.Source)
 	}
 

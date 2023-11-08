@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/rs/zerolog"
 	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"math/rand"
@@ -63,6 +64,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, n.receivePrivateMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.DataRequestMessage{}, n.receiveDataRequest)
 	conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.receiveDataReply)
+	conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, n.receiveSearchRequest)
 	conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.receiveSearchReply)
 
 	return n
@@ -115,6 +117,14 @@ type node struct {
 // GetAddress returns the address of the node
 func (n *node) GetAddress() string {
 	return n.conf.Socket.GetAddress()
+}
+
+func (n *node) GetDataBlobStore() storage.Store {
+	return n.conf.Storage.GetDataBlobStore()
+}
+
+func (n *node) GetNamingStore() storage.Store {
+	return n.conf.Storage.GetNamingStore()
 }
 
 func loop(n *node) {
