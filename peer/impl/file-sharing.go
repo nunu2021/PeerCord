@@ -310,7 +310,7 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 	}
 
 	// Wait for the answers
-	time.Sleep(10 * time.Second) // TODO change...
+	time.Sleep(2 * time.Second) // TODO change...
 
 	// Return all the names that have been found
 	names := make([]string, 0)
@@ -346,15 +346,24 @@ func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) err
 		}
 
 		metaHashStr := string(metaHash)
-		chunks := n.GetDataBlobStore().Get(metaHashStr)
-		if chunks == nil {
+		chunk := n.GetDataBlobStore().Get(metaHashStr)
+		if chunk == nil {
 			return true
+		}
+
+		hashes := make([][]byte, 0)
+		for _, hash := range strings.Split(string(chunk), peer.MetafileSep) {
+			if n.GetDataBlobStore().Get(hash) != nil {
+				hashes = append(hashes, []byte(hash))
+			} else {
+				hashes = append(hashes, nil)
+			}
 		}
 
 		info := types.FileInfo{
 			Name:     name,
 			Metahash: metaHashStr,
-			Chunks:   nil, // TODO
+			Chunks:   hashes,
 		}
 		responses = append(responses, info)
 
