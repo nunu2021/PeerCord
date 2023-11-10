@@ -1,3 +1,5 @@
+// TODO encode in hexadecimal instead of string() and byte[]() conversions?
+
 package impl
 
 import (
@@ -105,7 +107,9 @@ func (n *node) UpdateCatalog(key string, peer string) {
 }
 
 // Asks a peer for a chunk. Retry if the peer doesn't answer fast enough.
-func (n *node) requestChunk(peer string, hash string, requestID string, currentTry uint) ([]byte, error) {
+func (n *node) requestChunk(peer string, hash string, currentTry uint) ([]byte, error) {
+	requestID := xid.New().String()
+
 	// Too many retries
 	if currentTry == n.conf.BackoffDataRequest.Retry {
 		return nil, NonExistentChunk(hash)
@@ -140,7 +144,7 @@ func (n *node) requestChunk(peer string, hash string, requestID string, currentT
 		return buffer, nil
 
 	case <-time.After(timeout):
-		return n.requestChunk(peer, hash, requestID, currentTry+1)
+		return n.requestChunk(peer, hash, currentTry+1)
 	}
 }
 
@@ -171,7 +175,7 @@ func (n *node) downloadChunk(hash string) ([]byte, error) {
 			remaining--
 		}
 
-		return n.requestChunk(target, hash, xid.New().String(), 0)
+		return n.requestChunk(target, hash, 0)
 	}
 
 	return nil, NonExistentChunk(hash)
