@@ -291,55 +291,70 @@ func (n *node) Resolve(name string) string {
 	return string(n.GetNamingStore().Get(name))
 }
 
-// TODO supprimer
-// SearchAll returns all the names that exist matching the given regex. It
-// merges results from the local storage and from the search request reply
-// sent to a random neighbor using the provided budget. It makes the peer
-// update its catalog and name storage according to the SearchReplyMessages
-// received. Returns an empty result if nothing found. An error is returned
-// in case of an exceptional event.
-
-// SearchAll implements peer.DataSharing
-func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
-	// Send requests to neighbors
+func (n *node) sendSearchRequestToNeighbors(requestID string, origin string, reg regexp.Regexp, totalBudget uint, forbiddenNeighbor string) error {
 	neighbors := n.routingTable.neighbors(n.GetAddress())
-	if len(neighbors) > 0 {
-		rand.Shuffle(len(neighbors), func(i, j int) {
-			neighbors[i], neighbors[j] = neighbors[j], neighbors[i]
-		})
 
-		budgetPerRequest := budget / uint(len(neighbors))
-		remainingBudget := budget - budgetPerRequest*uint(len(neighbors))
-
-		for _, neighbor := range neighbors {
-			// Compute the budget available for this neighbor
-			budget := budgetPerRequest
-			if remainingBudget > 0 {
-				budget++
-				remainingBudget--
-			}
-
-			if budget == 0 {
-				break
-			}
-
-			// Send the request
-			req := types.SearchRequestMessage{
-				RequestID: xid.New().String(),
-				Origin:    n.GetAddress(),
-				Pattern:   reg.String(),
-				Budget:    budget,
-			}
-
-			err := n.sendMsgToNeighbor(req, neighbor)
-			if err != nil {
-				n.logger.Error().Err(err).Msg("can't send request")
-			}
+	// Remove the forbidden neighbor
+	for i, neighbor := range neighbors {
+		if neighbor == forbiddenNeighbor {
+			neighbors = append(neighbors[:i], neighbors[i+1:]...)
+			break
 		}
 	}
 
+	if len(neighbors) == 0 {
+		return nil
+	}
+
+	rand.Shuffle(len(neighbors), func(i, j int) {
+		neighbors[i], neighbors[j] = neighbors[j], neighbors[i]
+	})
+
+	budgetPerRequest := totalBudget / uint(len(neighbors))
+	remainingBudget := totalBudget - budgetPerRequest*uint(len(neighbors))
+
+	for _, neighbor := range neighbors {
+		// Compute the budget available for this neighbor
+		budget := budgetPerRequest
+		if remainingBudget > 0 {
+			budget++
+			remainingBudget--
+		}
+
+		if budget == 0 {
+			break
+		}
+
+		// Send the request
+		req := types.SearchRequestMessage{
+			RequestID: requestID,
+			Origin:    origin,
+			Pattern:   reg.String(),
+			Budget:    budget,
+		}
+
+		err := n.sendMsgToNeighbor(req, neighbor)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't send request")
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SearchAll implements peer.DataSharing
+func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
+	requestID := xid.New().String()
+
+	err := n.sendSearchRequestToNeighbors(requestID, n.GetAddress(), reg, budget, "")
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't send search request")
+		return nil, err
+	}
+
 	// Wait for the answers
-	time.Sleep(2 * time.Second) // TODO change...
+	time.Sleep(timeout)
 
 	// Return all the names that have been found
 	names := make([]string, 0)
@@ -358,16 +373,18 @@ func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) err
 		panic("not a search request message")
 	}
 
+	reg := regexp.MustCompile(searchRequestMsg.Pattern)
+
 	budget := searchRequestMsg.Budget - 1
 	if budget > 0 {
-		// TODO forward the request
+		err := n.sendSearchRequestToNeighbors(searchRequestMsg.RequestID, searchRequestMsg.Origin, *reg, budget, pkt.Header.Source)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't send request to neighbor")
+		}
 	}
-
-	// TODO start a goroutine to avoid blocking
 
 	// Look for matches
 	responses := make([]types.FileInfo, 0)
-	reg := regexp.MustCompile(searchRequestMsg.Pattern)
 
 	n.GetNamingStore().ForEach(func(name string, metaHash []byte) bool {
 		if !reg.MatchString(name) {
@@ -404,13 +421,18 @@ func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) err
 		RequestID: searchRequestMsg.RequestID,
 		Responses: responses,
 	}
-	err := n.sendMsgToNeighbor(reply, pkt.Header.Source)
+
+	marshaled, err := n.conf.MessageRegistry.MarshalMessage(reply)
 	if err != nil {
-		n.logger.Error().Err(err).Msg("can't send search reply")
+		n.logger.Error().Err(err).Msg("can't marshal the message")
 		return err
 	}
 
-	return nil
+	replyHeader := transport.NewHeader(n.GetAddress(), n.GetAddress(), searchRequestMsg.Origin, 0)
+	replyPkt := transport.Packet{Header: &replyHeader, Msg: &marshaled}
+
+	n.logger.Info().Str("dest", pkt.Header.Source).Msg("sending packet to neighbor")
+	return n.conf.Socket.Send(pkt.Header.Source, replyPkt, time.Second)
 }
 
 func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error {
