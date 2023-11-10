@@ -23,6 +23,10 @@ type FileSharing struct {
 
 	chunkRepliesReceived  safeMap[string, chan struct{}] // RequestID -> channel
 	searchRepliesReceived safeMap[string, chan struct{}] // RequestID -> channel
+
+	// Packet ID of all the packets that have been received
+	// It is used to prevent answering to duplicate packets
+	requestsReceived map[string]struct{}
 }
 
 // NewFileSharing returns an empty FileSharing object.
@@ -31,6 +35,7 @@ func NewFileSharing() FileSharing {
 		catalog:               newSafeMap[string, map[string]struct{}](),
 		chunkRepliesReceived:  newSafeMap[string, chan struct{}](),
 		searchRepliesReceived: newSafeMap[string, chan struct{}](),
+		requestsReceived:      make(map[string]struct{}),
 	}
 }
 
@@ -215,6 +220,14 @@ func (n *node) receiveDataRequest(msg types.Message, pkt transport.Packet) error
 	if !ok {
 		panic("not a data request message")
 	}
+
+	// Detect duplicates
+	_, exists := n.fileSharing.requestsReceived[dataRequestMsg.RequestID]
+	if exists {
+		return nil
+	}
+	var empty struct{}
+	n.fileSharing.requestsReceived[dataRequestMsg.RequestID] = empty
 
 	blobStore := n.GetDataBlobStore()
 

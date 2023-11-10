@@ -959,6 +959,7 @@ func Test_HW2_SearchAll_Remote_Response(t *testing.T) {
 	require.Equal(t, node2.GetAddr(), n2outs[0].Header.Source)
 	require.Equal(t, node2.GetAddr(), n2outs[0].Header.RelayedBy)
 	require.Equal(t, node1.GetAddr(), n2outs[0].Header.Destination)
+	require.Equal(t, node1.GetAddr(), n2outs[0].Header.Destination)
 	require.Len(t, msg2.Responses, 4)
 
 	for _, e := range msg2.Responses {
