@@ -1,5 +1,3 @@
-// TODO encode in hexadecimal instead of string() and byte[]() conversions?
-
 package impl
 
 import (
