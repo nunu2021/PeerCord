@@ -21,8 +21,7 @@ import (
 type FileSharing struct {
 	catalog safeMap[string, map[string]struct{}]
 
-	chunkRepliesReceived  safeMap[string, chan struct{}] // RequestID -> channel
-	searchRepliesReceived safeMap[string, chan struct{}] // RequestID -> channel
+	chunkRepliesReceived safeMap[string, chan struct{}] // RequestID -> channel
 
 	// Packet ID of all the requests that have been received
 	// It is used to prevent answering to duplicate packets
@@ -32,10 +31,9 @@ type FileSharing struct {
 // NewFileSharing returns an empty FileSharing object.
 func NewFileSharing() FileSharing {
 	return FileSharing{
-		catalog:               newSafeMap[string, map[string]struct{}](),
-		chunkRepliesReceived:  newSafeMap[string, chan struct{}](),
-		searchRepliesReceived: newSafeMap[string, chan struct{}](),
-		requestsReceived:      make(map[string]struct{}),
+		catalog:              newSafeMap[string, map[string]struct{}](),
+		chunkRepliesReceived: newSafeMap[string, chan struct{}](),
+		requestsReceived:     make(map[string]struct{}),
 	}
 }
 
@@ -459,12 +457,6 @@ func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error
 				n.UpdateCatalog(string(chunk), pkt.Header.Source)
 			}
 		}
-	}
-
-	channel, exists := n.fileSharing.searchRepliesReceived.get(searchReplyMsg.RequestID)
-	if exists {
-		var empty struct{}
-		channel <- empty
 	}
 
 	return nil
