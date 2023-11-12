@@ -516,9 +516,36 @@ func (n *node) searchFirstStep(reg regexp.Regexp, budget uint, timeout time.Dura
 // SearchFirst implements peer.DataSharing
 func (n *node) SearchFirst(reg regexp.Regexp, conf peer.ExpandingRing) (string, error) {
 
-	// TODO search locally
-	//n.searchFirstStep(reg, 0, 0)
+	// Search locally
+	localName := ""
 
+	n.GetNamingStore().ForEach(func(name string, metaHash []byte) bool {
+		if !reg.MatchString(name) {
+			return true
+		}
+
+		chunk := n.GetDataBlobStore().Get(string(metaHash))
+		if chunk == nil {
+			return true
+		}
+
+		for _, hash := range strings.Split(string(chunk), peer.MetafileSep) {
+			if n.GetDataBlobStore().Get(hash) == nil {
+				return true
+			}
+		}
+
+		// We have found a matching file
+		localName = name
+
+		return false
+	})
+
+	if localName != "" {
+		return localName, nil
+	}
+
+	// Perform several remote requests
 	budget := conf.Initial
 
 	for i := uint(0); i < conf.Retry; i++ {
