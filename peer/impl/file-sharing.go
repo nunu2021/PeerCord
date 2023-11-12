@@ -117,7 +117,7 @@ func (n *node) requestChunk(peer string, hash string, currentTry uint) ([]byte, 
 
 	// Too many retries
 	if currentTry == n.conf.BackoffDataRequest.Retry {
-		return nil, NonExistentChunk(hash)
+		return nil, NonExistentChunkError(hash)
 	}
 
 	// Set a up channel to be informed when the reply has been received
@@ -144,7 +144,7 @@ func (n *node) requestChunk(peer string, hash string, currentTry uint) ([]byte, 
 		blobStore := n.GetDataBlobStore()
 		buffer := blobStore.Get(hash)
 		if buffer == nil {
-			return nil, NonExistentChunk(hash)
+			return nil, NonExistentChunkError(hash)
 		}
 		return buffer, nil
 
@@ -183,7 +183,7 @@ func (n *node) downloadChunk(hash string) ([]byte, error) {
 		return n.requestChunk(target, hash, 0)
 	}
 
-	return nil, NonExistentChunk(hash)
+	return nil, NonExistentChunkError(hash)
 }
 
 // Download implements peer.DataSharing
