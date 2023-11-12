@@ -508,7 +508,8 @@ func (n *node) searchFirstStep(reg regexp.Regexp, budget uint, timeout time.Dura
 	}
 	n.fileSharing.searchRepliesReceived.unlock()
 
-	// TODO delete the list
+	// Delete the list
+	n.fileSharing.searchRepliesReceived.delete(requestID)
 
 	return name, nil
 }
