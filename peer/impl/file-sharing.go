@@ -191,9 +191,7 @@ func (n *node) downloadChunk(hash string) ([]byte, error) {
 func (n *node) Download(metahash string) ([]byte, error) {
 	chunk, err := n.downloadChunk(metahash)
 	if err != nil {
-		// TODO test type of error
 		n.logger.Info().Str("meta-hash", metahash).Err(err).Msg("can't download file")
-		n.logger.Info().Str("meta-hash", metahash).Err(err).Msg("can't download file: unknown meta-hash")
 		return nil, err
 	}
 
@@ -204,7 +202,6 @@ func (n *node) Download(metahash string) ([]byte, error) {
 	for _, hash := range hashes {
 		chunk, err := n.downloadChunk(hash)
 		if err != nil {
-			// TODO test type of error
 			n.logger.Info().Str("hash", hash).Msg("can't download file: unknown hash")
 			return nil, err
 		}
