@@ -648,6 +648,14 @@ func Test_HW2_Download_Duplication(t *testing.T) {
 	// > Node1 should get the data
 
 	buf, err := node1.Download(mh)
+
+	if len(node2.GetIns()) != 2 {
+		println("Error")
+		time.Sleep(time.Second)
+		println("Size after waiting:", len(node2.GetIns()))
+		panic("End of test")
+	}
+
 	require.NoError(t, err)
 	require.Equal(t, data, buf)
 

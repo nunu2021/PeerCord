@@ -21,7 +21,8 @@ import (
 type FileSharing struct {
 	catalog safeMap[string, map[string]struct{}]
 
-	chunkRepliesReceived safeMap[string, chan struct{}] // RequestID -> channel
+	chunkRepliesReceived  safeMap[string, chan struct{}]              // RequestID -> channel
+	searchRepliesReceived safeMap[string, []types.SearchReplyMessage] // RequestID -> list of replies
 
 	// Packet ID of all the requests that have been received
 	// It is used to prevent answering to duplicate packets
@@ -31,9 +32,10 @@ type FileSharing struct {
 // NewFileSharing returns an empty FileSharing object.
 func NewFileSharing() FileSharing {
 	return FileSharing{
-		catalog:              newSafeMap[string, map[string]struct{}](),
-		chunkRepliesReceived: newSafeMap[string, chan struct{}](),
-		requestsReceived:     make(map[string]struct{}),
+		catalog:               newSafeMap[string, map[string]struct{}](),
+		chunkRepliesReceived:  newSafeMap[string, chan struct{}](),
+		searchRepliesReceived: newSafeMap[string, []types.SearchReplyMessage](),
+		requestsReceived:      make(map[string]struct{}),
 	}
 }
 
@@ -459,5 +461,79 @@ func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error
 		}
 	}
 
+	// Store the reply in a list if needed
+	n.fileSharing.searchRepliesReceived.lock()
+	list, exists := n.fileSharing.searchRepliesReceived.unsafeGet(searchReplyMsg.RequestID)
+	if exists {
+		n.fileSharing.searchRepliesReceived.unsafeSet(searchReplyMsg.RequestID, append(list, *searchReplyMsg))
+	}
+	n.fileSharing.searchRepliesReceived.unlock()
+
 	return nil
+}
+
+func (n *node) searchFirstStep(reg regexp.Regexp, budget uint, timeout time.Duration) (string, error) {
+	requestID := xid.New().String()
+
+	// Set up a list to receive the replies
+	n.fileSharing.searchRepliesReceived.set(requestID, make([]types.SearchReplyMessage, 0))
+
+	// Send the request
+	err := n.sendSearchRequestToNeighbors(requestID, n.GetAddress(), reg, budget, "")
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't send search request")
+		return "", err
+	}
+
+	// Wait for the answers
+	time.Sleep(timeout)
+
+	// Check if a name has been found
+	name := ""
+
+	replies, _ := n.fileSharing.searchRepliesReceived.getReference(requestID)
+	for _, reply := range replies {
+		for _, response := range reply.Responses {
+			success := reg.MatchString(response.Name) // Check the regex again
+			for _, chunk := range response.Chunks {
+				if chunk == nil {
+					success = false
+				}
+			}
+
+			if success {
+				name = response.Name
+			}
+		}
+	}
+	n.fileSharing.searchRepliesReceived.unlock()
+
+	// TODO delete the list
+
+	return name, nil
+}
+
+// SearchFirst implements peer.DataSharing
+func (n *node) SearchFirst(reg regexp.Regexp, conf peer.ExpandingRing) (string, error) {
+
+	// TODO search locally
+	//n.searchFirstStep(reg, 0, 0)
+
+	budget := conf.Initial
+
+	for i := uint(0); i < conf.Retry; i++ {
+		name, err := n.searchFirstStep(reg, budget, conf.Timeout)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't perform step of SearchFirst")
+			return "", err
+		}
+
+		if name != "" {
+			return name, nil
+		}
+
+		budget = budget * conf.Factor
+	}
+
+	return "", nil
 }
