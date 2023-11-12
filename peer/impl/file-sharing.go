@@ -288,7 +288,9 @@ func (n *node) Resolve(name string) string {
 	return string(n.GetNamingStore().Get(name))
 }
 
-func (n *node) sendSearchRequestToNeighbors(requestID string, origin string, reg regexp.Regexp, totalBudget uint, forbiddenNeighbor string) error {
+func (n *node) sendSearchRequestToNeighbors(requestID string, origin string,
+	reg regexp.Regexp, totalBudget uint, forbiddenNeighbor string) error {
+
 	neighbors := n.routingTable.neighbors(n.GetAddress())
 
 	// Remove the forbidden neighbor
@@ -370,19 +372,21 @@ func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) err
 		panic("not a search request message")
 	}
 
+	requestID := searchRequestMsg.RequestID
+
 	// Detect duplicates
-	_, exists := n.fileSharing.requestsReceived[searchRequestMsg.RequestID]
+	_, exists := n.fileSharing.requestsReceived[requestID]
 	if exists {
 		return nil
 	}
 	var empty struct{}
-	n.fileSharing.requestsReceived[searchRequestMsg.RequestID] = empty
+	n.fileSharing.requestsReceived[requestID] = empty
 
 	reg := regexp.MustCompile(searchRequestMsg.Pattern)
 
 	budget := searchRequestMsg.Budget - 1
 	if budget > 0 {
-		err := n.sendSearchRequestToNeighbors(searchRequestMsg.RequestID, searchRequestMsg.Origin, *reg, budget, pkt.Header.Source)
+		err := n.sendSearchRequestToNeighbors(requestID, searchRequestMsg.Origin, *reg, budget, pkt.Header.Source)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't send request to neighbor")
 		}
@@ -423,7 +427,7 @@ func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) err
 
 	// Send the reply
 	reply := types.SearchReplyMessage{
-		RequestID: searchRequestMsg.RequestID,
+		RequestID: requestID,
 		Responses: responses,
 	}
 
