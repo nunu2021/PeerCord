@@ -24,7 +24,7 @@ type FileSharing struct {
 	chunkRepliesReceived  safeMap[string, chan struct{}] // RequestID -> channel
 	searchRepliesReceived safeMap[string, chan struct{}] // RequestID -> channel
 
-	// Packet ID of all the packets that have been received
+	// Packet ID of all the requests that have been received
 	// It is used to prevent answering to duplicate packets
 	requestsReceived map[string]struct{}
 }
@@ -372,6 +372,14 @@ func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) err
 	if !ok {
 		panic("not a search request message")
 	}
+
+	// Detect duplicates
+	_, exists := n.fileSharing.requestsReceived[searchRequestMsg.RequestID]
+	if exists {
+		return nil
+	}
+	var empty struct{}
+	n.fileSharing.requestsReceived[searchRequestMsg.RequestID] = empty
 
 	reg := regexp.MustCompile(searchRequestMsg.Pattern)
 
