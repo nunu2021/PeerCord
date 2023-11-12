@@ -77,16 +77,3 @@ func (sm *safeMap[T, U]) internalMap() map[T]U {
 	sm.mutex.Lock()
 	return sm.data
 }
-
-// Returns a copy of the internal routing table
-func (sm *safeMap[T, U]) clone() map[T]U {
-	sm.mutex.Lock()
-	defer sm.mutex.Unlock()
-
-	newMap := make(map[T]U)
-	for key, val := range sm.data {
-		newMap[key] = val
-	}
-
-	return newMap
-}
