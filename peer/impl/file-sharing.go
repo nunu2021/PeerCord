@@ -19,8 +19,8 @@ import (
 type FileSharing struct {
 	catalog safeMap[string, map[string]struct{}]
 
-	chunkRepliesReceived  safeMap[string, chan struct{}]              // RequestID -> channel
-	searchRepliesReceived safeMap[string, []types.SearchReplyMessage] // RequestID -> list of replies
+	chunkRepliesReceived  safeMap[string, chan struct{}]                 // RequestID -> channel
+	searchRepliesReceived safeMap[string, chan types.SearchReplyMessage] // RequestID -> channel of replies
 
 	// Packet ID of all the requests that have been received
 	// It is used to prevent answering to duplicate packets
@@ -32,7 +32,7 @@ func NewFileSharing() FileSharing {
 	return FileSharing{
 		catalog:               newSafeMap[string, map[string]struct{}](),
 		chunkRepliesReceived:  newSafeMap[string, chan struct{}](),
-		searchRepliesReceived: newSafeMap[string, []types.SearchReplyMessage](),
+		searchRepliesReceived: newSafeMap[string, chan types.SearchReplyMessage](),
 		requestsReceived:      make(map[string]struct{}),
 	}
 }
@@ -461,12 +461,10 @@ func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error
 	}
 
 	// Store the reply in a list if needed
-	n.fileSharing.searchRepliesReceived.lock()
-	list, exists := n.fileSharing.searchRepliesReceived.unsafeGet(searchReplyMsg.RequestID)
+	channel, exists := n.fileSharing.searchRepliesReceived.get(searchReplyMsg.RequestID)
 	if exists {
-		n.fileSharing.searchRepliesReceived.unsafeSet(searchReplyMsg.RequestID, append(list, *searchReplyMsg))
+		channel <- *searchReplyMsg
 	}
-	n.fileSharing.searchRepliesReceived.unlock()
 
 	return nil
 }
@@ -475,7 +473,7 @@ func (n *node) searchFirstStep(reg regexp.Regexp, budget uint, timeout time.Dura
 	requestID := xid.New().String()
 
 	// Set up a list to receive the replies
-	n.fileSharing.searchRepliesReceived.set(requestID, make([]types.SearchReplyMessage, 0))
+	n.fileSharing.searchRepliesReceived.set(requestID, make(chan types.SearchReplyMessage))
 
 	// Send the request
 	err := n.sendSearchRequestToNeighbors(requestID, n.GetAddress(), reg, budget, "")
@@ -484,30 +482,35 @@ func (n *node) searchFirstStep(reg regexp.Regexp, budget uint, timeout time.Dura
 		return "", err
 	}
 
-	// Wait for the answers
-	time.Sleep(timeout)
-
-	// Check if a name has been found
+	// Receive the answers
+	replies, _ := n.fileSharing.searchRepliesReceived.get(requestID)
 	name := ""
+	keepWaiting := true
+	endTime := time.Now().Add(timeout)
 
-	replies, _ := n.fileSharing.searchRepliesReceived.getReference(requestID)
-	for _, reply := range replies {
-		for _, response := range reply.Responses {
-			success := reg.MatchString(response.Name) // Check the regex again
-			for _, chunk := range response.Chunks {
-				if chunk == nil {
-					success = false
+	for keepWaiting {
+		select {
+		case reply := <-replies: // We receive a new answer
+			for _, response := range reply.Responses {
+				success := reg.MatchString(response.Name) // Check the regex again
+				for _, chunk := range response.Chunks {
+					if chunk == nil {
+						success = false
+					}
+				}
+
+				if success {
+					name = response.Name
+					keepWaiting = false
 				}
 			}
 
-			if success {
-				name = response.Name
-			}
+		case <-time.After(time.Until(endTime)):
+			keepWaiting = false
 		}
 	}
-	n.fileSharing.searchRepliesReceived.unlock()
 
-	// Delete the list
+	// Delete the channel
 	n.fileSharing.searchRepliesReceived.delete(requestID)
 
 	return name, nil
