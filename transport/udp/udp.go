@@ -73,7 +73,7 @@ func (s *Socket) Send(dest string, pkt transport.Packet, timeout time.Duration) 
 		return err
 	}
 
-	_, _, err = s.conn.WriteMsgUDP(rawData, nil, addr)
+	_, err = s.conn.WriteToUDP(rawData, addr)
 	if err != nil {
 		return err
 	}
