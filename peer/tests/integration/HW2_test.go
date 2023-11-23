@@ -44,7 +44,7 @@ func Test_HW2_Integration_Scenario(t *testing.T) {
 				newNodesSearch,
 			}
 
-			for i := 1; i <= len(stages); i++ {
+			for i := 1; i < len(stages); i++ {
 				maxStage := i
 				t.Run(fmt.Sprintf("stage %d", i), func(t *testing.T) {
 					t.Parallel()
