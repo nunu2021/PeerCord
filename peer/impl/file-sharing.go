@@ -119,7 +119,7 @@ func (n *node) requestChunk(peer string, hash string, currentTry uint) ([]byte, 
 	}
 
 	// Set a up channel to be informed when the reply has been received
-	channel := make(chan struct{})
+	channel := make(chan struct{}, 1)
 	n.fileSharing.chunkRepliesReceived.set(requestID, channel)
 	defer n.fileSharing.chunkRepliesReceived.delete(requestID)
 
@@ -270,7 +270,11 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 		return nil
 	}
 	var emptyStruct struct{}
-	channel <- emptyStruct
+
+	select {
+	case channel <- emptyStruct: // If the channel is full,
+	default:
+	}
 
 	return nil
 }
