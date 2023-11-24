@@ -188,7 +188,12 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 			Str("packetID", ackMsg.AckedPacketID).
 			Msg("unexpected ACK received")
 	} else {
-		channel <- true
+		select {
+		case channel <- true:
+		case <-time.After(100 * time.Millisecond):
+			// Avoid blocking if the data is not read from the channel (very unlikely)
+			n.logger.Error().Msg("data can't be sent to channel")
+		}
 
 		// Log the ACK
 		n.logger.Info().
