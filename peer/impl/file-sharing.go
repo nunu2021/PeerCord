@@ -467,7 +467,12 @@ func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error
 	// Store the reply in a list if needed
 	channel, exists := n.fileSharing.searchRepliesReceived.get(searchReplyMsg.RequestID)
 	if exists {
-		channel <- *searchReplyMsg
+		select {
+		case channel <- *searchReplyMsg:
+		case <-time.After(100 * time.Millisecond):
+			// Avoid blocking if the data is not read from the channel (very unlikely)
+			n.logger.Error().Msg("data can't be sent to channel")
+		}
 	}
 
 	return nil
@@ -477,7 +482,8 @@ func (n *node) searchFirstStep(reg regexp.Regexp, budget uint, timeout time.Dura
 	requestID := xid.New().String()
 
 	// Set up a list to receive the replies
-	n.fileSharing.searchRepliesReceived.set(requestID, make(chan types.SearchReplyMessage))
+	replies := make(chan types.SearchReplyMessage)
+	n.fileSharing.searchRepliesReceived.set(requestID, replies)
 
 	// Send the request
 	err := n.sendSearchRequestToNeighbors(requestID, n.GetAddress(), reg, budget, "")
@@ -487,7 +493,6 @@ func (n *node) searchFirstStep(reg regexp.Regexp, budget uint, timeout time.Dura
 	}
 
 	// Receive the answers
-	replies, _ := n.fileSharing.searchRepliesReceived.get(requestID)
 	name := ""
 	keepWaiting := true
 	endTime := time.Now().Add(timeout)
