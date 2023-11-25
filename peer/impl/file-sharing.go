@@ -466,13 +466,15 @@ func (n *node) receiveSearchReply(msg types.Message, pkt transport.Packet) error
 
 	// Store the reply in a list if needed
 	channel, exists := n.fileSharing.searchRepliesReceived.get(searchReplyMsg.RequestID)
+
 	if exists {
-		select {
-		case channel <- *searchReplyMsg:
-		case <-time.After(100 * time.Millisecond):
-			// Avoid blocking if the data is not read from the channel (very unlikely)
-			n.logger.Error().Msg("data can't be sent to channel")
-		}
+		go func() {
+			select {
+			case channel <- *searchReplyMsg:
+			case <-time.After(time.Second):
+				// Avoid blocking if the data is not read from the channel
+			}
+		}()
 	}
 
 	return nil
