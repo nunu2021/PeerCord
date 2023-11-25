@@ -102,7 +102,10 @@ func (n *node) UpdateCatalog(key string, peer string) {
 		n.fileSharing.catalog.set(key, make(map[string]struct{}))
 	}
 
-	entries, _ := n.fileSharing.catalog.getReference(key)
+	entries, ok := n.fileSharing.catalog.getReference(key)
+	if !ok {
+		n.logger.Error().Msg("unexpected error reading catalog")
+	}
 	defer n.fileSharing.catalog.unlock()
 
 	var empty struct{}
@@ -162,23 +165,24 @@ func (n *node) downloadChunk(hash string) ([]byte, error) {
 
 	// Check if another peer has the file
 	entries, exists := n.fileSharing.catalog.getReference(hash)
+
 	if exists {
-		defer n.fileSharing.catalog.unlock()
-	}
+		if len(entries) > 0 {
+			remaining := rand.Intn(len(entries))
 
-	if exists && len(entries) > 0 {
-		remaining := rand.Intn(len(entries))
-
-		target := ""
-		for currentPeer := range entries {
-			if remaining == 0 {
-				target = currentPeer
-				break
+			target := ""
+			for currentPeer := range entries {
+				if remaining == 0 {
+					target = currentPeer
+					break
+				}
+				remaining--
 			}
-			remaining--
-		}
 
-		return n.requestChunk(target, hash, 0)
+			n.fileSharing.catalog.unlock()
+			return n.requestChunk(target, hash, 0)
+		}
+		n.fileSharing.catalog.unlock()
 	}
 
 	return nil, NonExistentChunkError(hash)
