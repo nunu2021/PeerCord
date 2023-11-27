@@ -2,6 +2,7 @@ package impl
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -344,7 +345,7 @@ func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't marshal block")
 		}
-		blockchain.Set(string(msg.Block.Hash), marshaledBlock)
+		blockchain.Set(hex.EncodeToString(msg.Block.Hash), marshaledBlock)
 		blockchain.Set(storage.LastBlockKey, msg.Block.Hash)
 
 		// Update the naming store
