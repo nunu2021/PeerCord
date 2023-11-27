@@ -36,3 +36,10 @@ type NonExistentChunkError string
 func (err NonExistentChunkError) Error() string {
 	return "file does not exists: " + string(err)
 }
+
+// NameAlreadyExistsError occurs when the Tag function is used with a name that already exists
+type NameAlreadyExistsError string
+
+func (err NameAlreadyExistsError) Error() string {
+	return "name already exists: " + string(err)
+}

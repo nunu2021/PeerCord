@@ -285,7 +285,19 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 
 // Tag implements peer.DataSharing
 func (n *node) Tag(name string, metaHash string) error {
-	n.GetNamingStore().Set(name, []byte(metaHash))
+	// Check if the name already exists
+	if n.GetNamingStore().Get(name) != nil {
+		return NameAlreadyExistsError(name)
+	}
+
+	// Check if no consensus is needed
+	if n.conf.TotalPeers == 1 {
+		n.GetNamingStore().Set(name, []byte(metaHash))
+		return nil
+	}
+
+	// TODO the name may start to exist later
+
 	return nil
 }
 

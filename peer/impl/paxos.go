@@ -14,7 +14,7 @@ type Paxos struct {
 	acceptedValue *types.PaxosValue
 
 	// Listener
-	nbAccepted map[uint]int // For each ID, the number of peers that have already accepted it
+	nbAccepted map[string]int // For each UniqID, the number of peers that have already accepted it
 }
 
 func NewPaxos() Paxos {
@@ -23,7 +23,7 @@ func NewPaxos() Paxos {
 		maxID:         0,
 		acceptedID:    0,
 		acceptedValue: nil,
-		nbAccepted:    make(map[uint]int),
+		nbAccepted:    make(map[string]int),
 	}
 }
 
@@ -108,9 +108,10 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 	// TODO Ignore messages if the proposer is not in Paxos phase 2: what does it mean?
 
 	// Save that a peer accepted the ID
-	n.paxos.nbAccepted[msg.ID] = n.paxos.nbAccepted[msg.ID] + 1
+	uniqID := msg.Value.UniqID
+	n.paxos.nbAccepted[uniqID] = n.paxos.nbAccepted[uniqID] + 1
 
-	if n.paxos.nbAccepted[msg.ID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
+	if n.paxos.nbAccepted[uniqID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
 
 	}
 
