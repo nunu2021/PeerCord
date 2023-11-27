@@ -60,7 +60,6 @@ func (n *node) sendStatus(neighbor string) {
 // Broadcast is thread-safe
 func (n *node) Broadcast(msg transport.Message) error {
 	n.rumorMutex.Lock()
-	defer n.rumorMutex.Unlock()
 
 	// Increase the sequence number
 	lastSeq, exists := n.status[n.GetAddress()]
@@ -98,6 +97,8 @@ func (n *node) Broadcast(msg transport.Message) error {
 	} else {
 		n.logger.Info().Msg("no neighbor to transfer the rumor to")
 	}
+
+	n.rumorMutex.Unlock()
 
 	// Process the rumor locally
 	n.processMessage(msg)
