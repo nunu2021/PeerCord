@@ -349,3 +349,31 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string, waitAck b
 
 	return n.conf.Socket.Send(neighbor, pkt, time.Second)
 }
+
+func (n *node) marshalAndBroadcast(msg types.Message) error {
+	marshaledMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	err = n.Broadcast(marshaledMsg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) marshalAndBroadcastAsPrivate(recipients map[string]struct{}, msg types.Message) error {
+	marshaledMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	privateMsh := types.PrivateMessage{
+		Recipients: recipients,
+		Msg:        &marshaledMsg,
+	}
+
+	return n.marshalAndBroadcast(privateMsh)
+}

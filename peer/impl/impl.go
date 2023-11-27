@@ -53,6 +53,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		status:          make(types.StatusMessage),
 		rumorsReceived:  make(map[string][]types.Rumor),
 		fileSharing:     NewFileSharing(),
+		paxos:           NewPaxos(),
 	}
 
 	// Register the different kinds of messages
@@ -66,6 +67,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.receiveDataReply)
 	conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, n.receiveSearchRequest)
 	conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.receiveSearchReply)
+	conf.MessageRegistry.RegisterMessageCallback(types.PaxosPrepareMessage{}, n.receivePaxosPrepareMsg)
+	conf.MessageRegistry.RegisterMessageCallback(types.PaxosProposeMessage{}, n.receivePaxosProposeMsg)
+	conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, n.receivePaxosAcceptMsg)
 
 	return n
 }
@@ -112,6 +116,9 @@ type node struct {
 
 	// All the objects used by the file sharing mechanism
 	fileSharing FileSharing
+
+	// Information needed to reach consensus with multi-paxos
+	paxos Paxos
 }
 
 // GetAddress returns the address of the node
