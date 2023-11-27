@@ -2,6 +2,7 @@ package impl
 
 import (
 	"crypto/sha256"
+	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"strconv"
@@ -45,6 +46,22 @@ func (n *node) nextStep() {
 	n.paxos.acceptedID = 0
 	n.paxos.acceptedValue = nil
 	n.paxos.nbAccepted = make(map[string]int)
+}
+
+func (n *node) lastBlock() *types.BlockchainBlock {
+	blockchain := n.conf.Storage.GetBlockchainStore()
+
+	key := blockchain.Get(storage.LastBlockKey)
+	if key == nil {
+		return nil
+	}
+
+	var block types.BlockchainBlock
+	err := block.Unmarshal(blockchain.Get(string(key)))
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't unmarshal block from blockchain")
+	}
+	return &block
 }
 
 func (n *node) receivePaxosPrepareMsg(originalMsg types.Message, pkt transport.Packet) error {
@@ -147,7 +164,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 		h.Write([]byte(msg.Value.Filename))
 		h.Write([]byte(msg.Value.Metahash))
 		h.Write(block.PrevHash)
-		block.PrevHash = h.Sum(nil)
+		block.Hash = h.Sum(nil)
 
 		tlcMsg := types.TLCMessage{
 			Step:  n.paxos.currentStep,
@@ -189,7 +206,14 @@ func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet
 	info.count++
 
 	if info.count == n.conf.PaxosThreshold(n.conf.TotalPeers) {
-		// TODO Add the block to the blockchain
+		// Add the block to the blockchain
+		blockchain := n.conf.Storage.GetBlockchainStore()
+		marshaledBlock, err := msg.Block.Marshal()
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't marshal block")
+		}
+		blockchain.Set(string(msg.Block.Hash), marshaledBlock)
+		blockchain.Set(storage.LastBlockKey, msg.Block.Hash)
 
 		// Update the naming store
 		if n.GetNamingStore().Get(value.Filename) != nil {
