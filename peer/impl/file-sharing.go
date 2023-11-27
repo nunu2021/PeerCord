@@ -297,6 +297,16 @@ func (n *node) Tag(name string, metaHash string) error {
 	}
 
 	// TODO the name may start to exist later
+	value := types.PaxosValue{
+		UniqID:   xid.New().String(),
+		Filename: name,
+		Metahash: metaHash,
+	}
+
+	err := n.makeProposal(value)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't make proposal")
+	}
 
 	return nil
 }

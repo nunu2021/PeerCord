@@ -6,18 +6,22 @@ import (
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"strconv"
+	"sync"
+	"time"
 )
 
 type Paxos struct {
 	currentStep uint
 
+	// Proposer
+	proposeMtx       sync.Mutex // This mutex is unlocked when the peer can make a proposal
+	receivedPromises chan types.PaxosPromiseMessage
+	receivedAccepts  chan types.PaxosAcceptMessage
+
 	// Acceptor
 	maxID         uint
 	acceptedID    uint
 	acceptedValue *types.PaxosValue
-
-	// Listener
-	nbAccepted map[string]int // For each UniqID, the number of peers that have already accepted it
 
 	// TLC
 	tlcMessages map[uint]struct { // For each step, information about the messages received
@@ -28,11 +32,12 @@ type Paxos struct {
 
 func NewPaxos() Paxos {
 	return Paxos{
-		currentStep:   0,
-		maxID:         0,
-		acceptedID:    0,
-		acceptedValue: nil,
-		nbAccepted:    make(map[string]int),
+		receivedPromises: make(chan types.PaxosPromiseMessage),
+		receivedAccepts:  make(chan types.PaxosAcceptMessage),
+		currentStep:      0,
+		maxID:            0,
+		acceptedID:       0,
+		acceptedValue:    nil,
 		tlcMessages: make(map[uint]struct {
 			tclMsg types.TLCMessage
 			count  int
@@ -45,7 +50,9 @@ func (n *node) nextStep() {
 	n.paxos.maxID = 0
 	n.paxos.acceptedID = 0
 	n.paxos.acceptedValue = nil
-	n.paxos.nbAccepted = make(map[string]int)
+
+	// TODO maybe it is not locked?
+	//n.paxos.proposeMtx.Unlock()
 }
 
 func (n *node) lastBlock() *types.BlockchainBlock {
@@ -62,6 +69,159 @@ func (n *node) lastBlock() *types.BlockchainBlock {
 		n.logger.Error().Err(err).Msg("can't unmarshal block from blockchain")
 	}
 	return &block
+}
+
+// Blocks until it is known if the proposal is accepted or not
+func (n *node) makeProposal(value types.PaxosValue) error {
+	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
+
+	// Prepare
+	prepareMsg := types.PaxosPrepareMessage{
+		Step:   n.paxos.currentStep,
+		ID:     n.conf.PaxosID,
+		Source: n.GetAddress(),
+	}
+
+	err := n.marshalAndBroadcast(prepareMsg)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't broadcast prepare message")
+		return err
+	}
+
+	// Receive promises
+	keepWaiting := true
+	endTime := time.Now().Add(n.conf.PaxosProposerRetry)
+
+	nbPromises := 0
+
+	var acceptedID uint = 0 // If 0, we can propose our value
+	var acceptedValue *types.PaxosValue = nil
+
+	for keepWaiting && nbPromises < threshold {
+		select {
+		case promise := <-n.paxos.receivedPromises:
+			// Validate the promise here
+			if promise.Step != n.paxos.currentStep || promise.ID != n.paxos.maxID {
+				continue
+			}
+
+			// Check if the promise already contains a value
+			if promise.AcceptedValue != nil && promise.AcceptedID > acceptedID {
+				acceptedID = promise.AcceptedID
+				acceptedValue = promise.AcceptedValue
+			}
+
+			nbPromises++
+
+		case <-time.After(time.Until(endTime)):
+			keepWaiting = false
+		}
+	}
+
+	// We don't have enough promises, retry
+	if nbPromises < threshold {
+		// TODO retry with higher ID
+		return nil
+	}
+
+	// Propose
+	id := n.paxos.maxID
+	if acceptedValue != nil { // We can not use our own value
+		value = *acceptedValue
+		id = acceptedID
+	}
+
+	proposeMsg := types.PaxosProposeMessage{
+		Step:  n.paxos.currentStep,
+		ID:    id,
+		Value: value,
+	}
+
+	err = n.marshalAndBroadcast(proposeMsg)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't broadcast propose message")
+		return err
+	}
+
+	// Receive accept messages
+	keepWaiting = true
+	endTime = time.Now().Add(n.conf.PaxosProposerRetry)
+
+	nbAcceptedMsgs := make(map[string]int) // For each UniqID, the number of peers that have already accepted it
+	//var acceptedValue *types.PaxosValue = nil
+	acceptedValue = nil
+
+	for keepWaiting {
+		select {
+		case acceptMsg := <-n.paxos.receivedAccepts:
+			// Validate the promise here
+			if acceptMsg.Step != n.paxos.currentStep {
+				continue
+			}
+
+			nbAcceptedMsgs[acceptMsg.Value.UniqID]++
+			if nbAcceptedMsgs[acceptMsg.Value.UniqID] == threshold { // A consensus has been reached
+				acceptedValue = &acceptMsg.Value
+				keepWaiting = false
+			}
+
+		case <-time.After(time.Until(endTime)):
+			keepWaiting = false
+		}
+	}
+
+	// We don't have enough accept messages to reach a consensus, retry
+	if acceptedValue == nil {
+		// TODO retry with higher ID
+		return nil
+	}
+
+	// A consensus has been reached
+	block := types.BlockchainBlock{
+		Index:    n.paxos.currentStep,
+		Hash:     nil,
+		Value:    *acceptedValue,
+		PrevHash: nil, // TODO
+	}
+
+	// TODO is it the correct way to compute the hash?
+	h := sha256.New()
+	h.Write([]byte(strconv.Itoa(int(block.Index))))
+	h.Write([]byte(acceptedValue.UniqID))
+	h.Write([]byte(acceptedValue.Filename))
+	h.Write([]byte(acceptedValue.Metahash))
+	h.Write(block.PrevHash)
+	block.Hash = h.Sum(nil)
+
+	tlcMsg := types.TLCMessage{
+		Step:  n.paxos.currentStep,
+		Block: block,
+	}
+
+	err = n.marshalAndBroadcast(tlcMsg)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't broadcast TLC message")
+		return err
+	}
+
+	return nil
+}
+
+func (n *node) receivePaxosPromiseMsg(originalMsg types.Message, pkt transport.Packet) error {
+	msg, ok := originalMsg.(*types.PaxosPromiseMessage)
+	if !ok {
+		panic("not a paxos promise message")
+	}
+
+	// TODO check that we are in phase 1, waiting for promises
+
+	select {
+	case n.paxos.receivedPromises <- *msg:
+	case <-time.After(100 * time.Millisecond):
+		n.logger.Error().Msg("promise can't be sent to channel")
+	}
+
+	return nil
 }
 
 func (n *node) receivePaxosPrepareMsg(originalMsg types.Message, pkt transport.Packet) error {
@@ -90,7 +250,7 @@ func (n *node) receivePaxosPrepareMsg(originalMsg types.Message, pkt transport.P
 		AcceptedValue: n.paxos.acceptedValue,
 	}
 
-	recipients := map[string]struct{}{pkt.Header.Source: struct{}{}}
+	recipients := map[string]struct{}{msg.Source: struct{}{}}
 
 	err := n.marshalAndBroadcastAsPrivate(recipients, promiseMsg)
 	if err != nil {
@@ -144,38 +304,10 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 
 	// TODO Ignore messages if the proposer is not in Paxos phase 2: what does it mean?
 
-	// Save that a peer accepted the ID
-	uniqID := msg.Value.UniqID
-	n.paxos.nbAccepted[uniqID] = n.paxos.nbAccepted[uniqID] + 1
-
-	// A consensus has been reached
-	if n.paxos.nbAccepted[uniqID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
-		block := types.BlockchainBlock{
-			Index:    n.paxos.currentStep,
-			Hash:     nil,
-			Value:    msg.Value,
-			PrevHash: nil, // TODO
-		}
-
-		// TODO is it the correct way to compute the hash?
-		h := sha256.New()
-		h.Write([]byte(strconv.Itoa(int(block.Index))))
-		h.Write([]byte(msg.Value.UniqID))
-		h.Write([]byte(msg.Value.Filename))
-		h.Write([]byte(msg.Value.Metahash))
-		h.Write(block.PrevHash)
-		block.Hash = h.Sum(nil)
-
-		tlcMsg := types.TLCMessage{
-			Step:  n.paxos.currentStep,
-			Block: block,
-		}
-
-		err := n.marshalAndBroadcast(tlcMsg)
-		if err != nil {
-			n.logger.Error().Err(err).Msg("can't broadcast TLC message")
-			return err
-		}
+	select {
+	case n.paxos.receivedAccepts <- *msg:
+	case <-time.After(100 * time.Millisecond):
+		n.logger.Error().Msg("accept message can't be sent to channel")
 	}
 
 	return nil
