@@ -1,8 +1,10 @@
 package impl
 
 import (
+	"crypto/sha256"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"strconv"
 )
 
 type Paxos struct {
@@ -111,8 +113,34 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 	uniqID := msg.Value.UniqID
 	n.paxos.nbAccepted[uniqID] = n.paxos.nbAccepted[uniqID] + 1
 
+	// A consensus has been reached
 	if n.paxos.nbAccepted[uniqID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
+		block := types.BlockchainBlock{
+			Index:    n.paxos.currentStep,
+			Hash:     nil,
+			Value:    msg.Value,
+			PrevHash: nil, // TODO
+		}
 
+		// TODO is it the correct way to compute the hash?
+		h := sha256.New()
+		h.Write([]byte(strconv.Itoa(int(block.Index))))
+		h.Write([]byte(msg.Value.UniqID))
+		h.Write([]byte(msg.Value.Filename))
+		h.Write([]byte(msg.Value.Metahash))
+		h.Write(block.PrevHash)
+		block.PrevHash = h.Sum(nil)
+
+		tlcMsg := types.TLCMessage{
+			Step:  n.paxos.currentStep,
+			Block: block,
+		}
+
+		err := n.marshalAndBroadcast(tlcMsg)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't broadcast TLC message")
+			return err
+		}
 	}
 
 	return nil
