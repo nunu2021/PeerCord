@@ -332,13 +332,12 @@ func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet
 			tclMsg: *msg,
 			count:  0,
 		}
-
-		n.paxos.tlcMessages[msg.Step] = info
 	}
 
 	info.count++
+	n.paxos.tlcMessages[msg.Step] = info
 
-	if info.count == n.conf.PaxosThreshold(n.conf.TotalPeers) {
+	if info.count == n.conf.PaxosThreshold(n.conf.TotalPeers) && msg.Step == n.paxos.currentStep {
 		// Add the block to the blockchain
 		blockchain := n.conf.Storage.GetBlockchainStore()
 		marshaledBlock, err := msg.Block.Marshal()
