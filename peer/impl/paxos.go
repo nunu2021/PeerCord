@@ -32,8 +32,9 @@ type Paxos struct {
 
 func NewPaxos() Paxos {
 	return Paxos{
-		receivedPromises: make(chan types.PaxosPromiseMessage),
-		receivedAccepts:  make(chan types.PaxosAcceptMessage),
+		// The buffers are used to receive the message the peer sends to itself
+		receivedPromises: make(chan types.PaxosPromiseMessage, 1),
+		receivedAccepts:  make(chan types.PaxosAcceptMessage, 1),
 		currentStep:      0,
 		maxID:            0,
 		acceptedID:       0,
