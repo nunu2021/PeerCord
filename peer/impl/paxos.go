@@ -17,6 +17,12 @@ type Paxos struct {
 
 	// Listener
 	nbAccepted map[string]int // For each UniqID, the number of peers that have already accepted it
+
+	// TLC
+	tlcMessages map[uint]struct { // For each step, information about the messages received
+		tclMsg types.TLCMessage
+		count  int
+	}
 }
 
 func NewPaxos() Paxos {
@@ -26,7 +32,19 @@ func NewPaxos() Paxos {
 		acceptedID:    0,
 		acceptedValue: nil,
 		nbAccepted:    make(map[string]int),
+		tlcMessages: make(map[uint]struct {
+			tclMsg types.TLCMessage
+			count  int
+		}),
 	}
+}
+
+func (n *node) nextStep() {
+	n.paxos.currentStep++
+	n.paxos.maxID = 0
+	n.paxos.acceptedID = 0
+	n.paxos.acceptedValue = nil
+	n.paxos.nbAccepted = make(map[string]int)
 }
 
 func (n *node) receivePaxosPrepareMsg(originalMsg types.Message, pkt transport.Packet) error {
@@ -141,6 +159,51 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 			n.logger.Error().Err(err).Msg("can't broadcast TLC message")
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet) error {
+	msg, ok := originalMsg.(*types.TLCMessage)
+	if !ok {
+		panic("not a TLC message")
+	}
+
+	value := msg.Block.Value
+
+	// Store the message
+	info, ok := n.paxos.tlcMessages[msg.Step]
+	if !ok {
+		info = struct {
+			tclMsg types.TLCMessage
+			count  int
+		}{
+			tclMsg: *msg,
+			count:  0,
+		}
+
+		n.paxos.tlcMessages[msg.Step] = info
+	}
+
+	info.count++
+
+	if info.count == n.conf.PaxosThreshold(n.conf.TotalPeers) {
+		// TODO Add the block to the blockchain
+
+		// Update the naming store
+		if n.GetNamingStore().Get(value.Filename) != nil {
+			n.logger.Error().Str("name", value.Filename).Msg("name already exists")
+			return NameAlreadyExistsError(value.Filename)
+		}
+		n.GetNamingStore().Set(value.Filename, []byte(value.Metahash))
+
+		// TODO broadcast the message if needed
+
+		// Go to next step
+		n.nextStep()
+
+		// TODO catch up if needed
 	}
 
 	return nil
