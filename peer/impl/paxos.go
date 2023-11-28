@@ -180,11 +180,16 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 	}
 
 	// A consensus has been reached
+	prevHash := n.conf.Storage.GetBlockchainStore().Get(storage.LastBlockKey)
+	if prevHash == nil {
+		prevHash = make([]byte, 32)
+	}
+
 	block := types.BlockchainBlock{
 		Index:    n.paxos.currentStep,
 		Hash:     nil,
 		Value:    *acceptedValue,
-		PrevHash: nil, // TODO
+		PrevHash: prevHash,
 	}
 
 	// TODO is it the correct way to compute the hash?
