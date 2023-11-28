@@ -29,6 +29,7 @@ type Paxos struct {
 		tclMsg types.TLCMessage
 		count  int
 	}
+	hasBroadcastedTLC bool // TODO protect by mutex, as other variables
 }
 
 func NewPaxos() Paxos {
@@ -52,6 +53,7 @@ func (n *node) nextStep() {
 	n.paxos.maxID = 0
 	n.paxos.acceptedID = 0
 	n.paxos.acceptedValue = nil
+	n.paxos.hasBroadcastedTLC = false
 
 	// TODO maybe it is not locked?
 	//n.paxos.proposeMtx.Unlock()
@@ -337,9 +339,14 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	}
 	n.GetNamingStore().Set(value.Filename, []byte(value.Metahash))
 
-	// TODO broadcast the message if needed
-	if !isCatchingUp {
+	// Broadcast the message if needed
+	if !isCatchingUp && !n.paxos.hasBroadcastedTLC {
+		n.paxos.hasBroadcastedTLC = true
 
+		err := n.marshalAndBroadcast(msg)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't broadcast TLC message")
+		}
 	}
 
 	// Go to next step
