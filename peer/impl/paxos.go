@@ -315,13 +315,44 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 	return nil
 }
 
+// When enough TLC messages have been received, adds the block to the blockchain and update the naming store
+func (n *node) thresholdTlcReached(isCatchingUp bool) {
+	info := n.paxos.tlcMessages[n.paxos.currentStep]
+
+	msg := info.tclMsg
+	value := msg.Block.Value
+
+	// Add the block to the blockchain
+	blockchain := n.conf.Storage.GetBlockchainStore()
+	marshaledBlock, err := msg.Block.Marshal()
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't marshal block")
+	}
+	blockchain.Set(hex.EncodeToString(msg.Block.Hash), marshaledBlock)
+	blockchain.Set(storage.LastBlockKey, msg.Block.Hash)
+
+	// Update the naming store
+	if n.GetNamingStore().Get(value.Filename) != nil {
+		n.logger.Error().Str("name", value.Filename).Msg("name already exists")
+	}
+	n.GetNamingStore().Set(value.Filename, []byte(value.Metahash))
+
+	// TODO broadcast the message if needed
+	if !isCatchingUp {
+
+	}
+
+	// Go to next step
+	n.nextStep()
+}
+
 func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet) error {
 	msg, ok := originalMsg.(*types.TLCMessage)
 	if !ok {
 		panic("not a TLC message")
 	}
 
-	value := msg.Block.Value
+	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
 
 	// Store the message
 	info, ok := n.paxos.tlcMessages[msg.Step]
@@ -338,29 +369,15 @@ func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet
 	info.count++
 	n.paxos.tlcMessages[msg.Step] = info
 
-	if info.count == n.conf.PaxosThreshold(n.conf.TotalPeers) && msg.Step == n.paxos.currentStep {
-		// Add the block to the blockchain
-		blockchain := n.conf.Storage.GetBlockchainStore()
-		marshaledBlock, err := msg.Block.Marshal()
-		if err != nil {
-			n.logger.Error().Err(err).Msg("can't marshal block")
+	if info.count == threshold && msg.Step == n.paxos.currentStep {
+		n.thresholdTlcReached(false)
+
+		// Catch up if needed
+		info, ok := n.paxos.tlcMessages[n.paxos.currentStep]
+		for ok && info.count >= threshold {
+			n.thresholdTlcReached(true)
+			info, ok = n.paxos.tlcMessages[n.paxos.currentStep]
 		}
-		blockchain.Set(hex.EncodeToString(msg.Block.Hash), marshaledBlock)
-		blockchain.Set(storage.LastBlockKey, msg.Block.Hash)
-
-		// Update the naming store
-		if n.GetNamingStore().Get(value.Filename) != nil {
-			n.logger.Error().Str("name", value.Filename).Msg("name already exists")
-			return NameAlreadyExistsError(value.Filename)
-		}
-		n.GetNamingStore().Set(value.Filename, []byte(value.Metahash))
-
-		// TODO broadcast the message if needed
-
-		// Go to next step
-		n.nextStep()
-
-		// TODO catch up if needed
 	}
 
 	return nil
