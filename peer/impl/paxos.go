@@ -26,7 +26,7 @@ type Paxos struct {
 
 	// TLC
 	tlcMessages map[uint]struct { // For each step, information about the messages received
-		tclMsg types.TLCMessage
+		tlcMsg types.TLCMessage
 		count  int
 	}
 	hasBroadcastedTLC bool // TODO protect by mutex, as other variables
@@ -42,7 +42,7 @@ func NewPaxos() Paxos {
 		acceptedID:       0,
 		acceptedValue:    nil,
 		tlcMessages: make(map[uint]struct {
-			tclMsg types.TLCMessage
+			tlcMsg types.TLCMessage
 			count  int
 		}),
 	}
@@ -325,7 +325,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	info := n.paxos.tlcMessages[n.paxos.currentStep]
 
-	msg := info.tclMsg
+	msg := info.tlcMsg
 	value := msg.Block.Value
 
 	// Add the block to the blockchain
@@ -369,10 +369,10 @@ func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet
 	info, ok := n.paxos.tlcMessages[msg.Step]
 	if !ok {
 		info = struct {
-			tclMsg types.TLCMessage
+			tlcMsg types.TLCMessage
 			count  int
 		}{
-			tclMsg: *msg,
+			tlcMsg: *msg,
 			count:  0,
 		}
 	}
