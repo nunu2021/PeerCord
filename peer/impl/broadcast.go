@@ -115,13 +115,11 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	// Log the message
 	n.logger.Info().Str("from", pkt.Header.Source).Msg("rumors received")
 
-	n.rumorMutex.Lock()
-	defer n.rumorMutex.Unlock()
-
 	// Process the rumors
 	hasExpectedRumor := false
 
 	for _, rumor := range rumorsMsg.Rumors {
+		n.rumorMutex.Lock()
 		previousSequence := n.status[rumor.Origin] // 0 if it doesn't exist
 
 		if rumor.Sequence == previousSequence+1 {
@@ -147,11 +145,17 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 
 			// Process it
 			n.status[rumor.Origin] = rumor.Sequence
+			n.rumorMutex.Unlock()
 			n.processMessage(*rumor.Msg)
+		} else {
+			n.rumorMutex.Unlock()
 		}
 	}
 
 	// Send back ACK
+	n.rumorMutex.Lock()
+	defer n.rumorMutex.Unlock()
+
 	ack := types.AckMessage{AckedPacketID: pkt.Header.PacketID, Status: n.status}
 	n.logger.Info().Str("dest", pkt.Header.Source).Str("packetID", ack.AckedPacketID).Msg("sending ACK")
 	if err := n.sendMsgToNeighbor(ack, pkt.Header.Source); err != nil {

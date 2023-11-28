@@ -100,7 +100,6 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 
 	var acceptedID uint = 0 // If 0, we can propose our value
 	var acceptedValue *types.PaxosValue = nil
-
 	for keepWaiting && nbPromises < threshold {
 		select {
 		case promise := <-n.paxos.receivedPromises:
