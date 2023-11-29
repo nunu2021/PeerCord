@@ -159,11 +159,7 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 	for keepWaiting {
 		select {
 		case acceptMsg := <-n.paxos.receivedAccepts:
-			if acceptMsg.Step != n.paxos.currentStep {
-				continue
-			}
 
-			n.paxos.nbAcceptedMsgs[acceptMsg.Value.UniqID]++
 			if n.paxos.nbAcceptedMsgs[acceptMsg.Value.UniqID] == threshold { // A consensus has been reached
 				acceptedValue = &acceptMsg.Value
 				keepWaiting = false
@@ -181,37 +177,6 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 	}
 
 	// A consensus has been reached
-	prevHash := n.conf.Storage.GetBlockchainStore().Get(storage.LastBlockKey)
-	if prevHash == nil {
-		prevHash = make([]byte, 32)
-	}
-
-	block := types.BlockchainBlock{
-		Index:    n.paxos.currentStep,
-		Hash:     nil,
-		Value:    *acceptedValue,
-		PrevHash: prevHash,
-	}
-
-	// TODO is it the correct way to compute the hash?
-	h := sha256.New()
-	h.Write([]byte(strconv.Itoa(int(block.Index))))
-	h.Write([]byte(acceptedValue.UniqID))
-	h.Write([]byte(acceptedValue.Filename))
-	h.Write([]byte(acceptedValue.Metahash))
-	h.Write(block.PrevHash)
-	block.Hash = h.Sum(nil)
-
-	tlcMsg := types.TLCMessage{
-		Step:  n.paxos.currentStep,
-		Block: block,
-	}
-
-	err = n.marshalAndBroadcast(tlcMsg)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't broadcast TLC message")
-		return err
-	}
 
 	return nil
 }
@@ -313,16 +278,40 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 
 	n.paxos.nbAcceptedMsgs[msg.Value.UniqID]++
 	if n.paxos.nbAcceptedMsgs[msg.Value.UniqID] == n.conf.PaxosThreshold(n.conf.TotalPeers) { // A consensus has been reached
-		// TODO
+		prevHash := n.conf.Storage.GetBlockchainStore().Get(storage.LastBlockKey)
+		if prevHash == nil {
+			prevHash = make([]byte, 32)
+		}
+
+		block := types.BlockchainBlock{
+			Index:    n.paxos.currentStep,
+			Hash:     nil,
+			Value:    msg.Value,
+			PrevHash: prevHash,
+		}
+
+		// TODO is it the correct way to compute the hash?
+		h := sha256.New()
+		h.Write([]byte(strconv.Itoa(int(block.Index))))
+		h.Write([]byte(msg.Value.UniqID))
+		h.Write([]byte(msg.Value.Filename))
+		h.Write([]byte(msg.Value.Metahash))
+		h.Write(block.PrevHash)
+		block.Hash = h.Sum(nil)
+
+		tlcMsg := types.TLCMessage{
+			Step:  n.paxos.currentStep,
+			Block: block,
+		}
+
+		err := n.marshalAndBroadcast(tlcMsg)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't broadcast TLC message")
+			return err
+		}
 	}
 
 	// TODO Ignore messages if the proposer is not in Paxos phase 2: what does it mean?
-
-	select {
-	case n.paxos.receivedAccepts <- *msg:
-	case <-time.After(100 * time.Millisecond):
-		n.logger.Error().Msg("accept message can't be sent to channel")
-	}
 
 	return nil
 }
