@@ -15,10 +15,10 @@ type Paxos struct {
 	currentStep uint
 
 	// Proposer
-	proposeMtx       sync.Mutex // This mutex is unlocked when the peer can make a proposal
+	proposeMtx       sync.Mutex // This mutex is locked when the peer is making a proposal
 	receivedPromises chan types.PaxosPromiseMessage
-	receivedAccepts  chan types.PaxosAcceptMessage
 	nbAcceptedMsgs   map[string]int // For each UniqID, the number of peers that have already accepted it
+	consensusReached chan struct{}  // Notifies when enough accept messages have been received
 
 	// Acceptor
 	maxID         uint
@@ -37,8 +37,8 @@ func NewPaxos() Paxos {
 	return Paxos{
 		// The buffers are used to receive the message the peer sends to itself
 		receivedPromises: make(chan types.PaxosPromiseMessage, 1),
-		receivedAccepts:  make(chan types.PaxosAcceptMessage, 1),
 		nbAcceptedMsgs:   make(map[string]int),
+		consensusReached: make(chan struct{}, 1),
 		currentStep:      0,
 		maxID:            0,
 		acceptedID:       0,
@@ -149,33 +149,12 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 		return err
 	}
 
-	// Receive accept messages
-	keepWaiting = true
-	endTime = time.Now().Add(n.conf.PaxosProposerRetry)
+	// Wait until consensus is reached
+	select {
+	case <-n.paxos.consensusReached:
 
-	acceptedValue = nil
-
-	for keepWaiting {
-		select {
-		case acceptMsg := <-n.paxos.receivedAccepts:
-
-			if n.paxos.nbAcceptedMsgs[acceptMsg.Value.UniqID] == threshold { // A consensus has been reached
-				acceptedValue = &acceptMsg.Value
-				keepWaiting = false
-			}
-
-		case <-time.After(time.Until(endTime)):
-			keepWaiting = false
-		}
+	case <-time.After(n.conf.PaxosProposerRetry): // No consensus have been reached
 	}
-
-	// We don't have enough accept messages to reach a consensus, retry
-	if acceptedValue == nil {
-		// TODO retry with higher ID
-		return nil
-	}
-
-	// A consensus has been reached
 
 	return nil
 }
@@ -276,7 +255,9 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 	}
 
 	n.paxos.nbAcceptedMsgs[msg.Value.UniqID]++
-	if n.paxos.nbAcceptedMsgs[msg.Value.UniqID] == n.conf.PaxosThreshold(n.conf.TotalPeers) { // A consensus has been reached
+
+	// A consensus has been reached
+	if n.paxos.nbAcceptedMsgs[msg.Value.UniqID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
 		prevHash := n.conf.Storage.GetBlockchainStore().Get(storage.LastBlockKey)
 		if prevHash == nil {
 			prevHash = make([]byte, 32)
@@ -307,6 +288,10 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't broadcast TLC message")
 			return err
+		}
+
+		if true { // TODO check if we need to inform the proposer
+			n.paxos.consensusReached <- struct{}{}
 		}
 	}
 

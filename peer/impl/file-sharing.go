@@ -284,6 +284,7 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 }
 
 // Tag implements peer.DataSharing
+// TODO check if the Tag function can be called in parallel
 func (n *node) Tag(name string, metaHash string) error {
 	// Check if the name already exists
 	if n.GetNamingStore().Get(name) != nil {
