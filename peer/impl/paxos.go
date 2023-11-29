@@ -101,7 +101,23 @@ func (n *node) lastBlock() *types.BlockchainBlock {
 // Returns if the provided value was accepted by the system
 func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 	n.paxos.proposeMtx.Lock()
-	defer n.paxos.proposeMtx.Unlock()
+
+	defer func() {
+		n.paxos.proposeMtx.Unlock()
+
+		// Clean the channels
+		success := true
+
+		for success {
+			select {
+			case <-n.paxos.receivedPromises:
+			case <-n.paxos.consensusReached:
+			case <-n.paxos.nextTlcStep:
+			default:
+				success = false
+			}
+		}
+	}()
 
 	id := n.conf.PaxosID
 
