@@ -79,23 +79,46 @@ func (n *node) lastBlock() *types.BlockchainBlock {
 }
 
 // Blocks until it is known if the proposal is accepted or not
+// Returns if the provided value was accepted by the system
 func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 	n.paxos.proposeMtx.Lock()
 	defer n.paxos.proposeMtx.Unlock()
 
+	id := n.conf.PaxosID
+
+	res := 2
+	for res == 2 {
+		r, err := n.makeProposalWithId(value, id)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't make proposal with given ID")
+			return false, err
+		}
+		res = r
+		id += n.conf.TotalPeers
+	}
+
+	return res == 0, nil
+}
+
+// Blocks until it is known if the proposal is accepted or not
+// Returns:
+// - 0 if the proposal was a success
+// - 1 if another proposal was accepted
+// - 2 if we need to retry with a higher ID
+func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, error) {
 	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
 
 	// Prepare
 	prepareMsg := types.PaxosPrepareMessage{
 		Step:   n.paxos.currentStep,
-		ID:     n.conf.PaxosID,
+		ID:     prepareId,
 		Source: n.GetAddress(),
 	}
 
 	err := n.marshalAndBroadcast(prepareMsg)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't broadcast prepare message")
-		return false, err
+		return -1, err
 	}
 
 	// Receive promises
@@ -127,10 +150,9 @@ func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 		}
 	}
 
-	// We don't have enough promises, retry
+	// We don't have enough promises, retry with a higher ID
 	if nbPromises < threshold {
-		// TODO retry with higher ID
-		return false, nil
+		return 2, nil
 	}
 
 	// Propose
@@ -151,16 +173,20 @@ func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 	err = n.marshalAndBroadcast(proposeMsg)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't broadcast propose message")
-		return false, err
+		return -1, err
 	}
 
 	// Wait until consensus is reached
 	select {
 	case <-n.paxos.consensusReached:
-		return proposedOurOwnValue, nil
+		if proposedOurOwnValue {
+			return 0, nil
+		} else {
+			return 1, nil
+		}
 
 	case <-time.After(n.conf.PaxosProposerRetry): // No consensus have been reached
-		return false, nil
+		return 2, nil
 	}
 }
 
