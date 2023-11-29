@@ -80,6 +80,9 @@ func (n *node) lastBlock() *types.BlockchainBlock {
 
 // Blocks until it is known if the proposal is accepted or not
 func (n *node) makeProposal(value types.PaxosValue) error {
+	n.paxos.proposeMtx.Lock()
+	defer n.paxos.proposeMtx.Unlock()
+
 	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
 
 	// Prepare
@@ -290,7 +293,10 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 			return err
 		}
 
-		if true { // TODO check if we need to inform the proposer
+		if n.paxos.proposeMtx.TryLock() {
+			n.paxos.proposeMtx.Unlock()
+		} else {
+			// If a proposer is listening, tell it that we reached a consensus
 			n.paxos.consensusReached <- struct{}{}
 		}
 	}
