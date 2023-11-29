@@ -10,7 +10,7 @@ import (
 // Send the heartbeat if needed
 func (n *node) sendHeartbeat() error {
 	if n.conf.HeartbeatInterval != 0 && time.Now().After(n.lastHeartbeat.Add(n.conf.HeartbeatInterval)) {
-		n.logger.Info().Msg("sending heartbeat")
+		//n.logger.Info().Msg("sending heartbeat")
 		n.lastHeartbeat = time.Now()
 
 		emptyMsg := types.EmptyMessage{}
@@ -38,7 +38,7 @@ func (n *node) antiEntropy() {
 
 		if len(neighbors) != 0 {
 			dest := neighbors[rand.Intn(len(neighbors))]
-			n.logger.Info().Str("dest", dest).Msg("using anti-entropy mechanism")
+			//n.logger.Info().Str("dest", dest).Msg("using anti-entropy mechanism")
 			n.sendStatus(dest)
 		}
 	}
@@ -77,7 +77,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 	}
 
 	n.rumorsReceived[n.GetAddress()] = append(n.rumorsReceived[n.GetAddress()], rumor)
-	n.logger.Info().Uint("sequence", rumor.Sequence).Msg("started a broadcast")
+	//n.logger.Info().Uint("sequence", rumor.Sequence).Msg("started a broadcast")
 
 	// Create the message
 	rumorsMsg := types.RumorsMessage{
@@ -95,7 +95,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 			return err
 		}
 	} else {
-		n.logger.Info().Msg("no neighbor to transfer the rumor to")
+		//n.logger.Info().Msg("no neighbor to transfer the rumor to")
 	}
 
 	n.rumorMutex.Unlock()
@@ -113,7 +113,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	}
 
 	// Log the message
-	n.logger.Info().Str("from", pkt.Header.Source).Msg("rumors received")
+	//n.logger.Info().Str("from", pkt.Header.Source).Msg("rumors received")
 
 	// Process the rumors
 	hasExpectedRumor := false
@@ -125,10 +125,10 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 		if rumor.Sequence == previousSequence+1 {
 			hasExpectedRumor = true
 
-			n.logger.Info().
-				Uint("sequence", rumor.Sequence).
-				Str("source", rumor.Origin).
-				Msg("rumor processed")
+			/*n.logger.Info().
+			Uint("sequence", rumor.Sequence).
+			Str("source", rumor.Origin).
+			Msg("rumor processed")*/
 
 			// Update the routing table
 			next, exists := n.routingTable.get(rumor.Origin)
@@ -157,7 +157,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	defer n.rumorMutex.Unlock()
 
 	ack := types.AckMessage{AckedPacketID: pkt.Header.PacketID, Status: n.status}
-	n.logger.Info().Str("dest", pkt.Header.Source).Str("packetID", ack.AckedPacketID).Msg("sending ACK")
+	//n.logger.Info().Str("dest", pkt.Header.Source).Str("packetID", ack.AckedPacketID).Msg("sending ACK")
 	if err := n.sendMsgToNeighbor(ack, pkt.Header.Source); err != nil {
 		n.logger.Error().Err(err).Msg("can't send ack to neighbor")
 		return err
@@ -188,10 +188,10 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 	n.ackChannelsMutex.Unlock()
 
 	if !exists {
-		n.logger.Info().
-			Str("source", pkt.Header.Source).
-			Str("packetID", ackMsg.AckedPacketID).
-			Msg("unexpected ACK received")
+		/*n.logger.Info().
+		Str("source", pkt.Header.Source).
+		Str("packetID", ackMsg.AckedPacketID).
+		Msg("unexpected ACK received")*/
 	} else {
 		select {
 		case channel <- true:
@@ -201,10 +201,10 @@ func (n *node) receiveAck(msg types.Message, pkt transport.Packet) error {
 		}
 
 		// Log the ACK
-		n.logger.Info().
-			Str("source", pkt.Header.Source).
-			Str("packetID", ackMsg.AckedPacketID).
-			Msg("ACK received")
+		/*n.logger.Info().
+		Str("source", pkt.Header.Source).
+		Str("packetID", ackMsg.AckedPacketID).
+		Msg("ACK received")*/
 	}
 
 	// Process the status
@@ -223,7 +223,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 		panic("not a status message")
 	}
 
-	n.logger.Info().Str("from", pkt.Header.Source).Msg("received status")
+	//n.logger.Info().Str("from", pkt.Header.Source).Msg("received status")
 
 	neighbor := pkt.Header.Source
 
@@ -241,7 +241,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	n.rumorMutex.Unlock()
 
 	if mustSendStatus {
-		n.logger.Info().Msg("processing status: the peer has new rumors")
+		//n.logger.Info().Msg("processing status: the peer has new rumors")
 		n.sendStatus(neighbor)
 	}
 
@@ -266,7 +266,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	n.rumorMutex.Unlock()
 
 	if len(rumors.Rumors) > 0 {
-		n.logger.Info().Int("nbRumors", len(rumors.Rumors)).Msg("processing status: we have new rumors for the peer")
+		//n.logger.Info().Int("nbRumors", len(rumors.Rumors)).Msg("processing status: we have new rumors for the peer")
 		err := n.sendRumorsMsg(rumors, neighbor, false)
 		if err != nil {
 			return err
@@ -276,7 +276,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	// Continue Mongering
 	if !mustSendStatus && len(rumors.Rumors) == 0 && rand.Float64() < n.conf.ContinueMongering {
 		dest, ok := n.randomDifferentNeighbor(neighbor)
-		n.logger.Info().Str("dest", dest).Msg("continue mongering")
+		//n.logger.Info().Str("dest", dest).Msg("continue mongering")
 		if ok {
 			n.sendStatus(dest)
 		}
@@ -313,7 +313,7 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string, waitAck b
 	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), neighbor, 0)
 	pkt := transport.Packet{Header: &header, Msg: &marshaled}
 
-	n.logger.Info().Str("packetID", header.PacketID).Str("neighbor", neighbor).Msg("sent rumor to neighbor")
+	//n.logger.Info().Str("packetID", header.PacketID).Str("neighbor", neighbor).Msg("sent rumor to neighbor")
 
 	// Wait for the ACK
 	if n.conf.AckTimeout != 0 && waitAck {
@@ -330,7 +330,7 @@ func (n *node) sendRumorsMsg(msg types.RumorsMessage, neighbor string, waitAck b
 				// Do nothing
 
 			case <-time.After(n.conf.AckTimeout):
-				n.logger.Info().Str("packetID", header.PacketID).Msg("ACK not received in time")
+				//n.logger.Info().Str("packetID", header.PacketID).Msg("ACK not received in time")
 				newDest, exists := n.randomDifferentNeighbor(neighbor)
 
 				if exists {

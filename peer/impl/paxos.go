@@ -17,9 +17,13 @@ type Paxos struct {
 	// Proposer
 	proposeMtx       sync.Mutex // This mutex is locked when the peer is making a proposal
 	receivedPromises chan types.PaxosPromiseMessage
-	nbAcceptedMsgs   map[string]int // For each UniqID, the number of peers that have already accepted it
-	consensusReached chan struct{}  // Notifies when enough accept messages have been received
-	nextTlcStep      chan struct{}  // Notifies when the proposer must restart due to a change of TLC
+
+	// For each UniqID, the number of peers that have already accepted it
+	// Only accessed from the loop goroutine
+	nbAcceptedMsgs map[string]int
+
+	consensusReached chan struct{} // Notifies when enough accept messages have been received
+	nextTlcStep      chan struct{} // Notifies when the proposer must restart due to a change of TLC
 
 	// Acceptor
 	maxID         uint
@@ -52,22 +56,13 @@ func NewPaxos() Paxos {
 	}
 }
 
+// Clean the variables
 func (n *node) nextStep() {
-	// If needed, tell the proposer to restart
-	if n.paxos.proposeMtx.TryLock() {
-		n.paxos.proposeMtx.Unlock()
-	} else {
-		n.paxos.nextTlcStep <- struct{}{}
-	}
-
-	n.paxos.proposeMtx.Lock()
-	n.paxos.nbAcceptedMsgs = make(map[string]int)
 	n.paxos.currentStep++
 	n.paxos.maxID = 0
 	n.paxos.acceptedID = 0
 	n.paxos.acceptedValue = nil
 	n.paxos.hasBroadcastedTLC = false
-	n.paxos.proposeMtx.Unlock()
 }
 
 func (n *node) lastBlock() *types.BlockchainBlock {
@@ -97,6 +92,7 @@ func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 	res := 2
 	for res == 2 {
 		r, err := n.makeProposalWithId(value, id)
+		n.logger.Debug().Int("return", r).Msg("end proposal with id")
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't make proposal with given ID")
 			return false, err
@@ -138,8 +134,10 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	var acceptedID uint = 0 // If 0, we can propose our value
 	var acceptedValue *types.PaxosValue = nil
 	for keepWaiting && nbPromises < threshold {
+		n.logger.Debug().Msg("1")
 		select {
 		case <-n.paxos.nextTlcStep: // We must start again
+			n.nextStep()
 			return 1, nil
 
 		case promise := <-n.paxos.receivedPromises:
@@ -159,6 +157,7 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 		case <-time.After(time.Until(endTime)):
 			keepWaiting = false
 		}
+		n.logger.Debug().Msg("2")
 	}
 
 	// We don't have enough promises, retry with a higher ID
@@ -190,6 +189,7 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	// Wait until consensus is reached
 	select {
 	case <-n.paxos.nextTlcStep: // We must start again
+		n.nextStep()
 		return 1, nil
 
 	case <-n.paxos.consensusReached:
@@ -380,8 +380,17 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 		}
 	}
 
-	// Go to next step
-	n.nextStep()
+	// Reset variables
+	n.paxos.nbAcceptedMsgs = make(map[string]int)
+
+	if n.paxos.proposeMtx.TryLock() {
+		n.nextStep()
+		n.paxos.proposeMtx.Unlock()
+	} else {
+		// Tell the proposer to restart
+		// The proposer will call nextStep itself
+		n.paxos.nextTlcStep <- struct{}{}
+	}
 }
 
 func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet) error {

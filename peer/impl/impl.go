@@ -24,7 +24,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	if isDefined && val == "no" {
 		logLevel = zerolog.Disabled
 	}
-	logLevel = zerolog.Disabled // TODEL
+	//	logLevel = zerolog.Disabled // TODEL
 
 	// Initialize the logger
 	var logger = zerolog.New(zerolog.ConsoleWriter{
