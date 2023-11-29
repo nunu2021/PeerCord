@@ -153,7 +153,6 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 	keepWaiting = true
 	endTime = time.Now().Add(n.conf.PaxosProposerRetry)
 
-	//var acceptedValue *types.PaxosValue = nil
 	acceptedValue = nil
 
 	for keepWaiting {
