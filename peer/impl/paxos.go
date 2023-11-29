@@ -14,24 +14,40 @@ import (
 type Paxos struct {
 	currentStep uint
 
-	// Proposer
-	proposeMtx       sync.Mutex // This mutex is locked when the peer is making a proposal
-	receivedPromises chan types.PaxosPromiseMessage
+	/*
+	 * Proposer
+	 */
+
+	// This mutex is locked when the peer is making a proposal
+	proposeMtx sync.Mutex
 
 	// For each UniqID, the number of peers that have already accepted it
 	// Only accessed from the loop goroutine
 	nbAcceptedMsgs map[string]int
 
-	consensusReached chan struct{} // Notifies when enough accept messages have been received
-	nextTlcStep      chan struct{} // Notifies when the proposer must restart due to a change of TLC
+	// Promises waiting to be processed
+	receivedPromises chan types.PaxosPromiseMessage
 
-	// Acceptor
+	// Notifies when enough accept messages have been received
+	consensusReached chan struct{}
+
+	// Notifies when the proposer must restart due to a change of TLC
+	nextTlcStep chan struct{}
+
+	/*
+	 * Acceptor
+	 */
+
 	maxID         uint
 	acceptedID    uint
 	acceptedValue *types.PaxosValue
 
-	// TLC
-	tlcMessages map[uint]struct { // For each step, information about the messages received
+	/*
+	 * TLC
+	 */
+
+	// For each step, information about the messages received
+	tlcMessages map[uint]struct {
 		tlcMsg types.TLCMessage
 		count  int
 	}
