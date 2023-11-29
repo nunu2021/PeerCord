@@ -19,6 +19,7 @@ type Paxos struct {
 	receivedPromises chan types.PaxosPromiseMessage
 	nbAcceptedMsgs   map[string]int // For each UniqID, the number of peers that have already accepted it
 	consensusReached chan struct{}  // Notifies when enough accept messages have been received
+	nextTlcStep      chan struct{}  // Notifies when the proposer must restart due to a change of TLC
 
 	// Acceptor
 	maxID         uint
@@ -39,6 +40,7 @@ func NewPaxos() Paxos {
 		receivedPromises: make(chan types.PaxosPromiseMessage, 1),
 		nbAcceptedMsgs:   make(map[string]int),
 		consensusReached: make(chan struct{}, 1),
+		nextTlcStep:      make(chan struct{}, 1),
 		currentStep:      0,
 		maxID:            0,
 		acceptedID:       0,
@@ -51,15 +53,21 @@ func NewPaxos() Paxos {
 }
 
 func (n *node) nextStep() {
+	// If needed, tell the proposer to restart
+	if n.paxos.proposeMtx.TryLock() {
+		n.paxos.proposeMtx.Unlock()
+	} else {
+		n.paxos.nextTlcStep <- struct{}{}
+	}
+
+	n.paxos.proposeMtx.Lock()
 	n.paxos.nbAcceptedMsgs = make(map[string]int)
 	n.paxos.currentStep++
 	n.paxos.maxID = 0
 	n.paxos.acceptedID = 0
 	n.paxos.acceptedValue = nil
 	n.paxos.hasBroadcastedTLC = false
-
-	// TODO maybe it is not locked?
-	//n.paxos.proposeMtx.Unlock()
+	n.paxos.proposeMtx.Unlock()
 }
 
 func (n *node) lastBlock() *types.BlockchainBlock {
@@ -131,6 +139,9 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	var acceptedValue *types.PaxosValue = nil
 	for keepWaiting && nbPromises < threshold {
 		select {
+		case <-n.paxos.nextTlcStep: // We must start again
+			return 1, nil
+
 		case promise := <-n.paxos.receivedPromises:
 			// Validate the promise here
 			if promise.Step != n.paxos.currentStep || promise.ID != n.paxos.maxID {
@@ -178,6 +189,9 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 
 	// Wait until consensus is reached
 	select {
+	case <-n.paxos.nextTlcStep: // We must start again
+		return 1, nil
+
 	case <-n.paxos.consensusReached:
 		if proposedOurOwnValue {
 			return 0, nil
