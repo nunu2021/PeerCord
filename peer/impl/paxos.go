@@ -18,6 +18,7 @@ type Paxos struct {
 	proposeMtx       sync.Mutex // This mutex is unlocked when the peer can make a proposal
 	receivedPromises chan types.PaxosPromiseMessage
 	receivedAccepts  chan types.PaxosAcceptMessage
+	nbAcceptedMsgs   map[string]int // For each UniqID, the number of peers that have already accepted it
 
 	// Acceptor
 	maxID         uint
@@ -37,6 +38,7 @@ func NewPaxos() Paxos {
 		// The buffers are used to receive the message the peer sends to itself
 		receivedPromises: make(chan types.PaxosPromiseMessage, 1),
 		receivedAccepts:  make(chan types.PaxosAcceptMessage, 1),
+		nbAcceptedMsgs:   make(map[string]int),
 		currentStep:      0,
 		maxID:            0,
 		acceptedID:       0,
@@ -49,6 +51,7 @@ func NewPaxos() Paxos {
 }
 
 func (n *node) nextStep() {
+	n.paxos.nbAcceptedMsgs = make(map[string]int)
 	n.paxos.currentStep++
 	n.paxos.maxID = 0
 	n.paxos.acceptedID = 0
@@ -150,20 +153,18 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 	keepWaiting = true
 	endTime = time.Now().Add(n.conf.PaxosProposerRetry)
 
-	nbAcceptedMsgs := make(map[string]int) // For each UniqID, the number of peers that have already accepted it
 	//var acceptedValue *types.PaxosValue = nil
 	acceptedValue = nil
 
 	for keepWaiting {
 		select {
 		case acceptMsg := <-n.paxos.receivedAccepts:
-			// Validate the promise here
 			if acceptMsg.Step != n.paxos.currentStep {
 				continue
 			}
 
-			nbAcceptedMsgs[acceptMsg.Value.UniqID]++
-			if nbAcceptedMsgs[acceptMsg.Value.UniqID] == threshold { // A consensus has been reached
+			n.paxos.nbAcceptedMsgs[acceptMsg.Value.UniqID]++
+			if n.paxos.nbAcceptedMsgs[acceptMsg.Value.UniqID] == threshold { // A consensus has been reached
 				acceptedValue = &acceptMsg.Value
 				keepWaiting = false
 			}
@@ -308,6 +309,11 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 	// Check if the message is invalid
 	if msg.Step != n.paxos.currentStep {
 		return nil
+	}
+
+	n.paxos.nbAcceptedMsgs[msg.Value.UniqID]++
+	if n.paxos.nbAcceptedMsgs[msg.Value.UniqID] == n.conf.PaxosThreshold(n.conf.TotalPeers) { // A consensus has been reached
+		// TODO
 	}
 
 	// TODO Ignore messages if the proposer is not in Paxos phase 2: what does it mean?
