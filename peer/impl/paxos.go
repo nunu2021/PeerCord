@@ -124,7 +124,6 @@ func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 	res := 2
 	for res == 2 {
 		r, err := n.makeProposalWithId(value, id)
-		n.logger.Debug().Int("return", r).Msg("end proposal with id")
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't make proposal with given ID")
 			return false, err
@@ -166,7 +165,6 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	var acceptedID uint = 0 // If 0, we can propose our value
 	var acceptedValue *types.PaxosValue = nil
 	for keepWaiting && nbPromises < threshold {
-		n.logger.Debug().Msg("1")
 		select {
 		case <-n.paxos.nextTlcStep: // We must start again
 			n.nextStep()
@@ -189,7 +187,6 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 		case <-time.After(time.Until(endTime)):
 			keepWaiting = false
 		}
-		n.logger.Debug().Msg("2")
 	}
 
 	// We don't have enough promises, retry with a higher ID
