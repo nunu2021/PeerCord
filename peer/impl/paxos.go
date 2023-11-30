@@ -173,6 +173,9 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 		case <-n.paxos.nextTlcStep: // We must start again
 			return 1, nil
 
+		case <-n.paxos.consensusReached: // We must start again
+			return 1, nil
+
 		case promise := <-n.paxos.receivedPromises:
 			// Validate the promise here
 			if promise.Step != n.paxos.currentStep || promise.ID != prepareId {
@@ -341,6 +344,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 
 	// A consensus has been reached
 	if n.paxos.nbAcceptedMsgs[msg.ID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
+		// Add to the blockchain
 		prevHash := n.conf.Storage.GetBlockchainStore().Get(storage.LastBlockKey)
 		if prevHash == nil {
 			prevHash = make([]byte, 32)
@@ -361,6 +365,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 		h.Write(block.PrevHash)
 		block.Hash = h.Sum(nil)
 
+		// Broadcast TLC message
 		tlcMsg := types.TLCMessage{
 			Step:  n.paxos.currentStep,
 			Block: block,
@@ -372,23 +377,15 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 			return err
 		}
 
-		if n.paxos.proposeMtx.TryLock() {
-			n.paxos.proposeMtx.Unlock()
-		} else {
-			// If a proposer is listening, tell it that we reached a consensus
-			n.paxos.consensusReached <- struct{}{}
-		}
-
 		// Don't start new propose. The mutex will be unlocked when enough TLC messages have been received.
-		n.logger.Debug().Msg("TryLock recv acceptMsg")
 		if !n.paxos.startProposeMtx.TryLock() { // TODO remove error msg
 			n.logger.Error().Msg("can't lock startProposeMtx")
 		}
 
-		// End the current proposer
+		// End the current proposer by telling it we reached a consensus
 		for !n.paxos.proposeMtx.TryLock() {
 			select {
-			case n.paxos.nextTlcStep <- struct{}{}:
+			case n.paxos.consensusReached <- struct{}{}:
 			case <-time.After(10 * time.Millisecond):
 			}
 		}
