@@ -149,7 +149,6 @@ func loop(n *node) {
 	if n.conf.AntiEntropyInterval != 0 {
 		timeoutLoop = min(timeoutLoop, n.conf.AntiEntropyInterval/10)
 	}
-
 	receivedPackets := make(chan transport.Packet, 1)
 
 	// Receive packets
@@ -166,6 +165,7 @@ func loop(n *node) {
 			if err != nil {
 				n.logger.Warn().Err(err).Msg("failed to receive message")
 			}
+
 			receivedPackets <- pkt
 		}
 	}()

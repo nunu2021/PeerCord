@@ -96,9 +96,10 @@ func (n *node) lastBlock() *types.BlockchainBlock {
 // Blocks until it is known if the proposal is accepted or not
 // Returns if the provided value was accepted by the system
 func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
+	n.logger.Debug().Msg("lock makeProposal")
 	n.paxos.startProposeMtx.Lock()
 	n.paxos.startProposeMtx.Unlock()
-
+	n.logger.Debug().Msg("unlock makeProposal")
 	n.paxos.proposeMtx.Lock()
 
 	defer func() {
@@ -140,6 +141,8 @@ func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 // - 1 if another proposal was accepted
 // - 2 if we need to retry with a higher ID
 func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, error) {
+	n.logger.Debug().Msg("Debut proposal ID")
+	defer n.logger.Debug().Msg("Fin proposal ID")
 	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
 
 	// Prepare
@@ -148,6 +151,8 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 		ID:     prepareId,
 		Source: n.GetAddress(),
 	}
+
+	n.logger.Debug().Uint("prepareId", prepareId).Msg("sending prepare")
 
 	err := n.marshalAndBroadcast(prepareMsg)
 	if err != nil {
@@ -186,6 +191,8 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 			keepWaiting = false
 		}
 	}
+
+	n.logger.Debug().Int("nbPromises", nbPromises).Int("threshold", threshold).Msg("Stop receiving promises")
 
 	// We don't have enough promises, retry with a higher ID
 	if nbPromises < threshold {
@@ -251,6 +258,13 @@ func (n *node) receivePaxosPrepareMsg(originalMsg types.Message, pkt transport.P
 		panic("not a paxos prepare message")
 	}
 
+	n.logger.Debug().
+		Uint("step", msg.Step).
+		Uint("currentStep", n.paxos.currentStep).
+		Uint("id", msg.ID).
+		Uint("maxId", n.paxos.maxID).
+		Msg("received prepare")
+
 	// Ignore messages with wrong Step
 	if msg.Step != n.paxos.currentStep {
 		return nil
@@ -260,6 +274,8 @@ func (n *node) receivePaxosPrepareMsg(originalMsg types.Message, pkt transport.P
 	if msg.ID <= n.paxos.maxID {
 		return nil
 	}
+
+	n.logger.Debug().Msg("received correct prepare")
 
 	n.paxos.maxID = msg.ID
 
@@ -339,7 +355,6 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 			PrevHash: prevHash,
 		}
 
-		// TODO is it the correct way to compute the hash?
 		h := sha256.New()
 		h.Write([]byte(strconv.Itoa(int(block.Index))))
 		h.Write([]byte(msg.Value.UniqID))
@@ -365,6 +380,21 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 			// If a proposer is listening, tell it that we reached a consensus
 			n.paxos.consensusReached <- struct{}{}
 		}
+
+		// Don't start new propose. The mutex will be unlocked when enough TLC messages have been received.
+		n.logger.Debug().Msg("TryLock recv acceptMsg")
+		if !n.paxos.startProposeMtx.TryLock() { // TODO remove error msg
+			n.logger.Error().Msg("can't lock startProposeMtx")
+		}
+
+		// End the current proposer
+		for !n.paxos.proposeMtx.TryLock() {
+			select {
+			case n.paxos.nextTlcStep <- struct{}{}:
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+		n.paxos.proposeMtx.Unlock()
 	}
 
 	// TODO Ignore messages if the proposer is not in Paxos phase 2: what does it mean?
@@ -375,13 +405,17 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 // When enough TLC messages have been received, adds the block to the blockchain and update the naming store
 func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	// Prevent another proposer from starting
-	n.paxos.startProposeMtx.Lock()
+	n.logger.Debug().Msg("TryLock thresholdTLC")
+	n.paxos.startProposeMtx.TryLock()
 	defer n.paxos.startProposeMtx.Unlock()
+	defer n.logger.Debug().Msg("Unlock thresholdTLC")
 
 	// End the current proposer
 	if !n.paxos.proposeMtx.TryLock() {
 		// TODO here, the proposer may be already leaving and not listening for this
+		n.logger.Debug().Msg("AV")
 		n.paxos.nextTlcStep <- struct{}{}
+		n.logger.Debug().Msg("AP")
 		n.paxos.proposeMtx.Lock()
 	}
 	defer n.paxos.proposeMtx.Unlock()
@@ -407,14 +441,14 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	n.GetNamingStore().Set(value.Filename, []byte(value.Metahash))
 
 	// Broadcast the message if needed
-	if !isCatchingUp && !n.paxos.hasBroadcastedTLC {
+	/*if !isCatchingUp && !n.paxos.hasBroadcastedTLC {
 		n.paxos.hasBroadcastedTLC = true
 
 		err := n.marshalAndBroadcast(msg)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't broadcast TLC message")
 		}
-	}
+	}*/
 
 	// Reset variables
 	n.paxos.nbAcceptedMsgs = make(map[string]int)
@@ -447,6 +481,8 @@ func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet
 
 	info.count++
 	n.paxos.tlcMessages[msg.Step] = info
+
+	n.logger.Debug().Int("count", info.count).Msg("received TLC msg")
 
 	if info.count == threshold && msg.Step == n.paxos.currentStep {
 		n.thresholdTlcReached(false)
