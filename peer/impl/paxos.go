@@ -352,9 +352,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 		}
 
 		// Don't start new propose. The mutex will be unlocked when enough TLC messages have been received.
-		if !n.paxos.startProposeMtx.TryLock() { // TODO remove error msg
-			n.logger.Error().Msg("can't lock startProposeMtx")
-		}
+		n.paxos.startProposeMtx.TryLock()
 
 		// End the current proposer by telling it we reached a consensus
 		for !n.paxos.proposeMtx.TryLock() {
