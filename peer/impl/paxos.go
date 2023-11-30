@@ -36,9 +36,6 @@ type Paxos struct {
 	// Notifies when enough accept messages have been received
 	consensusReached chan struct{}
 
-	// Notifies when the proposer must restart due to a change of TLC
-	nextTlcStep chan struct{}
-
 	/*
 	 * Acceptor
 	 */
@@ -68,7 +65,6 @@ func NewPaxos() Paxos {
 		receivedPromises: make(chan types.PaxosPromiseMessage, 1),
 		nbAcceptedMsgs:   make(map[uint]int),
 		consensusReached: make(chan struct{}, 1),
-		nextTlcStep:      make(chan struct{}, 1),
 		currentStep:      0,
 		maxID:            0,
 		acceptedID:       0,
@@ -115,7 +111,6 @@ func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 			select {
 			case <-n.paxos.receivedPromises:
 			case <-n.paxos.consensusReached:
-			case <-n.paxos.nextTlcStep:
 			default:
 				success = false
 			}
@@ -173,9 +168,6 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	var acceptedValue *types.PaxosValue = nil
 	for keepWaiting && nbPromises < threshold {
 		select {
-		case <-n.paxos.nextTlcStep: // We must start again
-			return 1, nil
-
 		case <-n.paxos.consensusReached: // We must start again
 			return 1, nil
 
@@ -226,9 +218,7 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 
 	// Wait until consensus is reached
 	select {
-	case <-n.paxos.nextTlcStep: // We must start again
-		return 1, nil
-
+	// TODO the consensus may have been for another value
 	case <-n.paxos.consensusReached:
 		if proposedOurOwnValue {
 			return 0, nil
@@ -349,7 +339,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 	if n.paxos.nbAcceptedMsgs[msg.ID] == n.conf.PaxosThreshold(n.conf.TotalPeers) && !n.paxos.achievedConsensus {
 		n.paxos.achievedConsensus = true
 
-		// Add to the blockchain
+		// Compute the block to add
 		prevHash := n.conf.Storage.GetBlockchainStore().Get(storage.LastBlockKey)
 		if prevHash == nil {
 			prevHash = make([]byte, 32)
@@ -414,7 +404,7 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	if !n.paxos.proposeMtx.TryLock() {
 		// TODO here, the proposer may be already leaving and not listening for this
 		n.logger.Debug().Msg("AV")
-		n.paxos.nextTlcStep <- struct{}{}
+		n.paxos.consensusReached <- struct{}{}
 		n.logger.Debug().Msg("AP")
 		n.paxos.proposeMtx.Lock()
 	}
