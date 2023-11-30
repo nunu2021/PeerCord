@@ -303,22 +303,23 @@ func (n *node) Tag(name string, metaHash string) error {
 		Metahash: metaHash,
 	}
 
-	success := false
+	for {
+		n.waitAvailability()
 
-	for !success {
-		s, err := n.makeProposal(value)
-		success = s
+		// Check if the name already exists
+		mh := n.GetNamingStore().Get(name)
+		if mh != nil {
+			if string(mh) != metaHash {
+				return NameAlreadyExistsError(name)
+			}
+			return nil // The tag is a success
+		}
+
+		err := n.makeProposal(value)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't make proposal, retrying")
 		}
-
-		// Check if the name already exists
-		if n.GetNamingStore().Get(name) != nil {
-			return NameAlreadyExistsError(name)
-		}
 	}
-
-	return nil
 }
 
 // Resolve implements peer.DataSharing

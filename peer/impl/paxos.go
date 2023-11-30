@@ -33,8 +33,9 @@ type Paxos struct {
 	// Promises waiting to be processed
 	receivedPromises chan types.PaxosPromiseMessage
 
-	// Notifies when enough accept messages have been received
-	consensusReached chan struct{}
+	// Notifies when a consensus has been reached.
+	// Gives the final value
+	consensusReached chan types.PaxosValue
 
 	/*
 	 * Acceptor
@@ -64,7 +65,7 @@ func NewPaxos() Paxos {
 		// The buffers are used to receive the message the peer sends to itself
 		receivedPromises: make(chan types.PaxosPromiseMessage, 1),
 		nbAcceptedMsgs:   make(map[uint]int),
-		consensusReached: make(chan struct{}, 1),
+		consensusReached: make(chan types.PaxosValue, 1),
 		currentStep:      0,
 		maxID:            0,
 		acceptedID:       0,
@@ -92,13 +93,13 @@ func (n *node) lastBlock() *types.BlockchainBlock {
 	return &block
 }
 
-// Blocks until it is known if the proposal is accepted or not
-// Returns if the provided value was accepted by the system
-func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
-	n.logger.Debug().Msg("lock makeProposal")
+func (n *node) waitAvailability() {
 	n.paxos.startProposeMtx.Lock()
 	n.paxos.startProposeMtx.Unlock()
-	n.logger.Debug().Msg("unlock makeProposal")
+}
+
+// Blocks until it is known if the proposal is accepted or not
+func (n *node) makeProposal(value types.PaxosValue) error {
 	n.paxos.proposeMtx.Lock()
 
 	defer func() {
@@ -119,28 +120,29 @@ func (n *node) makeProposal(value types.PaxosValue) (bool, error) {
 
 	id := n.conf.PaxosID
 
-	res := 2
-	for res == 2 {
-		r, err := n.makeProposalWithId(value, id)
+	for {
+		success, err := n.makeProposalWithId(value, id)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't make proposal with given ID")
-			return false, err
+			return err
 		}
-		res = r
+		if success {
+			return nil
+		}
 		id += n.conf.TotalPeers
 	}
-
-	return res == 0, nil
 }
 
 // Blocks until it is known if the proposal is accepted or not
+// Returns if the proposal was a success. If not, we must try with a greater Id
 // Returns:
 // - 0 if the proposal was a success
 // - 1 if another proposal was accepted
 // - 2 if we need to retry with a higher ID
-func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, error) {
+func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (bool, error) {
 	n.logger.Debug().Msg("Debut proposal ID")
 	defer n.logger.Debug().Msg("Fin proposal ID")
+
 	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
 
 	// Prepare
@@ -155,7 +157,7 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	err := n.marshalAndBroadcast(prepareMsg)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't broadcast prepare message")
-		return -1, err
+		return false, err
 	}
 
 	// Receive promises
@@ -169,7 +171,7 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	for keepWaiting && nbPromises < threshold {
 		select {
 		case <-n.paxos.consensusReached: // We must start again
-			return 1, nil
+			return true, nil
 
 		case promise := <-n.paxos.receivedPromises:
 			// Validate the promise here
@@ -194,14 +196,12 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 
 	// We don't have enough promises, retry with a higher ID
 	if nbPromises < threshold {
-		return 2, nil
+		return false, nil
 	}
 
 	// Propose
-	proposedOurOwnValue := true
 	if acceptedValue != nil { // We can not use our own value
 		value = *acceptedValue
-		proposedOurOwnValue = false
 	}
 
 	proposeMsg := types.PaxosProposeMessage{
@@ -213,21 +213,16 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	err = n.marshalAndBroadcast(proposeMsg)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't broadcast propose message")
-		return -1, err
+		return false, err
 	}
 
 	// Wait until consensus is reached
 	select {
-	// TODO the consensus may have been for another value
 	case <-n.paxos.consensusReached:
-		if proposedOurOwnValue {
-			return 0, nil
-		} else {
-			return 1, nil
-		}
+		return true, nil
 
 	case <-time.After(n.conf.PaxosProposerRetry): // No consensus have been reached
-		return 2, nil
+		return false, nil
 	}
 }
 
@@ -380,7 +375,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 		// End the current proposer by telling it we reached a consensus
 		for !n.paxos.proposeMtx.TryLock() {
 			select {
-			case n.paxos.consensusReached <- struct{}{}:
+			case n.paxos.consensusReached <- msg.Value:
 			case <-time.After(10 * time.Millisecond):
 			}
 		}
@@ -400,20 +395,19 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	defer n.paxos.startProposeMtx.Unlock()
 	defer n.logger.Debug().Msg("Unlock thresholdTLC")
 
+	info := n.paxos.tlcMessages[n.paxos.currentStep]
+	msg := info.tlcMsg
+	value := msg.Block.Value
+
 	// End the current proposer
 	if !n.paxos.proposeMtx.TryLock() {
 		// TODO here, the proposer may be already leaving and not listening for this
 		n.logger.Debug().Msg("AV")
-		n.paxos.consensusReached <- struct{}{}
+		n.paxos.consensusReached <- value
 		n.logger.Debug().Msg("AP")
 		n.paxos.proposeMtx.Lock()
 	}
 	defer n.paxos.proposeMtx.Unlock()
-
-	info := n.paxos.tlcMessages[n.paxos.currentStep]
-
-	msg := info.tlcMsg
-	value := msg.Block.Value
 
 	// Add the block to the blockchain
 	blockchain := n.conf.Storage.GetBlockchainStore()
