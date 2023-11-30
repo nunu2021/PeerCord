@@ -170,7 +170,7 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 
 		case promise := <-n.paxos.receivedPromises:
 			// Validate the promise here
-			if promise.Step != n.paxos.currentStep || promise.ID != n.paxos.maxID {
+			if promise.Step != n.paxos.currentStep || promise.ID != prepareId {
 				continue
 			}
 
