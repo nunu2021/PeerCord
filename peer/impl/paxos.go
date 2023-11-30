@@ -161,8 +161,8 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (bool,
 
 	nbPromises := 0
 
-	var acceptedID uint = 0 // If 0, we can propose our value
-	var acceptedValue *types.PaxosValue = nil
+	var acceptedID uint // If 0, we can propose our value
+	var acceptedValue *types.PaxosValue
 	for keepWaiting && nbPromises < threshold {
 		select {
 		case <-n.paxos.consensusReached: // We must start again
