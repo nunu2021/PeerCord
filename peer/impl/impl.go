@@ -24,7 +24,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	if isDefined && val == "no" {
 		logLevel = zerolog.Disabled
 	}
-	//	logLevel = zerolog.Disabled // TODEL
+	logLevel = zerolog.Disabled // TODEL
 
 	// Initialize the logger
 	var logger = zerolog.New(zerolog.ConsoleWriter{
@@ -43,18 +43,19 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 	// Create the node
 	n := &node{
-		conf:            conf,
-		routingTable:    safeRoutingTable{rt: routingTable},
-		isRunning:       false,
-		mustStop:        make(chan bool, 1),
-		logger:          logger,
-		lastHeartbeat:   time.Now().Add(-2 * conf.HeartbeatInterval),   // Start immediately
-		lastAntiEntropy: time.Now().Add(-conf.AntiEntropyInterval / 2), // Start a bit after
-		ackChannels:     make(map[string]chan bool),
-		status:          make(types.StatusMessage),
-		rumorsReceived:  make(map[string][]types.Rumor),
-		fileSharing:     NewFileSharing(),
-		paxos:           NewPaxos(),
+		conf:              conf,
+		routingTable:      safeRoutingTable{rt: routingTable},
+		isRunning:         false,
+		mustStop:          make(chan bool, 1),
+		logger:            logger,
+		messagesToProcess: make(chan transport.Message, 100),
+		lastHeartbeat:     time.Now().Add(-2 * conf.HeartbeatInterval),   // Start immediately
+		lastAntiEntropy:   time.Now().Add(-conf.AntiEntropyInterval / 2), // Start a bit after
+		ackChannels:       make(map[string]chan bool),
+		status:            make(types.StatusMessage),
+		rumorsReceived:    make(map[string][]types.Rumor),
+		fileSharing:       NewFileSharing(),
+		paxos:             NewPaxos(),
 	}
 
 	// Register the different kinds of messages
@@ -95,6 +96,9 @@ type node struct {
 
 	// Logger instance
 	logger zerolog.Logger
+
+	// Avoids processing several packets at the same time
+	messagesToProcess chan transport.Message
 
 	// Date at which the last heartbeat was sent
 	lastHeartbeat time.Time
@@ -146,7 +150,36 @@ func loop(n *node) {
 		timeoutLoop = min(timeoutLoop, n.conf.AntiEntropyInterval/10)
 	}
 
+	receivedPackets := make(chan transport.Packet, 1)
+
+	// Receive packets
+	// TODO stop this goroutine at the end
+	go func() {
+		for {
+			// Receive a packet
+			// TODO Hour as timeout
+			pkt, err := n.conf.Socket.Recv(100 * time.Millisecond)
+			//pkt, err := n.conf.Socket.Recv(0)
+			if errors.Is(err, transport.TimeoutError(0)) {
+				n.logger.Debug().Msg("timeout error")
+				continue
+			}
+			n.logger.Debug().Msg("packet received")
+			if err != nil {
+				n.logger.Warn().Err(err).Msg("failed to receive message")
+			}
+			receivedPackets <- pkt
+		}
+	}()
+
 	for {
+		// Things to do first to avoid blocking
+		select {
+		case msg := <-n.messagesToProcess:
+			n.processMessage(msg)
+		default:
+		}
+
 		// Stop the worker if needed
 		select {
 		case <-n.mustStop:
@@ -163,22 +196,21 @@ func loop(n *node) {
 		// Executes the anti-entropy mechanism if needed
 		n.antiEntropy()
 
-		// Receive a packet
-		pkt, err := n.conf.Socket.Recv(timeoutLoop)
-		if errors.Is(err, transport.TimeoutError(0)) {
-			continue
-		}
-		if err != nil {
-			n.logger.Warn().Err(err).Msg("failed to receive message")
-		}
+		select {
+		case msg := <-n.messagesToProcess:
+			n.processMessage(msg)
 
-		// The packet is for us
-		if pkt.Header.Destination == n.GetAddress() {
-			n.processPacket(pkt)
-		} else if pkt.Header.TTL > 0 { // We must transfer the packet
-			n.transferPacket(pkt)
-		} else {
-			n.logger.Info().Msg("dropped packet with TTL=0")
+		case pkt := <-receivedPackets:
+			// The packet is for us
+			if pkt.Header.Destination == n.GetAddress() {
+				n.processPacket(pkt)
+			} else if pkt.Header.TTL > 0 { // We must transfer the packet
+				n.transferPacket(pkt)
+			} else {
+				n.logger.Info().Msg("dropped packet with TTL=0")
+			}
+
+		case <-time.After(timeoutLoop):
 		}
 	}
 }

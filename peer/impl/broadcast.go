@@ -101,7 +101,7 @@ func (n *node) Broadcast(msg transport.Message) error {
 	n.rumorMutex.Unlock()
 
 	// Process the rumor locally
-	n.processMessage(msg)
+	n.messagesToProcess <- msg
 
 	return nil
 }
