@@ -20,10 +20,10 @@ import (
 // Call the Tag() function on multiple peers concurrently. The state should be
 // consistent for all peers. Mixes student and reference peers.
 func Test_HW3_Integration_Multiple_Consensus(t *testing.T) {
-	numMessages := 1 // TODO 5
+	numMessages := 5
 
-	nStudent := 6   // TODO 2
-	nReference := 0 // TODO 2
+	nStudent := 2
+	nReference := 2
 	totalNodes := nStudent + nReference
 
 	referenceTransp := proxyFac()
