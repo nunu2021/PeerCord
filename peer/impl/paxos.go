@@ -56,7 +56,10 @@ type Paxos struct {
 		tlcMsg types.TLCMessage
 		count  int
 	}
-	hasBroadcastedTLC bool // TODO protect by mutex, as other variables
+
+	// This variable becomes true when the peer has achieved consensus for the current step
+	// It is only used from the goroutine processing messages
+	achievedConsensus bool
 }
 
 func NewPaxos() Paxos {
@@ -343,7 +346,9 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 	n.paxos.nbAcceptedMsgs[msg.ID]++
 
 	// A consensus has been reached
-	if n.paxos.nbAcceptedMsgs[msg.ID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
+	if n.paxos.nbAcceptedMsgs[msg.ID] == n.conf.PaxosThreshold(n.conf.TotalPeers) && !n.paxos.achievedConsensus {
+		n.paxos.achievedConsensus = true
+
 		// Add to the blockchain
 		prevHash := n.conf.Storage.GetBlockchainStore().Get(storage.LastBlockKey)
 		if prevHash == nil {
@@ -451,7 +456,7 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	n.paxos.maxID = 0
 	n.paxos.acceptedID = 0
 	n.paxos.acceptedValue = nil
-	n.paxos.hasBroadcastedTLC = false
+	n.paxos.achievedConsensus = false
 }
 
 func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet) error {
