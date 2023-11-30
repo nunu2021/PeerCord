@@ -95,7 +95,7 @@ func (n *node) lastBlock() *types.BlockchainBlock {
 
 func (n *node) waitAvailability() {
 	n.paxos.startProposeMtx.Lock()
-	n.paxos.startProposeMtx.Unlock()
+	n.paxos.startProposeMtx.Unlock() //nolint:staticcheck // justification
 }
 
 // Blocks until it is known if the proposal is accepted or not
@@ -368,7 +368,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 }
 
 // When enough TLC messages have been received, adds the block to the blockchain and update the naming store
-func (n *node) thresholdTlcReached(isCatchingUp bool) {
+func (n *node) thresholdTlcReached() {
 	// Prevent another proposer from starting
 	n.paxos.startProposeMtx.TryLock()
 	defer n.paxos.startProposeMtx.Unlock()
@@ -443,12 +443,12 @@ func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet
 	n.paxos.tlcMessages[msg.Step] = info
 
 	if info.count == threshold && msg.Step == n.paxos.currentStep {
-		n.thresholdTlcReached(false)
+		n.thresholdTlcReached()
 
 		// Catch up if needed
 		info, ok := n.paxos.tlcMessages[n.paxos.currentStep]
 		for ok && info.count >= threshold {
-			n.thresholdTlcReached(true)
+			n.thresholdTlcReached()
 			info, ok = n.paxos.tlcMessages[n.paxos.currentStep]
 		}
 	}
