@@ -101,7 +101,11 @@ func (n *node) Broadcast(msg transport.Message) error {
 	n.rumorMutex.Unlock()
 
 	// Process the rumor locally
-	n.messagesToProcess <- msg
+	select {
+	case n.messagesToProcess <- msg:
+	default:
+		n.logger.Error().Msg("can't add message to process: buffer full")
+	}
 
 	return nil
 }
