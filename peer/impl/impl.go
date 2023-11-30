@@ -24,7 +24,6 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	if isDefined && val == "no" {
 		logLevel = zerolog.Disabled
 	}
-	//logLevel = zerolog.Disabled // TODEL
 
 	// Initialize the logger
 	var logger = zerolog.New(zerolog.ConsoleWriter{
@@ -252,8 +251,6 @@ func (n *node) processMessage(msg transport.Message) {
 // AddPeer implements peer.Service
 func (n *node) AddPeer(addresses ...string) {
 	for _, addr := range addresses {
-		n.logger.Info().Str("addr", addr).Msg("new neighbor added")
-
 		if addr != n.GetAddress() {
 			// We have a new neighbour
 			n.routingTable.set(addr, addr)
@@ -269,8 +266,6 @@ func (n *node) GetRoutingTable() peer.RoutingTable {
 
 // SetRoutingEntry implements peer.Service
 func (n *node) SetRoutingEntry(origin, relayAddr string) {
-	n.logger.Info().Str("origin", origin).Str("relay", relayAddr).Msg("set routing entry")
-
 	n.routingTable.set(origin, relayAddr)
 }
 

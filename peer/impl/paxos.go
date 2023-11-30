@@ -140,9 +140,6 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 // - 1 if another proposal was accepted
 // - 2 if we need to retry with a higher ID
 func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (bool, error) {
-	n.logger.Debug().Msg("Debut proposal ID")
-	defer n.logger.Debug().Msg("Fin proposal ID")
-
 	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
 
 	// Prepare
@@ -151,8 +148,6 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (bool,
 		ID:     prepareId,
 		Source: n.GetAddress(),
 	}
-
-	n.logger.Debug().Uint("prepareId", prepareId).Msg("sending prepare")
 
 	err := n.marshalAndBroadcast(prepareMsg)
 	if err != nil {
@@ -191,8 +186,6 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (bool,
 			keepWaiting = false
 		}
 	}
-
-	n.logger.Debug().Int("nbPromises", nbPromises).Int("threshold", threshold).Msg("Stop receiving promises")
 
 	// We don't have enough promises, retry with a higher ID
 	if nbPromises < threshold {
@@ -247,13 +240,6 @@ func (n *node) receivePaxosPrepareMsg(originalMsg types.Message, pkt transport.P
 		panic("not a paxos prepare message")
 	}
 
-	n.logger.Debug().
-		Uint("step", msg.Step).
-		Uint("currentStep", n.paxos.currentStep).
-		Uint("id", msg.ID).
-		Uint("maxId", n.paxos.maxID).
-		Msg("received prepare")
-
 	// Ignore messages with wrong Step
 	if msg.Step != n.paxos.currentStep {
 		return nil
@@ -263,8 +249,6 @@ func (n *node) receivePaxosPrepareMsg(originalMsg types.Message, pkt transport.P
 	if msg.ID <= n.paxos.maxID {
 		return nil
 	}
-
-	n.logger.Debug().Msg("received correct prepare")
 
 	n.paxos.maxID = msg.ID
 
@@ -390,10 +374,8 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 // When enough TLC messages have been received, adds the block to the blockchain and update the naming store
 func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	// Prevent another proposer from starting
-	n.logger.Debug().Msg("TryLock thresholdTLC")
 	n.paxos.startProposeMtx.TryLock()
 	defer n.paxos.startProposeMtx.Unlock()
-	defer n.logger.Debug().Msg("Unlock thresholdTLC")
 
 	info := n.paxos.tlcMessages[n.paxos.currentStep]
 	msg := info.tlcMsg
@@ -402,9 +384,7 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	// End the current proposer
 	if !n.paxos.proposeMtx.TryLock() {
 		// TODO here, the proposer may be already leaving and not listening for this
-		n.logger.Debug().Msg("AV")
 		n.paxos.consensusReached <- value
-		n.logger.Debug().Msg("AP")
 		n.paxos.proposeMtx.Lock()
 	}
 	defer n.paxos.proposeMtx.Unlock()
@@ -465,8 +445,6 @@ func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet
 
 	info.count++
 	n.paxos.tlcMessages[msg.Step] = info
-
-	n.logger.Debug().Int("count", info.count).Msg("received TLC msg")
 
 	if info.count == threshold && msg.Step == n.paxos.currentStep {
 		n.thresholdTlcReached(false)
