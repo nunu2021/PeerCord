@@ -236,12 +236,10 @@ func (n *node) receivePaxosPromiseMsg(originalMsg types.Message, pkt transport.P
 		panic("not a paxos promise message")
 	}
 
-	// TODO check that we are in phase 1, waiting for promises
-
 	select {
 	case n.paxos.receivedPromises <- *msg:
 	case <-time.After(100 * time.Millisecond):
-		n.logger.Error().Msg("promise can't be sent to channel")
+		n.logger.Info().Msg("promise can't be sent to channel")
 	}
 
 	return nil
