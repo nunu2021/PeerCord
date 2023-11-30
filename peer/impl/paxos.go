@@ -200,17 +200,15 @@ func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (int, 
 	}
 
 	// Propose
-	id := n.paxos.maxID
 	proposedOurOwnValue := true
 	if acceptedValue != nil { // We can not use our own value
 		value = *acceptedValue
-		id = acceptedID
 		proposedOurOwnValue = false
 	}
 
 	proposeMsg := types.PaxosProposeMessage{
 		Step:  n.paxos.currentStep,
-		ID:    id,
+		ID:    prepareId,
 		Value: value,
 	}
 
