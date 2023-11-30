@@ -24,7 +24,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	if isDefined && val == "no" {
 		logLevel = zerolog.Disabled
 	}
-	logLevel = zerolog.Disabled // TODEL
+	//logLevel = zerolog.Disabled // TODEL
 
 	// Initialize the logger
 	var logger = zerolog.New(zerolog.ConsoleWriter{
@@ -161,10 +161,8 @@ func loop(n *node) {
 			pkt, err := n.conf.Socket.Recv(100 * time.Millisecond)
 			//pkt, err := n.conf.Socket.Recv(0)
 			if errors.Is(err, transport.TimeoutError(0)) {
-				n.logger.Debug().Msg("timeout error")
 				continue
 			}
-			n.logger.Debug().Msg("packet received")
 			if err != nil {
 				n.logger.Warn().Err(err).Msg("failed to receive message")
 			}
@@ -295,7 +293,6 @@ func (n *node) sendMsgToNeighbor(msg types.Message, dest string) error {
 	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
 	pkt := transport.Packet{Header: &header, Msg: &marshaled}
 
-	n.logger.Info().Str("dest", dest).Msg("sending packet to neighbor")
 	return n.conf.Socket.Send(dest, pkt, time.Second)
 }
 

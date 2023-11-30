@@ -478,7 +478,6 @@ func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) err
 	replyHeader := transport.NewHeader(n.GetAddress(), n.GetAddress(), searchRequestMsg.Origin, 0)
 	replyPkt := transport.Packet{Header: &replyHeader, Msg: &marshaled}
 
-	n.logger.Info().Str("dest", pkt.Header.Source).Msg("sending packet to neighbor")
 	return n.conf.Socket.Send(pkt.Header.Source, replyPkt, time.Second)
 }
 

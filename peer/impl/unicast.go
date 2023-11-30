@@ -49,11 +49,6 @@ func (n *node) transferPacket(pkt transport.Packet) {
 		return
 	}
 
-	n.logger.Info().
-		Str("dest", pkt.Header.Destination).
-		Str("next", next).
-		Msg("transferring packet")
-
 	err := n.conf.Socket.Send(next, pkt, time.Second)
 	if err != nil {
 		n.logger.Warn().Err(err).Msg("failed to transfer packet")
