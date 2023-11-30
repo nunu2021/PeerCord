@@ -26,9 +26,9 @@ type Paxos struct {
 	// when the data of the current step is being reset.
 	startProposeMtx sync.Mutex
 
-	// For each UniqID, the number of peers that have already accepted it
+	// For each ID, the number of peers that have already accepted it.
 	// Only accessed from the loop goroutine
-	nbAcceptedMsgs map[string]int
+	nbAcceptedMsgs map[uint]int
 
 	// Promises waiting to be processed
 	receivedPromises chan types.PaxosPromiseMessage
@@ -63,7 +63,7 @@ func NewPaxos() Paxos {
 	return Paxos{
 		// The buffers are used to receive the message the peer sends to itself
 		receivedPromises: make(chan types.PaxosPromiseMessage, 1),
-		nbAcceptedMsgs:   make(map[string]int),
+		nbAcceptedMsgs:   make(map[uint]int),
 		consensusReached: make(chan struct{}, 1),
 		nextTlcStep:      make(chan struct{}, 1),
 		currentStep:      0,
@@ -339,10 +339,10 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 		return nil
 	}
 
-	n.paxos.nbAcceptedMsgs[msg.Value.UniqID]++
+	n.paxos.nbAcceptedMsgs[msg.ID]++
 
 	// A consensus has been reached
-	if n.paxos.nbAcceptedMsgs[msg.Value.UniqID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
+	if n.paxos.nbAcceptedMsgs[msg.ID] == n.conf.PaxosThreshold(n.conf.TotalPeers) {
 		prevHash := n.conf.Storage.GetBlockchainStore().Get(storage.LastBlockKey)
 		if prevHash == nil {
 			prevHash = make([]byte, 32)
@@ -451,7 +451,7 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	}*/
 
 	// Reset variables
-	n.paxos.nbAcceptedMsgs = make(map[string]int)
+	n.paxos.nbAcceptedMsgs = make(map[uint]int)
 	n.paxos.currentStep++
 	n.paxos.maxID = 0
 	n.paxos.acceptedID = 0
