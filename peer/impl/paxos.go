@@ -364,8 +364,6 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 		n.paxos.proposeMtx.Unlock()
 	}
 
-	// TODO Ignore messages if the proposer is not in Paxos phase 2: what does it mean?
-
 	return nil
 }
 
