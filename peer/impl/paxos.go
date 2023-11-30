@@ -35,7 +35,7 @@ type Paxos struct {
 
 	// Notifies when a consensus has been reached.
 	// Gives the final value
-	consensusReached chan types.PaxosValue
+	consensusReached chan struct{}
 
 	/*
 	 * Acceptor
@@ -65,7 +65,7 @@ func NewPaxos() Paxos {
 		// The buffers are used to receive the message the peer sends to itself
 		receivedPromises: make(chan types.PaxosPromiseMessage, 1),
 		nbAcceptedMsgs:   make(map[uint]int),
-		consensusReached: make(chan types.PaxosValue, 1),
+		consensusReached: make(chan struct{}, 1),
 		currentStep:      0,
 		maxID:            0,
 		acceptedID:       0,
@@ -357,7 +357,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 		// End the current proposer by telling it we reached a consensus
 		for !n.paxos.proposeMtx.TryLock() {
 			select {
-			case n.paxos.consensusReached <- msg.Value:
+			case n.paxos.consensusReached <- struct{}{}:
 			case <-time.After(10 * time.Millisecond):
 			}
 		}
@@ -380,7 +380,7 @@ func (n *node) thresholdTlcReached(isCatchingUp bool) {
 	// End the current proposer
 	if !n.paxos.proposeMtx.TryLock() {
 		// TODO here, the proposer may be already leaving and not listening for this
-		n.paxos.consensusReached <- value
+		n.paxos.consensusReached <- struct{}{}
 		n.paxos.proposeMtx.Lock()
 	}
 	defer n.paxos.proposeMtx.Unlock()
