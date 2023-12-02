@@ -304,7 +304,8 @@ func (n *node) Tag(name string, metaHash string) error {
 	}
 
 	for {
-		n.waitAvailability()
+		n.paxos.stepMtx.Lock()
+		n.paxos.proposingMtx.Lock()
 
 		// Check if the name already exists
 		mh := n.GetNamingStore().Get(name)
@@ -312,6 +313,10 @@ func (n *node) Tag(name string, metaHash string) error {
 			if string(mh) != metaHash {
 				return NameAlreadyExistsError(name)
 			}
+
+			n.paxos.proposingMtx.Unlock()
+			n.paxos.stepMtx.Unlock()
+
 			return nil // The tag is a success
 		}
 

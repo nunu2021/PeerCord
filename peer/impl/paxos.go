@@ -18,13 +18,13 @@ type Paxos struct {
 	 * Proposer
 	 */
 
-	// This mutex is locked when the peer is making a proposal
-	proposeMtx sync.Mutex
-
-	// This mutex must be locked by the proposer before it starts. It then unlocks
-	// it immediately. The goal is to prevent a new proposer from being started
-	// when the data of the current step is being reset.
-	startProposeMtx sync.Mutex
+	// To control proposals, two mutexes are used.
+	// At the start of the proposal (before checking if the name already exists),
+	// we lock these two mutexes.
+	// - proposingMtx is unlocked at the end of the propose goroutine
+	// - stepMtx is locked at the end of the step
+	proposingMtx sync.Mutex
+	stepMtx      sync.Mutex
 
 	// For each ID, the number of peers that have already accepted it.
 	// Only accessed from the loop goroutine
@@ -93,17 +93,10 @@ func (n *node) lastBlock() *types.BlockchainBlock {
 	return &block
 }
 
-func (n *node) waitAvailability() {
-	n.paxos.startProposeMtx.Lock()
-	n.paxos.startProposeMtx.Unlock() //nolint:staticcheck // justification
-}
-
 // Blocks until it is known if the proposal is accepted or not
 func (n *node) makeProposal(value types.PaxosValue) error {
-	n.paxos.proposeMtx.Lock()
-
 	defer func() {
-		n.paxos.proposeMtx.Unlock()
+		n.paxos.proposingMtx.Unlock()
 
 		// Clean the channels
 		success := true
@@ -351,17 +344,17 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 			return err
 		}
 
-		// Don't start new propose. The mutex will be unlocked when enough TLC messages have been received.
-		n.paxos.startProposeMtx.TryLock()
+		// Prevent a new proposer from starting
+		n.paxos.stepMtx.TryLock()
 
 		// End the current proposer by telling it we reached a consensus
-		for !n.paxos.proposeMtx.TryLock() {
+		for !n.paxos.proposingMtx.TryLock() {
 			select {
 			case n.paxos.consensusReached <- struct{}{}:
-			case <-time.After(10 * time.Millisecond):
+			case <-time.After(10 * time.Millisecond): // TODO smaller time + msg when it happens
 			}
 		}
-		n.paxos.proposeMtx.Unlock()
+		n.paxos.proposingMtx.Unlock()
 	}
 
 	return nil
@@ -369,21 +362,21 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 
 // When enough TLC messages have been received, adds the block to the blockchain and update the naming store
 func (n *node) thresholdTlcReached() {
-	// Prevent another proposer from starting
-	n.paxos.startProposeMtx.TryLock()
-	defer n.paxos.startProposeMtx.Unlock()
-
 	info := n.paxos.tlcMessages[n.paxos.currentStep]
 	msg := info.tlcMsg
 	value := msg.Block.Value
 
-	// End the current proposer
-	if !n.paxos.proposeMtx.TryLock() {
-		// TODO here, the proposer may be already leaving and not listening for this
-		n.paxos.consensusReached <- struct{}{}
-		n.paxos.proposeMtx.Lock()
+	// Prevent a new proposer from starting
+	n.paxos.stepMtx.TryLock()
+
+	// End the current proposer)
+	for !n.paxos.proposingMtx.TryLock() {
+		select {
+		case n.paxos.consensusReached <- struct{}{}:
+		case <-time.After(10 * time.Millisecond): // TODO smaller time + msg when it happens
+		}
 	}
-	defer n.paxos.proposeMtx.Unlock()
+	n.paxos.proposingMtx.Unlock()
 
 	// Add the block to the blockchain
 	blockchain := n.conf.Storage.GetBlockchainStore()
@@ -417,6 +410,8 @@ func (n *node) thresholdTlcReached() {
 	n.paxos.acceptedID = 0
 	n.paxos.acceptedValue = nil
 	n.paxos.achievedConsensus = false
+
+	n.paxos.stepMtx.Unlock()
 }
 
 func (n *node) receiveTLCMessage(originalMsg types.Message, pkt transport.Packet) error {
