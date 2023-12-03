@@ -111,18 +111,18 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 }
 
 // Blocks until it is known if the proposal is accepted or not
-// Returns if the proposal was a success. If not, we must try with a greater Id
+// Returns if the proposal was a success. If not, we must try with a greater ID
 // Returns:
 // - 0 if the proposal was a success
 // - 1 if another proposal was accepted
 // - 2 if we need to retry with a higher ID
-func (n *node) makeProposalWithID(value types.PaxosValue, prepareId uint) (bool, error) {
+func (n *node) makeProposalWithID(value types.PaxosValue, prepareID uint) (bool, error) {
 	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
 
 	// Prepare
 	prepareMsg := types.PaxosPrepareMessage{
 		Step:   n.paxos.currentStep,
-		ID:     prepareId,
+		ID:     prepareID,
 		Source: n.GetAddress(),
 	}
 
@@ -147,7 +147,7 @@ func (n *node) makeProposalWithID(value types.PaxosValue, prepareId uint) (bool,
 
 		case promise := <-n.paxos.receivedPromises:
 			// Validate the promise here
-			if promise.Step != n.paxos.currentStep || promise.ID != prepareId {
+			if promise.Step != n.paxos.currentStep || promise.ID != prepareID {
 				continue
 			}
 
@@ -176,7 +176,7 @@ func (n *node) makeProposalWithID(value types.PaxosValue, prepareId uint) (bool,
 
 	proposeMsg := types.PaxosProposeMessage{
 		Step:  n.paxos.currentStep,
-		ID:    prepareId,
+		ID:    prepareID,
 		Value: value,
 	}
 
