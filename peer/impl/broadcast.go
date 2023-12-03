@@ -158,7 +158,7 @@ func (n *node) receiveRumors(msg types.Message, pkt transport.Packet) error {
 	if hasExpectedRumor {
 		if dest, ok := n.randomDifferentNeighbor(pkt.Header.Source); ok {
 			if err := n.sendRumorsMsg(*rumorsMsg, dest, true); err != nil {
-				n.logger.Error().Err(err).Msg("can't send message to neighbor")
+				n.logger.Error().Err(err).Str("dest", dest).Msg("can't send message to neighbor")
 				return err
 			}
 		}

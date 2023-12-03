@@ -169,7 +169,7 @@ func BenchmarkConsensus(b *testing.B) {
 
 	// Disable outputs to not penalize implementations that make use of it
 	oldStdout := os.Stdout
-	os.Stdout = nil
+	//os.Stdout = nil
 
 	defer func() {
 		os.Stdout = oldStdout

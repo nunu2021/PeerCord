@@ -220,8 +220,9 @@ func (n *node) receivePaxosPromiseMsg(originalMsg types.Message, pkt transport.P
 
 	select {
 	case n.paxos.receivedPromises <- *msg:
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(10 * time.Millisecond):
 		n.logger.Info().Msg("promise can't be sent to channel")
+		println("Wait 1")
 	}
 
 	return nil
@@ -352,6 +353,7 @@ func (n *node) receivePaxosAcceptMsg(originalMsg types.Message, pkt transport.Pa
 			select {
 			case n.paxos.consensusReached <- struct{}{}:
 			case <-time.After(10 * time.Millisecond): // TODO smaller time + msg when it happens
+				println("Wait 2")
 			}
 		}
 		n.paxos.proposingMtx.Unlock()
@@ -374,6 +376,7 @@ func (n *node) thresholdTlcReached() {
 		select {
 		case n.paxos.consensusReached <- struct{}{}:
 		case <-time.After(10 * time.Millisecond): // TODO smaller time + msg when it happens
+			println("Wait 3")
 		}
 	}
 	n.paxos.proposingMtx.Unlock()

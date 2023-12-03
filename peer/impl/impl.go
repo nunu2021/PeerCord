@@ -148,7 +148,7 @@ func loop(n *node) {
 	if n.conf.AntiEntropyInterval != 0 {
 		timeoutLoop = min(timeoutLoop, n.conf.AntiEntropyInterval/10)
 	}
-	receivedPackets := make(chan transport.Packet, 1)
+	receivedPackets := make(chan transport.Packet, 1000)
 
 	// Receive packets (this goroutine is not stopped at the end)
 	go func() {
@@ -159,7 +159,11 @@ func loop(n *node) {
 				n.logger.Warn().Err(err).Msg("failed to receive message")
 			}
 
-			receivedPackets <- pkt
+			select {
+			case receivedPackets <- pkt:
+			case <-time.After(time.Millisecond):
+				n.logger.Error().Msg("can't add received packet to buffer")
+			}
 		}
 	}()
 
