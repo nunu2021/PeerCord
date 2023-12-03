@@ -45,7 +45,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		conf:              conf,
 		routingTable:      safeRoutingTable{rt: routingTable},
 		isRunning:         false,
-		mustStop:          make(chan bool, 1),
+		mustStop:          make(chan struct{}, 2),
 		logger:            logger,
 		messagesToProcess: make(chan transport.Message, 100),
 		lastHeartbeat:     time.Now().Add(-2 * conf.HeartbeatInterval),   // Start immediately
@@ -88,7 +88,8 @@ type node struct {
 	isRunning bool
 
 	// Channel used to send a message to stop the worker
-	mustStop chan bool
+	// To close the worker correctly, the message need to be sent twice
+	mustStop chan struct{}
 
 	// Routing table of the node
 	routingTable safeRoutingTable
@@ -146,6 +147,13 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 		pkt, err := n.conf.Socket.Recv(math.MaxInt64)
 		if err != nil {
 			n.logger.Warn().Err(err).Msg("failed to receive message")
+		}
+
+		// Check if we must exit the function
+		select {
+		case <-n.mustStop:
+			return
+		default:
 		}
 
 		receivedPackets <- pkt
@@ -226,8 +234,10 @@ func (n *node) Stop() error {
 		return NotRunningError{}
 	}
 
-	n.mustStop <- true
+	n.mustStop <- struct{}{}
+	n.mustStop <- struct{}{}
 	n.isRunning = false
+
 	return nil
 }
 
