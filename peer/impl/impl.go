@@ -150,8 +150,7 @@ func loop(n *node) {
 	}
 	receivedPackets := make(chan transport.Packet, 1)
 
-	// Receive packets
-	// TODO stop this goroutine at the end
+	// Receive packets (this goroutine is not stopped at the end)
 	go func() {
 		for {
 			// Receive a packet
