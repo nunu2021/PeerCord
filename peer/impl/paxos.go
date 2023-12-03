@@ -77,22 +77,6 @@ func NewPaxos() Paxos {
 	}
 }
 
-func (n *node) lastBlock() *types.BlockchainBlock {
-	blockchain := n.conf.Storage.GetBlockchainStore()
-
-	key := blockchain.Get(storage.LastBlockKey)
-	if key == nil {
-		return nil
-	}
-
-	var block types.BlockchainBlock
-	err := block.Unmarshal(blockchain.Get(string(key)))
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't unmarshal block from blockchain")
-	}
-	return &block
-}
-
 // Blocks until it is known if the proposal is accepted or not
 func (n *node) makeProposal(value types.PaxosValue) error {
 	defer func() {
