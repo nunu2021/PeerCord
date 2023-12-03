@@ -245,6 +245,7 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 	if len(rumors.Rumors) > 0 {
 		err := n.sendRumorsMsg(rumors, neighbor, false)
 		if err != nil {
+			n.logger.Error().Err(err).Msg("can't send rumor message")
 			return err
 		}
 	}

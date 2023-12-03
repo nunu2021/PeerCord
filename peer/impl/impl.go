@@ -159,11 +159,7 @@ func loop(n *node) {
 				n.logger.Warn().Err(err).Msg("failed to receive message")
 			}
 
-			select {
-			case receivedPackets <- pkt:
-			case <-time.After(time.Millisecond):
-				n.logger.Error().Msg("can't add received packet to buffer")
-			}
+			receivedPackets <- pkt
 		}
 	}()
 
