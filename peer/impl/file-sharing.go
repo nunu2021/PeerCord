@@ -247,6 +247,13 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 		panic("not a data reply message")
 	}
 
+	// Inform the download thread that a reply has been received
+	channel, exists := n.fileSharing.chunkRepliesReceived.get(dataReplyMsg.RequestID)
+	if !exists {
+		n.logger.Info().Msg("unexpected data reply received")
+		return nil
+	}
+
 	// Check the data
 	sha := sha256.New()
 	sha.Write(dataReplyMsg.Value)
@@ -262,13 +269,6 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 	// Store the data
 	blobStore := n.GetDataBlobStore()
 	blobStore.Set(dataReplyMsg.Key, dataReplyMsg.Value)
-
-	// Inform the download thread that a reply has been received
-	channel, exists := n.fileSharing.chunkRepliesReceived.get(dataReplyMsg.RequestID)
-	if !exists {
-		n.logger.Info().Msg("unexpected data reply received")
-		return nil
-	}
 
 	select {
 	case channel <- struct{}{}: // If the channel is full,
