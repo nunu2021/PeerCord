@@ -140,6 +140,18 @@ func (n *node) GetNamingStore() storage.Store {
 	return n.conf.Storage.GetNamingStore()
 }
 
+func (n *node) receivePackets(receivedPackets chan transport.Packet) {
+	for {
+		// Receive a packet
+		pkt, err := n.conf.Socket.Recv(math.MaxInt64)
+		if err != nil {
+			n.logger.Warn().Err(err).Msg("failed to receive message")
+		}
+
+		receivedPackets <- pkt
+	}
+}
+
 func loop(n *node) {
 	timeoutLoop := time.Second
 	if n.conf.HeartbeatInterval != 0 {
@@ -151,30 +163,13 @@ func loop(n *node) {
 	receivedPackets := make(chan transport.Packet, 1000)
 
 	// Receive packets (this goroutine is not stopped at the end)
-	go func() {
-		for {
-			// Receive a packet
-			pkt, err := n.conf.Socket.Recv(math.MaxInt64)
-			if err != nil {
-				n.logger.Warn().Err(err).Msg("failed to receive message")
-			}
-
-			receivedPackets <- pkt
-		}
-	}()
+	go n.receivePackets(receivedPackets)
 
 	for {
 		// Things to do first to avoid blocking
 		select {
 		case msg := <-n.messagesToProcess:
 			n.processMessage(msg)
-		default:
-		}
-
-		// Stop the worker if needed
-		select {
-		case <-n.mustStop:
-			return
 		default:
 		}
 
@@ -188,6 +183,10 @@ func loop(n *node) {
 		n.antiEntropy()
 
 		select {
+		// Stop the worker if needed
+		case <-n.mustStop:
+			return
+
 		case msg := <-n.messagesToProcess:
 			n.processMessage(msg)
 
