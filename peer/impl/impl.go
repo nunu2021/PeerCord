@@ -1,12 +1,12 @@
 package impl
 
 import (
-	"errors"
 	"github.com/rs/zerolog"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"math"
 	"math/rand"
 	"os"
 	"sync"
@@ -155,12 +155,7 @@ func loop(n *node) {
 	go func() {
 		for {
 			// Receive a packet
-			// TODO Hour as timeout
-			pkt, err := n.conf.Socket.Recv(100 * time.Millisecond)
-			//pkt, err := n.conf.Socket.Recv(0)
-			if errors.Is(err, transport.TimeoutError(0)) {
-				continue
-			}
+			pkt, err := n.conf.Socket.Recv(math.MaxInt64)
 			if err != nil {
 				n.logger.Warn().Err(err).Msg("failed to receive message")
 			}
