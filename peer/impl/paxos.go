@@ -114,7 +114,7 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 	id := n.conf.PaxosID
 
 	for {
-		success, err := n.makeProposalWithId(value, id)
+		success, err := n.makeProposalWithID(value, id)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't make proposal with given ID")
 			return err
@@ -132,7 +132,7 @@ func (n *node) makeProposal(value types.PaxosValue) error {
 // - 0 if the proposal was a success
 // - 1 if another proposal was accepted
 // - 2 if we need to retry with a higher ID
-func (n *node) makeProposalWithId(value types.PaxosValue, prepareId uint) (bool, error) {
+func (n *node) makeProposalWithID(value types.PaxosValue, prepareId uint) (bool, error) {
 	threshold := n.conf.PaxosThreshold(n.conf.TotalPeers)
 
 	// Prepare
