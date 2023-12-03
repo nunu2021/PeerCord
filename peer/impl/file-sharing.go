@@ -58,7 +58,6 @@ func (n *node) Upload(data io.Reader) (string, error) {
 	chunk := make([]byte, n.conf.ChunkSize)
 	metaHash := make([]byte, 0)
 
-	var err error
 	size, err := data.Read(chunk)
 
 	for err == nil { // For each chunk
