@@ -86,8 +86,7 @@ func (n *node) GetCatalog() peer.Catalog {
 	for hash, peersAddr := range internalMap {
 		catalog[hash] = make(map[string]struct{})
 		for peerAddr := range peersAddr {
-			var empty struct{}
-			catalog[hash][peerAddr] = empty
+			catalog[hash][peerAddr] = struct{}{}
 		}
 	}
 
@@ -108,8 +107,7 @@ func (n *node) UpdateCatalog(key string, peer string) {
 	}
 	defer n.fileSharing.catalog.unlock()
 
-	var empty struct{}
-	entries[peer] = empty
+	entries[peer] = struct{}{}
 }
 
 // Asks a peer for a chunk. Retry if the peer doesn't answer fast enough.
@@ -225,8 +223,7 @@ func (n *node) receiveDataRequest(msg types.Message, pkt transport.Packet) error
 	if exists {
 		return nil
 	}
-	var empty struct{}
-	n.fileSharing.requestsReceived[dataRequestMsg.RequestID] = empty
+	n.fileSharing.requestsReceived[dataRequestMsg.RequestID] = struct{}{}
 
 	blobStore := n.GetDataBlobStore()
 
@@ -273,10 +270,9 @@ func (n *node) receiveDataReply(msg types.Message, pkt transport.Packet) error {
 		n.logger.Info().Msg("unexpected data reply received")
 		return nil
 	}
-	var emptyStruct struct{}
 
 	select {
-	case channel <- emptyStruct: // If the channel is full,
+	case channel <- struct{}{}: // If the channel is full,
 	default:
 	}
 
@@ -423,8 +419,7 @@ func (n *node) receiveSearchRequest(msg types.Message, pkt transport.Packet) err
 	if exists {
 		return nil
 	}
-	var empty struct{}
-	n.fileSharing.requestsReceived[requestID] = empty
+	n.fileSharing.requestsReceived[requestID] = struct{}{}
 
 	reg := regexp.MustCompile(searchRequestMsg.Pattern)
 
