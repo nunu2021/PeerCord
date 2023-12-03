@@ -304,7 +304,7 @@ func (n *node) Tag(name string, metaHash string) error {
 	}
 
 	for {
-		// TODO add another mutex around these instructions and the corresponding ones in paxos.go (when several mutex are manipulated at the same time)
+		// This may fail, but it is unlikely
 		n.paxos.stepMtx.Lock()
 		n.paxos.proposingMtx.Lock()
 
