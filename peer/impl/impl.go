@@ -1,16 +1,17 @@
 package impl
 
 import (
-	"github.com/rs/zerolog"
-	"go.dedis.ch/cs438/peer"
-	"go.dedis.ch/cs438/storage"
-	"go.dedis.ch/cs438/transport"
-	"go.dedis.ch/cs438/types"
 	"math"
 	"math/rand"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/rs/zerolog"
+	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/storage"
+	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -126,6 +127,9 @@ type node struct {
 
 	// Information needed to reach consensus with multi-paxos
 	paxos Paxos
+
+	//Cryptography for peer-cord
+	crypto Crypto
 }
 
 // GetAddress returns the address of the node
