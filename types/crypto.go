@@ -17,7 +17,7 @@ func (m GroupCallDHUpward) Name() string {
 
 // String implements types.Message.
 func (m GroupCallDHUpward) String() string {
-	return fmt.Sprintf("{GroupCallDHUpward %v - %v - %v}", m.Curve, m.PreviousKeys, m.RemainingReceivers)
+	return fmt.Sprintf("{GroupCallDHUpward %v - %v}", m.PreviousKeys, m.RemainingReceivers)
 }
 
 // HTML implements types.Message.
@@ -40,7 +40,7 @@ func (m GroupCallDHDownward) Name() string {
 
 // String implements types.Message.
 func (m GroupCallDHDownward) String() string {
-	return fmt.Sprintf("{GroupCallDHDownward %v - %v}", m.Curve, m.PreviousKeys)
+	return fmt.Sprintf("{GroupCallDHDownward %v}", m.PreviousKeys)
 }
 
 // HTML implements types.Message.

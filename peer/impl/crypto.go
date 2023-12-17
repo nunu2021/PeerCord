@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/json"
 	"io"
 	"sync"
@@ -27,13 +28,13 @@ type Crypto struct {
 	DHCurve         ecdh.Curve
 	DHPrivateKey    *ecdh.PrivateKey
 	DHPublicKey     *ecdh.PublicKey
-	DHSharedSecret  *ecdh.PrivateKey
+	DHSharedSecret  *ecdh.PublicKey
 	RingPredecessor string
 }
 
-func (c *Crypto) GenerateKeyPair(bits int) error {
-	keyPair, err := rsa.GenerateKey(rand.Reader, bits)
-	if err == nil {
+func (c *Crypto) GenerateKeyPair() error {
+	keyPair, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
 		return xerrors.Errorf("error when generating keypair: %v", err)
 	}
 	c.KeyPair = keyPair
@@ -68,7 +69,7 @@ func (c *Crypto) EncryptOneToOne(msg []byte, key *rsa.PublicKey) ([]byte, error)
 }
 
 func (c *Crypto) DecryptOneToOne(msg []byte) ([]byte, error) {
-	decryptedMsg, err := c.KeyPair.Decrypt(rand.Reader, msg, rsa.DecryptOAEP)
+	decryptedMsg, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, c.KeyPair, msg, nil)
 	if err != nil {
 		return nil, xerrors.Errorf("error when decrypting a 1to1 message: %v", err)
 	}
@@ -128,49 +129,61 @@ func (c *Crypto) DecryptDH(msg []byte) ([]byte, error) {
 func (c *Crypto) DHUpwardStepNewValue(
 	curve ecdh.Curve,
 	remoteKey *ecdh.PublicKey,
-) (*ecdh.PublicKey, *ecdh.PrivateKey, error) {
+) (*ecdh.PublicKey, error) {
+
 	DHPrivateKey, err := curve.GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, nil, xerrors.Errorf("error when generating DH private key: %v", err)
+		return nil, xerrors.Errorf("error when generating DH private key: %v", err)
 	}
 	c.DHPrivateKey = DHPrivateKey
 	c.DHPublicKey = DHPrivateKey.PublicKey()
 	if remoteKey != nil {
 		DHProductKey, err := c.DHPrivateKey.ECDH(remoteKey)
 		if err != nil {
-			return nil, nil, xerrors.Errorf("error when generating the product of the DH keys: %v", err)
+			return nil, xerrors.Errorf("error when generating the product of the DH keys: %v", err)
 		}
-		DHProductPrivateKey, err := curve.NewPrivateKey(DHProductKey)
+		DHProductPublicKey, err := curve.NewPublicKey(DHProductKey)
 		if err != nil {
-			return nil, nil, xerrors.Errorf("error when casting DH key bytes to PrivateKey: %v", err)
+			return nil, xerrors.Errorf("error when casting DH key bytes to PrivateKey: %v", err)
 		}
-		DHProductPublicKey := DHProductPrivateKey.PublicKey()
-		return DHProductPublicKey, DHProductPrivateKey, nil
+		return DHProductPublicKey, nil
 	}
-	return c.DHPublicKey, c.DHPrivateKey, nil
+	return c.DHPublicKey, nil
 }
 
 func (c *Crypto) DHDownwardStepGetSecret(
 	curve ecdh.Curve,
-	upstreamValues *[]ecdh.PublicKey,
-) ([](ecdh.PublicKey), error) {
-	downstreamValues := make([](ecdh.PublicKey), 0)
-	downstreamValues = append(downstreamValues, *c.DHPublicKey)
+	upstreamValues *[]([]byte),
+) ([]([]byte), error) {
+
+	downstreamValues := make([]([]byte), 0)
 	upstreamLen := len(*upstreamValues)
 	for i := range *upstreamValues {
 		upVal := (*upstreamValues)[i]
-		downVal, err := c.DHPrivateKey.ECDH(&upVal)
+		PK, err := x509.ParsePKIXPublicKey(upVal)
+		if err != nil {
+			return nil, xerrors.Errorf("error when parsing remote DH PK: %v", err)
+		}
+		pubKey, ok := PK.(*ecdh.PublicKey)
+		if !ok {
+			return nil, xerrors.Errorf("error when casting remote DH PK: type %T", PK)
+		}
+		downVal, err := c.DHPrivateKey.ECDH(pubKey)
 		if err != nil {
 			return nil, xerrors.Errorf("error in downward step when generating the product of keys: %v", err)
 		}
-		downValKey, err := curve.NewPrivateKey(downVal)
+		downValKey, err := curve.NewPublicKey(downVal)
 		if err != nil {
 			return nil, xerrors.Errorf("error in downward step when generating the public down value: %v", err)
 		}
 		if i+1 == upstreamLen {
 			c.DHSharedSecret = downValKey
 		} else {
-			downstreamValues = append(downstreamValues, *downValKey.PublicKey())
+			PK, err := x509.MarshalPKIXPublicKey(downValKey)
+			if err != nil {
+				return nil, xerrors.Errorf("error when parsing remote DH PK: %v", err)
+			}
+			downstreamValues = append(downstreamValues, PK)
 		}
 	}
 	return downstreamValues, nil
@@ -190,10 +203,13 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 	n.crypto.DHPublicKey = DHPrivateKey.PublicKey()
 	dest := n.FindDHNextHop(&receivers)
 
-	PreviousKeys := make([]ecdh.PublicKey, 1)
-	PreviousKeys[0] = *n.crypto.DHPublicKey
+	PreviousKeys := make([]([]byte), 1)
+	PreviousKeys[0], err = x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling local DH public key: %v", err)
+	}
 
-	upMsg := types.GroupCallDHUpward{Curve: n.crypto.DHCurve, PreviousKeys: PreviousKeys, RemainingReceivers: receivers}
+	upMsg := types.GroupCallDHUpward{PreviousKeys: PreviousKeys, RemainingReceivers: receivers}
 
 	data, err := json.Marshal(&upMsg)
 
@@ -208,19 +224,19 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 	return n.Unicast(dest, upTransportMsg)
 }
 
-func StrSliceContains(slice *[]string, element string) bool {
-	for _, v := range *slice {
+func StrSliceContains(slice *[]string, element string) (int, bool) {
+	for index, v := range *slice {
 		if v == element {
-			return true
+			return index, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 func (n *node) FindDHNextHop(receivers *[]string) string {
 	neighbors := n.routingTable.neighbors(n.GetAddress())
-	for index, neighbor := range neighbors {
-		if StrSliceContains(receivers, neighbor) {
+	for _, neighbor := range neighbors {
+		if index, ok := StrSliceContains(receivers, neighbor); ok {
 			*receivers = append((*receivers)[:index], (*receivers)[index+1:]...)
 			return neighbor
 		}
@@ -230,37 +246,61 @@ func (n *node) FindDHNextHop(receivers *[]string) string {
 }
 
 func EndDHUpwardStep(n *node, message *types.GroupCallDHUpward) error {
-	_, sharedSecret, err := n.crypto.DHUpwardStepNewValue(
-		message.Curve,
-		&message.PreviousKeys[len(message.PreviousKeys)-1],
-	)
+	remotePK, err := x509.ParsePKIXPublicKey(message.PreviousKeys[len(message.PreviousKeys)-1])
+	if err != nil {
+		return xerrors.Errorf("error when parsing remote DH PK: %v", err)
+	}
+	remotePubKey, ok := remotePK.(*ecdh.PublicKey)
+	if !ok {
+		return xerrors.Errorf("error when casting remote DH PK: type %T", remotePK)
+	}
+
+	curve := remotePubKey.Curve()
+	n.crypto.DHCurve = curve
+	sharedSecret, err := n.crypto.DHUpwardStepNewValue(curve, remotePubKey)
 	if err != nil {
 		return err
 	}
 
 	n.crypto.DHSharedSecret = sharedSecret
 
-	downwardKeys := make([]ecdh.PublicKey, 1)
-	downwardKeys[0] = *n.crypto.DHPublicKey
+	downwardKeys := make([]([]byte), 1)
+	localPK, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling local DH PK: %v", err)
+	}
+	downwardKeys[0] = localPK
 
 	for index := range message.PreviousKeys {
-		val := message.PreviousKeys[index]
 		if index == len(message.PreviousKeys)-1 {
 			break
 		}
-		DHProductKey, err := n.crypto.DHPrivateKey.ECDH(&val)
+		val := message.PreviousKeys[index]
+		remotePK, err := x509.ParsePKIXPublicKey(val)
+		if err != nil {
+			return xerrors.Errorf("error when parsing remote DH PK: %v", err)
+		}
+		remotePubKey, ok := remotePK.(*ecdh.PublicKey)
+		if !ok {
+			return xerrors.Errorf("error when casting remote DH PK: type %t", remotePK)
+		}
+		DHProductKey, err := n.crypto.DHPrivateKey.ECDH(remotePubKey)
 		if err != nil {
 			return xerrors.Errorf("error when generating the product of the DH keys: %v", err)
 		}
-		DHProductPrivateKey, err := n.crypto.DHCurve.NewPrivateKey(DHProductKey)
+		DHProductPublicKey, err := n.crypto.DHCurve.NewPublicKey(DHProductKey)
 		if err != nil {
 			return xerrors.Errorf("error when casting DH key bytes to PrivateKey: %v", err)
 		}
-		DHProductPublicKey := DHProductPrivateKey.PublicKey()
-		downwardKeys = append(downwardKeys, *DHProductPublicKey)
+		localPK, err := x509.MarshalPKIXPublicKey(DHProductPublicKey)
+		if err != nil {
+			return xerrors.Errorf("error when marshaling remote DH PK: %v", err)
+		}
+
+		downwardKeys = append(downwardKeys, localPK)
 	}
 
-	upMsg := types.GroupCallDHDownward{Curve: message.Curve, PreviousKeys: downwardKeys}
+	upMsg := types.GroupCallDHDownward{PreviousKeys: downwardKeys}
 
 	data, err := json.Marshal(&upMsg)
 
@@ -290,18 +330,30 @@ func (n *node) ExecGroupCallDHUpward(msg types.Message, packet transport.Packet)
 
 	dest := n.FindDHNextHop(&message.RemainingReceivers)
 
-	localPublicKey, _, err := n.crypto.DHUpwardStepNewValue(
-		message.Curve,
-		&message.PreviousKeys[len(message.PreviousKeys)-1],
-	)
+	remotePK, err := x509.ParsePKIXPublicKey(message.PreviousKeys[len(message.PreviousKeys)-1])
+	if err != nil {
+		return xerrors.Errorf("error when parsing remote DH PK: %v", err)
+	}
+	remotePubKey, ok := remotePK.(*ecdh.PublicKey)
+	if !ok {
+		return xerrors.Errorf("error when casting remote DH PK: type %t", remotePK)
+	}
+
+	curve := remotePubKey.Curve()
+	n.crypto.DHCurve = curve
+	newPublicKey, err := n.crypto.DHUpwardStepNewValue(curve, remotePubKey)
 	if err != nil {
 		return err
 	}
 
-	message.PreviousKeys = append(message.PreviousKeys, *localPublicKey)
+	newPK, err := x509.MarshalPKIXPublicKey(newPublicKey)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling local DH PK: %v", err)
+	}
+
+	message.PreviousKeys = append(message.PreviousKeys, newPK)
 
 	upMsg := types.GroupCallDHUpward{
-		Curve:              message.Curve,
 		PreviousKeys:       message.PreviousKeys,
 		RemainingReceivers: message.RemainingReceivers,
 	}
@@ -325,17 +377,17 @@ func (n *node) ExecGroupCallDHDownward(msg types.Message, packet transport.Packe
 		return xerrors.Errorf("wrong type: %T", msg)
 	}
 
-	downKeys, err := n.crypto.DHDownwardStepGetSecret(message.Curve, &message.PreviousKeys)
+	downKeys, err := n.crypto.DHDownwardStepGetSecret(n.crypto.DHCurve, &message.PreviousKeys)
 	if err != nil {
 		return err
 	}
 
-	if n.crypto.RingPredecessor == "" {
+	if len(downKeys) == 0 {
 		//End of the downward step
 		return nil
 	}
 
-	downMsg := types.GroupCallDHDownward{Curve: message.Curve, PreviousKeys: downKeys}
+	downMsg := types.GroupCallDHDownward{PreviousKeys: downKeys}
 
 	data, err := json.Marshal(&downMsg)
 
