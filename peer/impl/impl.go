@@ -56,6 +56,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		rumorsReceived:    make(map[string][]types.Rumor),
 		fileSharing:       NewFileSharing(),
 		paxos:             NewPaxos(),
+		streaming:         NewStreaming(),
 	}
 
 	// Register the different kinds of messages
@@ -76,6 +77,12 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.TLCMessage{}, n.receiveTLCMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHDownward{}, n.ExecGroupCallDHDownward)
 	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHUpward{}, n.ExecGroupCallDHUpward)
+
+	// streaming
+	conf.MessageRegistry.RegisterMessageCallback(types.JoinCallReplyMessage{}, n.receiveJoinCallRequest)
+	conf.MessageRegistry.RegisterMessageCallback(types.JoinCallReplyMessage{}, n.receiveJoinCallReply)
+	conf.MessageRegistry.RegisterMessageCallback(types.LeaveCallMessage{}, n.receiveLeaveCall)
+	conf.MessageRegistry.RegisterMessageCallback(types.CallDataMessage{}, n.receiveCallData)
 
 	return n
 }
@@ -132,6 +139,9 @@ type node struct {
 
 	//Cryptography for peer-cord
 	crypto Crypto
+
+	// Video and audio streaming
+	streaming Streaming
 }
 
 // GetAddress returns the address of the node
@@ -227,6 +237,11 @@ func (n *node) Start() error {
 		return AlreadyRunningError{}
 	}
 
+	if err := n.InitializeStreaming(); err != nil {
+		n.logger.Error().Err(err).Msg("failed to initialize streaming")
+		return err
+	}
+
 	n.isRunning = true
 	go loop(n)
 	return nil
@@ -238,6 +253,11 @@ func (n *node) Stop() error {
 	if !n.isRunning {
 		n.logger.Error().Msg("can't stop peer: not running")
 		return NotRunningError{}
+	}
+
+	if err := n.StopStreaming(); err != nil {
+		n.logger.Error().Err(err).Msg("failed to stop streaming")
+		return err
 	}
 
 	n.mustStop <- struct{}{}
