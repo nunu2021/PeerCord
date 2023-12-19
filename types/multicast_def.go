@@ -12,8 +12,11 @@ type JoinMulticastGroupRequestMessage struct {
 
 // MulticastMessage represents a message that is sent to many peers at the same time
 type MulticastMessage struct {
-	// Set of the addresses of the peers that should receive the message
-	Recipients map[string]struct{}
+	// Source of the multicast message
+	source string
+
+	// ID of the multicast group
+	id string
 
 	// The embedded message
 	Msg *transport.Message
