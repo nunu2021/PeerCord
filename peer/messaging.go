@@ -27,6 +27,10 @@ type Messaging interface {
 	// - implemented in HW1
 	Broadcast(msg transport.Message) error
 
+	// NaiveMulticast sends a packet to several destinations using several calls
+	// of Unicast
+	NaiveMulticast(msg transport.Message, recipients map[string]struct{}) error
+
 	// AddPeer adds new known addresses to the node. It must update the
 	// routing table of the node. Adding ourself should have no effect.
 	//
