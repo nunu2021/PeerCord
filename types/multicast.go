@@ -26,6 +26,29 @@ func (msg JoinMulticastGroupRequestMessage) HTML() string {
 }
 
 // -----------------------------------------------------------------------------
+// LeaveMulticastGroupRequestMessage
+
+// NewEmpty implements types.Message.
+func (msg LeaveMulticastGroupRequestMessage) NewEmpty() Message {
+	return &LeaveMulticastGroupRequestMessage{}
+}
+
+// Name implements types.Message.
+func (msg LeaveMulticastGroupRequestMessage) Name() string {
+	return "leave multicast group request"
+}
+
+// String implements types.Message.
+func (msg LeaveMulticastGroupRequestMessage) String() string {
+	return fmt.Sprintf("leave multicast group %s of %s request", msg.Id, msg.Source)
+}
+
+// HTML implements types.Message.
+func (msg LeaveMulticastGroupRequestMessage) HTML() string {
+	return msg.String()
+}
+
+// -----------------------------------------------------------------------------
 // MulticastMessage
 
 // NewEmpty implements types.Message.

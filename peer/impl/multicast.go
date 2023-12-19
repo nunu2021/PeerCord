@@ -70,6 +70,27 @@ func (n *node) JoinMulticastGroup(peer string, id string) error {
 	return nil
 }
 
+// LeaveMulticastGroup allows a peer to leave the multicast group with the
+// given id and created by the given peer. It sends a packet containing the
+// request to leave the group.
+func (n *node) LeaveMulticastGroup(peer string, id string) error {
+	// Send the request
+	req := types.LeaveMulticastGroupRequestMessage{
+		Source: peer,
+		Id:     id,
+	}
+
+	err := n.marshalAndUnicast(peer, req)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't unicast leave multicast group request")
+		return err
+	}
+
+	// TODO wait for an ACK?
+
+	return nil
+}
+
 func (n *node) Multicast(msg transport.Message, recipients map[string]struct{}) error {
 	/*multicastMsg := types.MulticastMessage{
 		Recipients: recipients,
