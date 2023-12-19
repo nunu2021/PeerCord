@@ -39,6 +39,17 @@ type Messaging interface {
 	// to all the peers of the group to inform them of the deletion.
 	DeleteMulticastGroup(id string) error
 
+	// JoinMulticastGroup allows a peer to be added to the multicast group with the
+	// given id and created by the given peer. It sends a packet containing the
+	// request to join the group. It blocks until the request is accepted, retrying
+	// if needed.
+	JoinMulticastGroup(peer string, id string) error
+
+	// LeaveMulticastGroup allows a peer to leave the multicast group with the
+	// given id and created by the given peer. It sends a packet containing the
+	// request to leave the group.
+	LeaveMulticastGroup(peer string, id string) error
+
 	// AddPeer adds new known addresses to the node. It must update the
 	// routing table of the node. Adding ourself should have no effect.
 	//

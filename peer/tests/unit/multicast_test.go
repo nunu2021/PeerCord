@@ -61,6 +61,43 @@ func Test_NaiveMulticast(t *testing.T) {
 	require.Equal(t, outs[1].Header.Destination, sock3.GetAddress())
 }
 
+func Test_MulticastListener(t *testing.T) {
+	transp := channel.NewTransport()
+
+	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+	defer node.Stop()
+
+	sock, err := transp.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	defer sock.Close()
+
+	node.AddPeer(sock.GetAddress())
+
+	// Join an existing multicast group
+	require.NoError(t, node.JoinMulticastGroup(sock.GetAddress(), "fake_id"))
+
+	// The node should have sent one message
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+
+	ins := sock.GetIns()
+	require.Len(t, ins, 1)
+	require.Equal(t, sock.GetAddress(), ins[0].Header.Destination)
+	require.Equal(t, "join multicast group request", ins[0].Msg.Type)
+
+	// Leave the multicast group
+	require.NoError(t, node.LeaveMulticastGroup(sock.GetAddress(), "fake_id"))
+
+	// The node should have sent another message
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+
+	ins = sock.GetIns()
+	require.Len(t, ins, 2)
+	require.Equal(t, sock.GetAddress(), ins[1].Header.Destination)
+	require.Equal(t, "leave multicast group request", ins[1].Msg.Type)
+}
+
 func Test_MulticastSender(t *testing.T) {
 	transp := channel.NewTransport()
 
