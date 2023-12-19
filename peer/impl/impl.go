@@ -56,6 +56,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		rumorsReceived:    make(map[string][]types.Rumor),
 		fileSharing:       NewFileSharing(),
 		paxos:             NewPaxos(),
+		multicast:         NewMulticast(),
 	}
 
 	// Register the different kinds of messages
@@ -129,6 +130,9 @@ type node struct {
 
 	// Information needed to reach consensus with multi-paxos
 	paxos Paxos
+
+	// Information needed for multicasting
+	multicast Multicast
 
 	//Cryptography for peer-cord
 	crypto Crypto

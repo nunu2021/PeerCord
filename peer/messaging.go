@@ -31,6 +31,14 @@ type Messaging interface {
 	// of Unicast
 	NaiveMulticast(msg transport.Message, recipients map[string]struct{}) error
 
+	// NewMulticastGroup creates a new multicast group and returns its ID. The other
+	// peers need this ID to join the group
+	NewMulticastGroup() string
+
+	// DeleteMulticastGroup deletes an existing multicast group. It sends a messages
+	// to all the peers of the group to inform them of the deletion.
+	DeleteMulticastGroup(id string) error
+
 	// AddPeer adds new known addresses to the node. It must update the
 	// routing table of the node. Adding ourself should have no effect.
 	//
