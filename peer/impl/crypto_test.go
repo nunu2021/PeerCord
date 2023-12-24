@@ -125,6 +125,7 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	abacad, err := adSK.ECDH(abacPK)
 	require.NoError(t, err)
 	abacadPK, err := curve.NewPublicKey(abacad)
+	require.NoError(t, err)
 
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abacadPK))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
