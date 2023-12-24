@@ -1,21 +1,27 @@
 // HOW TO USE
-// when a group call starts, the initiator should call n.StartDHKeyExchange(members) with members a slice containing the adresses
-// of all other members of the call (all members except the initiator)
-// When a peer is added to the call, the initiator should call n.GroupCallAdd(member) with member being the adress of the peer to add
-// When a peer is to me removed, the initiator should call n.GroupCallRemove(member) with member being the adress of the peer to remove
-// The addition/removal functions can be called on every members of the call, if the node isn't the initiator the function will not do anything
+// when a group call starts, the initiator should call n.StartDHKeyExchange(members)
+// with members a slice containing the adresses of all other members of the call
+// (all members except the initiator)
+// When a peer is added to the call, the initiator should call n.GroupCallAdd(member)
+// with member being the adress of the peer to add
+// When a peer is to me removed, the initiator should call n.GroupCallRemove(member)
+// with member being the adress of the peer to remove
+// The addition/removal functions can be called on every members of the call,
+// if the node isn't the initiator the function will not do anything
 // but if possible, do only call it on the initiator
 // When a call ends from the peer's PoV, this peer should call n.GroupCallEnd()
 // n.crypto.GenerateKeyPair() generates a public ID
 // n.crypto.AddPublicKey(peer, key) sets the knowledge that peer's ID is key
 // n.crypto.RemovePublicKey(peer) removes the knowledge of peer's ID
 // n.crypto.VerifyPK(peer, key) returns whether peer's known ID is key or not
-// n.crypto.EncryptOneToOne(msg, key) encrypts a One to One message with the remote public key "key" (max msg bytes size: 446)
+// n.crypto.EncryptOneToOne(msg, key) encrypts a One to One message
+// with the remote public key "key" (max msg bytes size: 446)
 // n.crypto.DecryptOneToOne(msg) decrypts the msg with the local private key
 // n.crypto.EncryptDH(msg) encrypts the msg with the DH shared secret
 // n.crypto.DecryptDH(msg) decrypts the msg with the DH shared secret
 
-//Group DH is based on https://www.researchgate.net/profile/Nistala-Ves-Murthy/publication/281272195_Elliptic_Curve_Based_Dynamic_Contributory_Group_Key_Agreement_Protocol_For_Secure_Group_Communication_Over_Ad-hoc_Networks/links/581c4baf08ae12715af1b979/Elliptic-Curve-Based-Dynamic-Contributory-Group-Key-Agreement-Protocol-For-Secure-Group-Communication-Over-Ad-hoc-Networks.pdf
+// Group DH is based on "Elliptic Curve Based Dynamic Contributory Group Key Agreement Protocol
+// For Secure Group Communication Over Ad-hoc Networks" by Naresh et al.
 
 package impl
 
@@ -150,27 +156,32 @@ func (c *Crypto) DecryptDH(msg []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+func ConstructKeyToSend(n *node, dest string) (*ecdh.PublicKey, error) {
+	var keyToSend *ecdh.PublicKey
+	for j, k := range n.crypto.DHInitSecrets {
+		if dest == j {
+			continue
+		}
+		if keyToSend == nil {
+			keyToSend = k.PublicKey()
+		} else {
+			newKeyToSend, err := k.ECDH(keyToSend)
+			if err != nil {
+				return nil, xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
+			}
+			keyToSend, err = n.crypto.DHCurve.NewPublicKey(newKeyToSend)
+			if err != nil {
+				return nil, xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
+			}
+		}
+	}
+	return keyToSend, nil
+}
+
 // Auxiliary function for StartDHKeyExchange sending the partial secrets to all other call members
 func SendPartialSecrets(n *node, receivers []string) error {
 	for i, dest := range receivers {
-		var keyToSend *ecdh.PublicKey
-		for j, k := range n.crypto.DHInitSecrets {
-			if dest == j {
-				continue
-			}
-			if keyToSend == nil {
-				keyToSend = k.PublicKey()
-			} else {
-				newKeyToSend, err := k.ECDH(keyToSend)
-				if err != nil {
-					return xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
-				}
-				keyToSend, err = n.crypto.DHCurve.NewPublicKey(newKeyToSend)
-				if err != nil {
-					return xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
-				}
-			}
-		}
+		keyToSend, err := ConstructKeyToSend(n, dest)
 		if i == 0 {
 			sharedSecretBytes, err := n.crypto.DHInitSecrets[dest].ECDH(keyToSend)
 			if err != nil {
@@ -180,6 +191,9 @@ func SendPartialSecrets(n *node, receivers []string) error {
 			if err != nil {
 				return xerrors.Errorf("error when generating shared secret: %v", err)
 			}
+		}
+		if err != nil {
+			return err
 		}
 		n.crypto.DHPartialSecrets[dest] = keyToSend
 		localKey, err := x509.MarshalPKIXPublicKey(keyToSend)
@@ -335,52 +349,7 @@ func (n *node) GroupCallRemove(member string) error {
 	return SendPartialSecretsRemove(n, member)
 }
 
-func SendPartialSecretsInAddition(n *node, member string) error {
-	newKey, err := n.crypto.DHCurve.GenerateKey(rand.Reader)
-	if err != nil {
-		return xerrors.Errorf("error when generating new key to add member %v: %v", member, err)
-	}
-	existingOffset, ok := n.crypto.DHPartialSecrets[n.GetAddress()]
-	if !ok {
-		n.crypto.DHPartialSecrets[n.GetAddress()] = newKey.PublicKey()
-	} else {
-		newOffset, err := newKey.ECDH(existingOffset)
-		if err != nil {
-			return xerrors.Errorf("error when generating new local PK bytes to add member %v: %v", member, err)
-		}
-		n.crypto.DHPartialSecrets[n.GetAddress()], err = n.crypto.DHCurve.NewPublicKey(newOffset)
-		if err != nil {
-			return xerrors.Errorf("error when generating new local PK to add member %v: %v", member, err)
-		}
-	}
-
-	newSSKey, err := newKey.ECDH(n.crypto.DHSharedSecret)
-	if err != nil {
-		return xerrors.Errorf("error when generating new SS bytes to add member %v: %v", member, err)
-	}
-	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(newSSKey)
-	if err != nil {
-		return xerrors.Errorf("error when generating new SS to add member %v: %v", member, err)
-	}
-
-	newPartialSecretKeyMarshaled, err := x509.MarshalPKIXPublicKey(n.crypto.DHSharedSecret)
-	if err != nil {
-		return xerrors.Errorf("error when marshaling partial key for %v to add %v: %v", member, member, err)
-	}
-	msg := types.GroupCallDHSharedSecret{RemoteKey: newPartialSecretKeyMarshaled}
-	data, err := json.Marshal(&msg)
-	if err != nil {
-		return xerrors.Errorf("error when marshaling DH addition msg of %v for %v: %v", member, member, err)
-	}
-
-	transportMsg := transport.Message{
-		Type:    msg.Name(),
-		Payload: data,
-	}
-	err = n.Unicast(member, transportMsg)
-	if err != nil {
-		return xerrors.Errorf("error when unicasting partial secret to additional member %v: %v", member, err)
-	}
+func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKey) error {
 
 	//Now we send the key to the new member
 	newMemberSecret, ok := n.crypto.DHInitSecrets[member]
@@ -473,7 +442,53 @@ func (n *node) GroupCallAdd(member string) error {
 
 	wg.Wait()
 
-	return SendPartialSecretsInAddition(n, member)
+	newKey, err := n.crypto.DHCurve.GenerateKey(rand.Reader)
+	if err != nil {
+		return xerrors.Errorf("error when generating new key to add member %v: %v", member, err)
+	}
+	existingOffset, ok := n.crypto.DHPartialSecrets[n.GetAddress()]
+	if !ok {
+		n.crypto.DHPartialSecrets[n.GetAddress()] = newKey.PublicKey()
+	} else {
+		newOffset, err := newKey.ECDH(existingOffset)
+		if err != nil {
+			return xerrors.Errorf("error when generating new local PK bytes to add member %v: %v", member, err)
+		}
+		n.crypto.DHPartialSecrets[n.GetAddress()], err = n.crypto.DHCurve.NewPublicKey(newOffset)
+		if err != nil {
+			return xerrors.Errorf("error when generating new local PK to add member %v: %v", member, err)
+		}
+	}
+
+	newSSKey, err := newKey.ECDH(n.crypto.DHSharedSecret)
+	if err != nil {
+		return xerrors.Errorf("error when generating new SS bytes to add member %v: %v", member, err)
+	}
+	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(newSSKey)
+	if err != nil {
+		return xerrors.Errorf("error when generating new SS to add member %v: %v", member, err)
+	}
+
+	newPartialSecretKeyMarshaled, err := x509.MarshalPKIXPublicKey(n.crypto.DHSharedSecret)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling partial key for %v to add %v: %v", member, member, err)
+	}
+	msg := types.GroupCallDHSharedSecret{RemoteKey: newPartialSecretKeyMarshaled}
+	data, err = json.Marshal(&msg)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling DH addition msg of %v for %v: %v", member, member, err)
+	}
+
+	transportMsg := transport.Message{
+		Type:    msg.Name(),
+		Payload: data,
+	}
+	err = n.Unicast(member, transportMsg)
+	if err != nil {
+		return xerrors.Errorf("error when unicasting partial secret to additional member %v: %v", member, err)
+	}
+
+	return SendPartialSecretsInAddition(n, member, newKey)
 }
 
 func (c *Crypto) GroupCallEnd() {
