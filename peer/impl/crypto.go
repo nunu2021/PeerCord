@@ -571,7 +571,11 @@ func (n *node) ExecGroupCallDHIndividual(msg types.Message, packet transport.Pac
 	}
 	err = n.Unicast(packet.Header.Source, initTransportMsg)
 	if err != nil {
-		return xerrors.Errorf("error when unicasting DH exchange answer from %v to %v: %v", n.GetAddress(), packet.Header.Source, err)
+		return xerrors.Errorf("error when unicasting DH exchange answer from %v to %v: %v",
+			n.GetAddress(),
+			packet.Header.Source,
+			err,
+		)
 	}
 	return nil
 }
