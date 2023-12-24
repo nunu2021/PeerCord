@@ -55,7 +55,7 @@ func TestCrypto_OtO_Enc_Dec(t *testing.T) {
 	require.Equal(t, string(decryptedMsg), string(randomBytes))
 }
 
-// A -- B -- C -- D
+// A,B,C,D fully connected
 // A starts a key exchange with B,C,D
 func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	udpTransport := udp.NewUDP()
@@ -80,10 +80,16 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	nodeD := NewPeer(confD).(*node)
 	defer nodeD.Stop()
 	nodeA.AddPeer(nodeB.GetAddress())
+	nodeA.AddPeer(nodeC.GetAddress())
+	nodeA.AddPeer(nodeD.GetAddress())
 	nodeB.AddPeer(nodeA.GetAddress())
 	nodeB.AddPeer(nodeC.GetAddress())
+	nodeB.AddPeer(nodeD.GetAddress())
+	nodeC.AddPeer(nodeA.GetAddress())
 	nodeC.AddPeer(nodeB.GetAddress())
 	nodeC.AddPeer(nodeD.GetAddress())
+	nodeD.AddPeer(nodeA.GetAddress())
+	nodeD.AddPeer(nodeB.GetAddress())
 	nodeD.AddPeer(nodeC.GetAddress())
 	nodeA.Start()
 	nodeB.Start()
@@ -102,18 +108,25 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	curve := nodeA.crypto.DHCurve
 	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
 	require.NoError(t, err)
-	abPK, err := curve.NewPublicKey(ab)
+	abSK, err := curve.NewPrivateKey(ab)
 	require.NoError(t, err)
-	abc, err := nodeC.crypto.DHPrivateKey.ECDH(abPK)
+	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
 	require.NoError(t, err)
-	abcPK, err := curve.NewPublicKey(abc)
+	acSK, err := curve.NewPrivateKey(ac)
 	require.NoError(t, err)
-	abcd, err := nodeD.crypto.DHPrivateKey.ECDH(abcPK)
+	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey)
 	require.NoError(t, err)
-	abcdPK, err := curve.NewPublicKey(abcd)
+	adSK, err := curve.NewPrivateKey(ad)
 	require.NoError(t, err)
+	abac, err := abSK.ECDH(acSK.PublicKey())
+	require.NoError(t, err)
+	abacPK, err := curve.NewPublicKey(abac)
+	require.NoError(t, err)
+	abacad, err := adSK.ECDH(abacPK)
+	require.NoError(t, err)
+	abacadPK, err := curve.NewPublicKey(abacad)
 
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abcdPK))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abacadPK))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))

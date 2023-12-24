@@ -1,10 +1,9 @@
 package types
 
-type GroupCallDHUpward struct {
-	PreviousKeys       []([]byte)
-	RemainingReceivers []string
+type GroupCallDHIndividual struct {
+	RemoteKey []byte
 }
 
-type GroupCallDHDownward struct {
-	PreviousKeys []([]byte)
+type GroupCallDHSharedSecret struct {
+	RemoteKey []byte
 }

@@ -23,13 +23,18 @@ type StrStrMap struct {
 }
 
 type Crypto struct {
-	KeyPair         *rsa.PrivateKey
-	KnownPKs        StrStrMap
-	DHCurve         ecdh.Curve
-	DHPrivateKey    *ecdh.PrivateKey
-	DHPublicKey     *ecdh.PublicKey
-	DHSharedSecret  *ecdh.PublicKey
-	RingPredecessor string
+	KeyPair  *rsa.PrivateKey
+	KnownPKs StrStrMap
+
+	DHCurve        ecdh.Curve
+	DHPrivateKey   *ecdh.PrivateKey
+	DHPublicKey    *ecdh.PublicKey
+	DHSharedSecret *ecdh.PublicKey
+
+	DHIsLeader       bool
+	DHchannels       map[string](chan struct{})
+	DHInitSecrets    map[string](*ecdh.PrivateKey)
+	DHPartialSecrets map[string](*ecdh.PublicKey)
 }
 
 func (c *Crypto) GenerateKeyPair() error {
@@ -126,74 +131,11 @@ func (c *Crypto) DecryptDH(msg []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func (c *Crypto) DHUpwardStepNewValue(
-	curve ecdh.Curve,
-	remoteKey *ecdh.PublicKey,
-) (*ecdh.PublicKey, error) {
-
-	DHPrivateKey, err := curve.GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, xerrors.Errorf("error when generating DH private key: %v", err)
-	}
-	c.DHPrivateKey = DHPrivateKey
-	c.DHPublicKey = DHPrivateKey.PublicKey()
-	if remoteKey != nil {
-		DHProductKey, err := c.DHPrivateKey.ECDH(remoteKey)
-		if err != nil {
-			return nil, xerrors.Errorf("error when generating the product of the DH keys: %v", err)
-		}
-		DHProductPublicKey, err := curve.NewPublicKey(DHProductKey)
-		if err != nil {
-			return nil, xerrors.Errorf("error when casting DH key bytes to PrivateKey: %v", err)
-		}
-		return DHProductPublicKey, nil
-	}
-	return c.DHPublicKey, nil
-}
-
-func (c *Crypto) DHDownwardStepGetSecret(
-	curve ecdh.Curve,
-	upstreamValues *[]([]byte),
-) ([]([]byte), error) {
-
-	downstreamValues := make([]([]byte), 0)
-	upstreamLen := len(*upstreamValues)
-	for i := range *upstreamValues {
-		upVal := (*upstreamValues)[i]
-		PK, err := x509.ParsePKIXPublicKey(upVal)
-		if err != nil {
-			return nil, xerrors.Errorf("error when parsing remote DH PK: %v", err)
-		}
-		pubKey, ok := PK.(*ecdh.PublicKey)
-		if !ok {
-			return nil, xerrors.Errorf("error when casting remote DH PK: type %T", PK)
-		}
-		downVal, err := c.DHPrivateKey.ECDH(pubKey)
-		if err != nil {
-			return nil, xerrors.Errorf("error in downward step when generating the product of keys: %v", err)
-		}
-		downValKey, err := curve.NewPublicKey(downVal)
-		if err != nil {
-			return nil, xerrors.Errorf("error in downward step when generating the public down value: %v", err)
-		}
-		if i+1 == upstreamLen {
-			c.DHSharedSecret = downValKey
-		} else {
-			PK, err := x509.MarshalPKIXPublicKey(downValKey)
-			if err != nil {
-				return nil, xerrors.Errorf("error when parsing remote DH PK: %v", err)
-			}
-			downstreamValues = append(downstreamValues, PK)
-		}
-	}
-	return downstreamValues, nil
-}
-
 func (n *node) StartDHKeyExchange(receivers []string) error {
-	n.crypto.RingPredecessor = ""
-	n.crypto.DHSharedSecret = nil
-	n.crypto.DHPrivateKey = nil
-	n.crypto.DHPublicKey = nil
+	n.crypto.DHIsLeader = true
+	n.crypto.DHInitSecrets = make(map[string](*ecdh.PrivateKey))
+	n.crypto.DHchannels = make(map[string]chan struct{})
+	n.crypto.DHPartialSecrets = make(map[string]*ecdh.PublicKey)
 	n.crypto.GenerateDHCurve()
 	DHPrivateKey, err := n.crypto.DHCurve.GenerateKey(rand.Reader)
 	if err != nil {
@@ -201,204 +143,401 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 	}
 	n.crypto.DHPrivateKey = DHPrivateKey
 	n.crypto.DHPublicKey = DHPrivateKey.PublicKey()
-	dest := n.FindDHNextHop(&receivers)
-
-	PreviousKeys := make([]([]byte), 1)
-	PreviousKeys[0], err = x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
-	if err != nil {
-		return xerrors.Errorf("error when marshaling local DH public key: %v", err)
+	multicastReceivers := make(map[string]struct{})
+	for _, s := range receivers {
+		multicastReceivers[s] = struct{}{}
 	}
 
-	upMsg := types.GroupCallDHUpward{PreviousKeys: PreviousKeys, RemainingReceivers: receivers}
-
-	data, err := json.Marshal(&upMsg)
-
+	localPKBytes, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
 	if err != nil {
-		return xerrors.Errorf("error when marshaling DHDownward msg for %v: %v", n.crypto.RingPredecessor, err)
+		return xerrors.Errorf("error when marshaling initiator PK: %v", err)
 	}
 
-	upTransportMsg := transport.Message{
-		Type:    upMsg.Name(),
+	initMsg := types.GroupCallDHIndividual{RemoteKey: localPKBytes}
+	data, err := json.Marshal(&initMsg)
+
+	if err != nil {
+		return xerrors.Errorf("error when marshaling DH init msg: %v", err)
+	}
+
+	initTransportMsg := transport.Message{
+		Type:    initMsg.Name(),
 		Payload: data,
 	}
-	return n.Unicast(dest, upTransportMsg)
-}
 
-func StrSliceContains(slice *[]string, element string) (int, bool) {
-	for index, v := range *slice {
-		if v == element {
-			return index, true
-		}
+	var wg sync.WaitGroup
+	for _, s := range receivers {
+		n.crypto.DHchannels[s] = make(chan struct{})
+		wg.Add(1)
+		go func(c <-chan struct{}) {
+			defer wg.Done()
+			for range c {
+				return
+			}
+		}(n.crypto.DHchannels[s])
 	}
-	return 0, false
-}
 
-func (n *node) FindDHNextHop(receivers *[]string) string {
-	neighbors := n.routingTable.neighbors(n.GetAddress())
-	for _, neighbor := range neighbors {
-		if index, ok := StrSliceContains(receivers, neighbor); ok {
-			*receivers = append((*receivers)[:index], (*receivers)[index+1:]...)
-			return neighbor
-		}
-	}
-	*receivers = (*receivers)[1:]
-	return (*receivers)[0]
-}
-
-func EndDHUpwardStep(n *node, message *types.GroupCallDHUpward) error {
-	remotePK, err := x509.ParsePKIXPublicKey(message.PreviousKeys[len(message.PreviousKeys)-1])
+	err = n.Multicast(initTransportMsg, multicastReceivers)
 	if err != nil {
-		return xerrors.Errorf("error when parsing remote DH PK: %v", err)
-	}
-	remotePubKey, ok := remotePK.(*ecdh.PublicKey)
-	if !ok {
-		return xerrors.Errorf("error when casting remote DH PK: type %T", remotePK)
+		return xerrors.Errorf("error in DH key exchange init multicast: %v", err)
 	}
 
-	curve := remotePubKey.Curve()
-	n.crypto.DHCurve = curve
-	sharedSecret, err := n.crypto.DHUpwardStepNewValue(curve, remotePubKey)
-	if err != nil {
-		return err
-	}
-
-	n.crypto.DHSharedSecret = sharedSecret
-
-	downwardKeys := make([]([]byte), 1)
-	localPK, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
-	if err != nil {
-		return xerrors.Errorf("error when marshaling local DH PK: %v", err)
-	}
-	downwardKeys[0] = localPK
-
-	for index := range message.PreviousKeys {
-		if index == len(message.PreviousKeys)-1 {
-			break
+	wg.Wait()
+	for i, dest := range receivers {
+		var keyToSend *ecdh.PublicKey
+		for j, k := range n.crypto.DHInitSecrets {
+			if dest == j {
+				continue
+			}
+			if keyToSend == nil {
+				keyToSend = k.PublicKey()
+			} else {
+				newKeyToSend, err := k.ECDH(keyToSend)
+				if err != nil {
+					return xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
+				}
+				keyToSend, err = n.crypto.DHCurve.NewPublicKey(newKeyToSend)
+				if err != nil {
+					return xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
+				}
+			}
 		}
-		val := message.PreviousKeys[index]
-		remotePK, err := x509.ParsePKIXPublicKey(val)
+		if i == 0 {
+			sharedSecretBytes, err := n.crypto.DHInitSecrets[dest].ECDH(keyToSend)
+			if err != nil {
+				return xerrors.Errorf("error when generating shared secret bytes: %v", err)
+			}
+			n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(sharedSecretBytes)
+			if err != nil {
+				return xerrors.Errorf("error when generating shared secret: %v", err)
+			}
+		}
+		n.crypto.DHPartialSecrets[dest] = keyToSend
+		localKey, err := x509.MarshalPKIXPublicKey(keyToSend)
 		if err != nil {
-			return xerrors.Errorf("error when parsing remote DH PK: %v", err)
+			return xerrors.Errorf("error in DH key exchange when marshaling partial shared secret for %v: %v", dest, err)
 		}
-		remotePubKey, ok := remotePK.(*ecdh.PublicKey)
-		if !ok {
-			return xerrors.Errorf("error when casting remote DH PK: type %t", remotePK)
-		}
-		DHProductKey, err := n.crypto.DHPrivateKey.ECDH(remotePubKey)
+		ssMsg := types.GroupCallDHSharedSecret{RemoteKey: localKey}
+		data, err := json.Marshal(&ssMsg)
+
 		if err != nil {
-			return xerrors.Errorf("error when generating the product of the DH keys: %v", err)
+			return xerrors.Errorf("error when marshaling DH init msg: %v", err)
 		}
-		DHProductPublicKey, err := n.crypto.DHCurve.NewPublicKey(DHProductKey)
+
+		ssTransportMsg := transport.Message{
+			Type:    ssMsg.Name(),
+			Payload: data,
+		}
+
+		err = n.Unicast(dest, ssTransportMsg)
 		if err != nil {
-			return xerrors.Errorf("error when casting DH key bytes to PrivateKey: %v", err)
+			return xerrors.Errorf("error when marshaling DH init msg: %v", err)
 		}
-		localPK, err := x509.MarshalPKIXPublicKey(DHProductPublicKey)
-		if err != nil {
-			return xerrors.Errorf("error when marshaling remote DH PK: %v", err)
-		}
-
-		downwardKeys = append(downwardKeys, localPK)
 	}
-
-	upMsg := types.GroupCallDHDownward{PreviousKeys: downwardKeys}
-
-	data, err := json.Marshal(&upMsg)
-
-	if err != nil {
-		return xerrors.Errorf("error when marshaling DHDownward msg for %v: %v", n.crypto.RingPredecessor, err)
-	}
-
-	upTransportMsg := transport.Message{
-		Type:    upMsg.Name(),
-		Payload: data,
-	}
-	return n.Unicast(n.crypto.RingPredecessor, upTransportMsg)
+	return nil
 }
 
-func (n *node) ExecGroupCallDHUpward(msg types.Message, packet transport.Packet) error {
-	message, ok := msg.(*types.GroupCallDHUpward)
+func (n *node) GroupCallRemove(member string) error {
+	if !n.crypto.DHIsLeader {
+		return nil
+	}
+	//If member = leader: must restart the exchange from a new leader, the leader should chose a new one
+	//Otherwise, recompute the partial secrets without member's secret and send them
+	if member == n.conf.Socket.GetAddress() {
+		return nil
+	}
+	newKey, err := n.crypto.DHCurve.GenerateKey(rand.Reader)
+	if err != nil {
+		return xerrors.Errorf("error when generating new key to remove member %v: %v", member, err)
+	}
+	existingOffset, ok := n.crypto.DHPartialSecrets[n.GetAddress()]
 	if !ok {
-		return xerrors.Errorf("wrong type: %T", msg)
+		n.crypto.DHPartialSecrets[n.GetAddress()] = newKey.PublicKey()
+	} else {
+		newOffset, err := newKey.ECDH(existingOffset)
+		if err != nil {
+			return xerrors.Errorf("error when generating new local PK bytes to remove member %v: %v", member, err)
+		}
+		n.crypto.DHPartialSecrets[n.GetAddress()], err = n.crypto.DHCurve.NewPublicKey(newOffset)
+		if err != nil {
+			return xerrors.Errorf("error when generating new local PK to remove member %v: %v", member, err)
+		}
 	}
 
-	n.crypto.RingPredecessor = packet.Header.Source
+	delete(n.crypto.DHInitSecrets, member)
+	delete(n.crypto.DHPartialSecrets, member)
+	for dest := range n.crypto.DHPartialSecrets {
+		var keyToSend = n.crypto.DHPartialSecrets[n.GetAddress()]
+		for j, k := range n.crypto.DHInitSecrets {
+			if dest == j {
+				continue
+			}
+			newKeyToSend, err := k.ECDH(keyToSend)
+			if err != nil {
+				return xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
+			}
+			keyToSend, err = n.crypto.DHCurve.NewPublicKey(newKeyToSend)
+			if err != nil {
+				return xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
+			}
+		}
+		n.crypto.DHPartialSecrets[dest] = keyToSend
+		localKey, err := x509.MarshalPKIXPublicKey(keyToSend)
+		if err != nil {
+			return xerrors.Errorf("error in DH key exchange when marshaling partial shared secret for %v: %v", dest, err)
+		}
+		ssMsg := types.GroupCallDHSharedSecret{RemoteKey: localKey}
+		data, err := json.Marshal(&ssMsg)
 
-	if len(message.RemainingReceivers) == 0 {
-		//end of upward step
-		return EndDHUpwardStep(n, message)
+		if err != nil {
+			return xerrors.Errorf("error when marshaling DH init msg: %v", err)
+		}
+
+		ssTransportMsg := transport.Message{
+			Type:    ssMsg.Name(),
+			Payload: data,
+		}
+
+		err = n.Unicast(dest, ssTransportMsg)
+		if err != nil {
+			return xerrors.Errorf("error when marshaling DH init msg: %v", err)
+		}
+
 	}
-
-	dest := n.FindDHNextHop(&message.RemainingReceivers)
-
-	remotePK, err := x509.ParsePKIXPublicKey(message.PreviousKeys[len(message.PreviousKeys)-1])
-	if err != nil {
-		return xerrors.Errorf("error when parsing remote DH PK: %v", err)
-	}
-	remotePubKey, ok := remotePK.(*ecdh.PublicKey)
-	if !ok {
-		return xerrors.Errorf("error when casting remote DH PK: type %t", remotePK)
-	}
-
-	curve := remotePubKey.Curve()
-	n.crypto.DHCurve = curve
-	newPublicKey, err := n.crypto.DHUpwardStepNewValue(curve, remotePubKey)
-	if err != nil {
-		return err
-	}
-
-	newPK, err := x509.MarshalPKIXPublicKey(newPublicKey)
-	if err != nil {
-		return xerrors.Errorf("error when marshaling local DH PK: %v", err)
-	}
-
-	message.PreviousKeys = append(message.PreviousKeys, newPK)
-
-	upMsg := types.GroupCallDHUpward{
-		PreviousKeys:       message.PreviousKeys,
-		RemainingReceivers: message.RemainingReceivers,
-	}
-
-	data, err := json.Marshal(&upMsg)
-
-	if err != nil {
-		return xerrors.Errorf("error when marshaling DHDownward msg for %v: %v", n.crypto.RingPredecessor, err)
-	}
-
-	upTransportMsg := transport.Message{
-		Type:    upMsg.Name(),
-		Payload: data,
-	}
-	return n.Unicast(dest, upTransportMsg)
+	return nil
 }
 
-func (n *node) ExecGroupCallDHDownward(msg types.Message, packet transport.Packet) error {
-	message, ok := msg.(*types.GroupCallDHDownward)
-	if !ok {
-		return xerrors.Errorf("wrong type: %T", msg)
-	}
-
-	downKeys, err := n.crypto.DHDownwardStepGetSecret(n.crypto.DHCurve, &message.PreviousKeys)
-	if err != nil {
-		return err
-	}
-
-	if len(downKeys) == 0 {
-		//End of the downward step
+func (n *node) GroupCallAdd(member string) error {
+	if !n.crypto.DHIsLeader {
 		return nil
 	}
 
-	downMsg := types.GroupCallDHDownward{PreviousKeys: downKeys}
-
-	data, err := json.Marshal(&downMsg)
+	initMsg := types.GroupCallDHIndividual{RemoteKey: n.crypto.DHPublicKey.Bytes()}
+	data, err := json.Marshal(&initMsg)
 
 	if err != nil {
-		return xerrors.Errorf("error when marshaling DHDownward msg for %v: %v", n.crypto.RingPredecessor, err)
+		return xerrors.Errorf("error when marshaling DH init msg: %v", err)
 	}
 
-	downTransportMsg := transport.Message{
-		Type:    downMsg.Name(),
+	initTransportMsg := transport.Message{
+		Type:    initMsg.Name(),
 		Payload: data,
 	}
 
-	return n.Unicast(n.crypto.RingPredecessor, downTransportMsg)
+	var wg sync.WaitGroup
+	n.crypto.DHchannels[member] = make(chan struct{})
+	wg.Add(1)
+	go func(c <-chan struct{}) {
+		defer wg.Done()
+		for range c {
+			return
+		}
+	}(n.crypto.DHchannels[member])
+
+	n.Unicast(member, initTransportMsg)
+
+	wg.Wait()
+
+	newKey, err := n.crypto.DHCurve.GenerateKey(rand.Reader)
+	if err != nil {
+		return xerrors.Errorf("error when generating new key to add member %v: %v", member, err)
+	}
+	existingOffset, ok := n.crypto.DHPartialSecrets[n.GetAddress()]
+	if !ok {
+		n.crypto.DHPartialSecrets[n.GetAddress()] = newKey.PublicKey()
+	} else {
+		newOffset, err := newKey.ECDH(existingOffset)
+		if err != nil {
+			return xerrors.Errorf("error when generating new local PK bytes to add member %v: %v", member, err)
+		}
+		n.crypto.DHPartialSecrets[n.GetAddress()], err = n.crypto.DHCurve.NewPublicKey(newOffset)
+		if err != nil {
+			return xerrors.Errorf("error when generating new local PK to add member %v: %v", member, err)
+		}
+	}
+
+	newSSKey, err := newKey.ECDH(n.crypto.DHSharedSecret)
+	if err != nil {
+		return xerrors.Errorf("error when generating new SS bytes to add member %v: %v", member, err)
+	}
+	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(newSSKey)
+	if err != nil {
+		return xerrors.Errorf("error when generating new SS to add member %v: %v", member, err)
+	}
+
+	newPartialSecretKeyMarshaled, err := x509.MarshalPKIXPublicKey(n.crypto.DHSharedSecret)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling partial key for %v to add %v: %v", member, member, err)
+	}
+	msg := types.GroupCallDHSharedSecret{RemoteKey: newPartialSecretKeyMarshaled}
+	data, err = json.Marshal(&msg)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling DH addition msg of %v for %v: %v", member, member, err)
+	}
+
+	transportMsg := transport.Message{
+		Type:    msg.Name(),
+		Payload: data,
+	}
+	n.Unicast(member, transportMsg)
+
+	//Now we send the key to the new member
+	newMemberSecret, ok := n.crypto.DHInitSecrets[member]
+	if !ok {
+		return xerrors.Errorf("error when retrieving new member (%v)'s shared secret", member)
+	}
+	newSharedSecretBytes, err := newMemberSecret.ECDH(n.crypto.DHPublicKey)
+	if err != nil {
+		return xerrors.Errorf("error when generating new shared PK bytes to add member %v: %v", member, err)
+	}
+	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(newSharedSecretBytes)
+	if err != nil {
+		return xerrors.Errorf("error when generating new shared PK to add member %v: %v", member, err)
+	}
+
+	for s, key := range n.crypto.DHPartialSecrets {
+		if s == n.GetAddress() {
+			continue
+		}
+		newPartialSecretKeyBytes, err := newKey.ECDH(key)
+		if err != nil {
+			return xerrors.Errorf("error when generating new patial secret bytes for %v to add member %v: %v", s, member, err)
+		}
+		newPartialSecretKey, err := n.crypto.DHCurve.NewPublicKey(newPartialSecretKeyBytes)
+		if err != nil {
+			return xerrors.Errorf("error when generating new partial secret for %v to add member %v: %v", s, member, err)
+		}
+		newPartialSecretKeyBytes, err = newMemberSecret.ECDH(key)
+		if err != nil {
+			return xerrors.Errorf("error when generating new patial secret bytes for %v to add member %v: %v", s, member, err)
+		}
+		newPartialSecretKey, err = n.crypto.DHCurve.NewPublicKey(newPartialSecretKeyBytes)
+		if err != nil {
+			return xerrors.Errorf("error when generating new partial secret for %v to add member %v: %v", s, member, err)
+		}
+		n.crypto.DHPartialSecrets[s] = newPartialSecretKey
+		newPartialSecretKeyMarshaled, err := x509.MarshalPKIXPublicKey(newPartialSecretKey)
+		if err != nil {
+			return xerrors.Errorf("error when marshaling partial key for %v to add %v: %v", s, member, err)
+		}
+		msg := types.GroupCallDHSharedSecret{RemoteKey: newPartialSecretKeyMarshaled}
+		data, err := json.Marshal(&msg)
+		if err != nil {
+			return xerrors.Errorf("error when marshaling DH addition msg of %v for %v: %v", member, s, err)
+		}
+
+		transportMsg := transport.Message{
+			Type:    msg.Name(),
+			Payload: data,
+		}
+		n.Unicast(s, transportMsg)
+	}
+
+	return nil
+}
+
+func (c *Crypto) GroupCallEnd() {
+	c.DHSharedSecret = nil
+	c.DHPrivateKey = nil
+	c.DHPublicKey = nil
+	c.DHIsLeader = false
+	for s, ch := range c.DHchannels {
+		close(ch)
+		delete(c.DHchannels, s)
+	}
+	for s := range c.DHInitSecrets {
+		delete(c.DHchannels, s)
+	}
+	for s := range c.DHPartialSecrets {
+		delete(c.DHPartialSecrets, s)
+	}
+}
+
+func (n *node) ExecGroupCallDHIndividual(msg types.Message, packet transport.Packet) error {
+	message, ok := msg.(*types.GroupCallDHIndividual)
+	if !ok {
+		return xerrors.Errorf("wrong type: %T", msg)
+	}
+	remoteK, err := x509.ParsePKIXPublicKey(message.RemoteKey)
+	if err != nil {
+		return xerrors.Errorf("error when parsing remote DH individual PK: %v", err)
+	}
+	remoteKey, ok := remoteK.(*ecdh.PublicKey)
+	if !ok {
+		return xerrors.Errorf("error when casting remote DH individual PK: type %T", remoteK)
+	}
+	if n.crypto.DHIsLeader {
+		sharedSecretBytes, err := n.crypto.DHPrivateKey.ECDH(remoteKey)
+		if err != nil {
+			return xerrors.Errorf("error in individual DH key exchange when generating secret bytes: %v", err)
+		}
+		sharedSecret, err := n.crypto.DHCurve.NewPrivateKey(sharedSecretBytes)
+		if err != nil {
+			return xerrors.Errorf("error in individual DH key exchange when generating secret: %v", err)
+		}
+		n.crypto.DHInitSecrets[packet.Header.Source] = sharedSecret
+		n.crypto.DHchannels[packet.Header.Source] <- struct{}{}
+		close(n.crypto.DHchannels[packet.Header.Source])
+		delete(n.crypto.DHchannels, packet.Header.Source)
+		return nil
+	}
+	n.crypto.DHCurve = remoteKey.Curve()
+	n.crypto.DHPrivateKey, err = remoteKey.Curve().GenerateKey(rand.Reader)
+	if err != nil {
+		return xerrors.Errorf("error in individual DH key exchange when generating key: %v", err)
+	}
+	n.crypto.DHPublicKey = n.crypto.DHPrivateKey.PublicKey()
+	sharedSecret, err := n.crypto.DHPrivateKey.ECDH(remoteKey)
+	if err != nil {
+		return xerrors.Errorf("error in individual DH key exchange when generating secret bytes: %v", err)
+	}
+	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(sharedSecret)
+	if err != nil {
+		return xerrors.Errorf("error in individual DH key exchange when generating secret: %v", err)
+	}
+	localPublicKeyBytes, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling DH init answer from %v to %v: %v", n.GetAddress(), packet.Header.Source, err)
+	}
+	initMsg := types.GroupCallDHIndividual{RemoteKey: localPublicKeyBytes}
+	data, err := json.Marshal(&initMsg)
+
+	if err != nil {
+		return xerrors.Errorf("error when marshaling DH init msg: %v", err)
+	}
+
+	initTransportMsg := transport.Message{
+		Type:    initMsg.Name(),
+		Payload: data,
+	}
+	n.Unicast(packet.Header.Source, initTransportMsg)
+	return nil
+}
+
+func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.Packet) error {
+	message, ok := msg.(*types.GroupCallDHSharedSecret)
+	if !ok {
+		return xerrors.Errorf("type mismatch: %T", msg)
+	}
+	sharedSecretSK, err := n.crypto.DHCurve.NewPrivateKey(n.crypto.DHSharedSecret.Bytes())
+	if err != nil {
+		return xerrors.Errorf("error when casting shared secret to private key: %v", err)
+	}
+	remoteK, err := x509.ParsePKIXPublicKey(message.RemoteKey)
+	if err != nil {
+		return xerrors.Errorf("error when parsing shared secret: %v", err)
+	}
+	remoteKey, ok := remoteK.(*ecdh.PublicKey)
+	if !ok {
+		return xerrors.Errorf("error when casting remoteKey to public key")
+	}
+	finalSecretBytes, err := sharedSecretSK.ECDH(remoteKey)
+	if err != nil {
+		return xerrors.Errorf("error when generating final shared secret: %v", err)
+	}
+	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(finalSecretBytes)
+	if err != nil {
+		return xerrors.Errorf("error when creating shared secret: %v", err)
+	}
+	return nil
 }

@@ -3,47 +3,47 @@ package types
 import "fmt"
 
 // -----------------------------------------------------------------------------
-// GroupCallDHUpward
+// GroupCallDHIndividual
 
 // NewEmpty implements types.Message.
-func (m GroupCallDHUpward) NewEmpty() Message {
-	return &GroupCallDHUpward{}
+func (m GroupCallDHIndividual) NewEmpty() Message {
+	return &GroupCallDHIndividual{}
 }
 
 // Name implements types.Message.
-func (m GroupCallDHUpward) Name() string {
-	return "GroupCallDHUpward"
+func (m GroupCallDHIndividual) Name() string {
+	return "GroupCallDHIndividual"
 }
 
 // String implements types.Message.
-func (m GroupCallDHUpward) String() string {
-	return fmt.Sprintf("{GroupCallDHUpward %v - %v}", m.PreviousKeys, m.RemainingReceivers)
+func (m GroupCallDHIndividual) String() string {
+	return fmt.Sprintf("{GroupCallDHIndividual %v}", m.RemoteKey)
 }
 
 // HTML implements types.Message.
-func (m GroupCallDHUpward) HTML() string {
+func (m GroupCallDHIndividual) HTML() string {
 	return m.String()
 }
 
 // -----------------------------------------------------------------------------
-// PaxosPrepareMessage
+// GroupCallDHSharedSecret
 
 // NewEmpty implements types.Message.
-func (m GroupCallDHDownward) NewEmpty() Message {
-	return &GroupCallDHDownward{}
+func (m GroupCallDHSharedSecret) NewEmpty() Message {
+	return &GroupCallDHSharedSecret{}
 }
 
 // Name implements types.Message.
-func (m GroupCallDHDownward) Name() string {
-	return "GroupCallDHDownward"
+func (m GroupCallDHSharedSecret) Name() string {
+	return "GroupCallDHSharedSecret"
 }
 
 // String implements types.Message.
-func (m GroupCallDHDownward) String() string {
-	return fmt.Sprintf("{GroupCallDHDownward %v}", m.PreviousKeys)
+func (m GroupCallDHSharedSecret) String() string {
+	return fmt.Sprintf("{GroupCallDHSharedSecret %v}", m.RemoteKey)
 }
 
 // HTML implements types.Message.
-func (m GroupCallDHDownward) HTML() string {
+func (m GroupCallDHSharedSecret) HTML() string {
 	return m.String()
 }

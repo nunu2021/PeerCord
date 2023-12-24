@@ -74,8 +74,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, n.receivePaxosAcceptMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosPromiseMessage{}, n.receivePaxosPromiseMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.TLCMessage{}, n.receiveTLCMessage)
-	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHDownward{}, n.ExecGroupCallDHDownward)
-	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHUpward{}, n.ExecGroupCallDHUpward)
+	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHIndividual{}, n.ExecGroupCallDHIndividual)
+	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHSharedSecret{}, n.ExecGroupCallDHSharedSecret)
 
 	return n
 }
