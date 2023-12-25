@@ -791,7 +791,7 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	}
 	remoteKey, ok := remoteK.(*rsa.PublicKey)
 	if !ok {
-		return xerrors.Errorf("error when casting remote PK to rsa.PK: %v")
+		return xerrors.Errorf("error when casting remote PK to rsa.PK")
 	}
 
 	err = rsa.VerifyPSS(remoteKey, crypto.SHA256, hashSum, message.Signature, nil)
