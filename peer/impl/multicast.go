@@ -131,32 +131,6 @@ func (n *node) LeaveMulticastGroup(groupSender string, id string) error {
 	return nil
 }
 
-func (n *node) Multicast(msg transport.Message, groupID string) error {
-	group, ok := n.multicast.groups[groupID]
-	if !ok {
-		return UnknownMulticastGroupError(groupID)
-	}
-
-	multicastMsg := types.MulticastMessage{
-		GroupID: groupID,
-		Msg:     &msg,
-	}
-
-	if group.isInGroup {
-		n.processMessage(msg)
-	}
-
-	for dest := range group.forwards {
-		err := n.marshalAndUnicast(dest, multicastMsg)
-		if err != nil {
-			n.logger.Error().Err(err).Msg("can't unicast message for multicast")
-			return err
-		}
-	}
-
-	return nil
-}
-
 func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt transport.Packet) error {
 	msg, ok := originalMsg.(*types.JoinMulticastGroupRequestMessage)
 	if !ok {
@@ -188,6 +162,32 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 	if !ok {
 		panic("not a leave multicast group request message")
 	}*/
+
+	return nil
+}
+
+func (n *node) Multicast(msg transport.Message, groupID string) error {
+	group, ok := n.multicast.groups[groupID]
+	if !ok {
+		return UnknownMulticastGroupError(groupID)
+	}
+
+	multicastMsg := types.MulticastMessage{
+		GroupID: groupID,
+		Msg:     &msg,
+	}
+
+	if group.isInGroup {
+		n.processMessage(msg)
+	}
+
+	for dest := range group.forwards {
+		err := n.marshalAndUnicast(dest, multicastMsg)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't unicast message for multicast")
+			return err
+		}
+	}
 
 	return nil
 }
