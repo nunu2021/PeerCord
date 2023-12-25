@@ -198,14 +198,19 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 	return nil
 }
 
-func (n *node) Multicast(msg transport.Message, groupID string) error {
+// Given a multicast message, performs a step of the multicast algorithm:
+// - transmit the messages to the children in the tree
+// - process the message locally
+// If isNewMessage is true, raises an error if the peer is not the sender of the
+// multicast group
+func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage bool) error {
 	group, ok := n.multicast.groups[groupID]
 	if !ok {
 		n.logger.Error().Msg("can't send message to unknown multicast group")
 		return UnknownMulticastGroupError(groupID)
 	}
 
-	if group.sender != n.GetAddress() {
+	if isNewMessage && group.sender != n.GetAddress() {
 		n.logger.Error().Msg("can't send message to a multicast group of another peer")
 		return UnknownMulticastGroupError(groupID)
 	}
@@ -213,10 +218,6 @@ func (n *node) Multicast(msg transport.Message, groupID string) error {
 	multicastMsg := types.MulticastMessage{
 		GroupID: groupID,
 		Msg:     &msg,
-	}
-
-	if group.isInGroup {
-		n.processMessage(msg)
 	}
 
 	for dest := range group.forwards {
@@ -227,5 +228,22 @@ func (n *node) Multicast(msg transport.Message, groupID string) error {
 		}
 	}
 
+	if group.isInGroup {
+		n.processMessage(msg)
+	}
+
 	return nil
+}
+
+func (n *node) Multicast(msg transport.Message, groupID string) error {
+	return n.multicastStep(msg, groupID, true)
+}
+
+func (n *node) receiveMulticastMessage(originalMsg types.Message, pkt transport.Packet) error {
+	msg, ok := originalMsg.(*types.MulticastMessage)
+	if !ok {
+		panic("not a multicast message")
+	}
+
+	return n.multicastStep(*msg.Msg, msg.GroupID, false)
 }
