@@ -67,8 +67,7 @@ func (n *node) DeleteMulticastGroup(id string) error {
 func (n *node) JoinMulticastGroup(peer string, id string) error {
 	// Send the request
 	req := types.JoinMulticastGroupRequestMessage{
-		Source: peer,
-		Id:     id,
+		ID: id,
 	}
 
 	err := n.marshalAndUnicast(peer, req)
@@ -88,8 +87,7 @@ func (n *node) JoinMulticastGroup(peer string, id string) error {
 func (n *node) LeaveMulticastGroup(peer string, id string) error {
 	// Send the request
 	req := types.LeaveMulticastGroupRequestMessage{
-		Source: peer,
-		Id:     id,
+		ID: id,
 	}
 
 	err := n.marshalAndUnicast(peer, req)
