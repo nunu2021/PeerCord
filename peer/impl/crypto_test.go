@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -94,7 +93,7 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 
 	require.NoError(t, nodeA.conf.Socket.Send(nodeB.GetAddress(), *packet, time.Second))
 	time.Sleep(time.Second * 2)
-	fmt.Println(chatMsg.Message)
+	nodeA.logger.Info().Msg(chatMsg.Message)
 }
 
 func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
@@ -156,7 +155,7 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	receiversMap[nodeC.GetAddress()] = struct{}{}
 	require.NoError(t, nodeA.Multicast(transpMsg, receiversMap))
 	time.Sleep(time.Second * 2)
-	fmt.Println(chatMsg.Message)
+	nodeA.logger.Info().Msg(chatMsg.Message)
 }
 
 // A,B,C,D fully connected
