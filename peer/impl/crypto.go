@@ -35,7 +35,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -374,7 +373,6 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 			case <-c:
 				return
 			case <-time.After(time.Second):
-				fmt.Println("removing", peer)
 				//assume the remote node is malicious or dead
 				lock.Lock()
 				delete(receivers, peer)
