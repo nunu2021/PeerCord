@@ -80,7 +80,7 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 
 	size := randInt(100)
 	randomBytes := make([]byte, size)
-	size, _ = rand.Read(randomBytes)
+	rand.Read(randomBytes)
 	chatMsg := types.ChatMessage{Message: hex.EncodeToString(randomBytes)}
 	data, err := json.Marshal(&chatMsg)
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 
 	size := randInt(500)
 	randomBytes := make([]byte, size)
-	size, _ = rand.Read(randomBytes)
+	rand.Read(randomBytes)
 	chatMsg := types.ChatMessage{Message: hex.EncodeToString(randomBytes)}
 	data, err := json.Marshal(&chatMsg)
 	require.NoError(t, err)
@@ -155,8 +155,7 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	data, err = json.Marshal(&encryptedMsg)
 	require.NoError(t, err)
 	transpMsg = transport.Message{Payload: data, Type: encryptedMsg.Name()}
-	header = transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
-	pkt = transport.Packet{Header: &header, Msg: &transpMsg}
+
 	receiversMap := make(map[string]struct{})
 	receiversMap[nodeB.GetAddress()] = struct{}{}
 	receiversMap[nodeC.GetAddress()] = struct{}{}

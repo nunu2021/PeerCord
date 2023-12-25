@@ -198,9 +198,6 @@ func SendPartialSecrets(n *node, receivers []string) error {
 				return xerrors.Errorf("error when generating shared secret: %v", err)
 			}
 		}
-		if err != nil {
-			return err
-		}
 		n.crypto.DHPartialSecrets[dest] = keyToSend
 		localKey, err := x509.MarshalPKIXPublicKey(keyToSend)
 		if err != nil {
