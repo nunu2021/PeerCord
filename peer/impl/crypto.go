@@ -281,25 +281,33 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 	return SendPartialSecrets(n, receivers)
 }
 
+func SendPartialSecretsRemoveBuildKeyToSend(n *node, dest string) (*ecdh.PublicKey, error) {
+	var keyToSend = n.crypto.DHPartialSecrets[n.GetAddress()]
+	for j, k := range n.crypto.DHInitSecrets {
+		if dest == j {
+			continue
+		}
+		newKeyToSend, err := k.ECDH(keyToSend)
+		if err != nil {
+			return nil, xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
+		}
+		keyToSend, err = n.crypto.DHCurve.NewPublicKey(newKeyToSend)
+		if err != nil {
+			return nil, xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
+		}
+	}
+	return keyToSend, nil
+}
+
 func SendPartialSecretsRemove(n *node, member string) error {
 	newSharedSecretSet := false
 	for dest := range n.crypto.DHPartialSecrets {
 		if dest == n.GetAddress() {
 			continue
 		}
-		var keyToSend = n.crypto.DHPartialSecrets[n.GetAddress()]
-		for j, k := range n.crypto.DHInitSecrets {
-			if dest == j {
-				continue
-			}
-			newKeyToSend, err := k.ECDH(keyToSend)
-			if err != nil {
-				return xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
-			}
-			keyToSend, err = n.crypto.DHCurve.NewPublicKey(newKeyToSend)
-			if err != nil {
-				return xerrors.Errorf("error in DH key exchange when generating partial shared secret for %v: %v", dest, err)
-			}
+		keyToSend, err := SendPartialSecretsRemoveBuildKeyToSend(n, dest)
+		if err != nil {
+			return err
 		}
 		n.crypto.DHPartialSecrets[dest] = keyToSend
 		localKey, err := x509.MarshalPKIXPublicKey(keyToSend)
