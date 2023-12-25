@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	nodeA.Start()
 	nodeB.Start()
 
-	size := randInt(100)
+	size := randInt(500)
 	randomBytes := make([]byte, size)
 	rand.Read(randomBytes)
 	chatMsg := types.ChatMessage{Message: hex.EncodeToString(randomBytes)}
@@ -88,18 +89,12 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	transpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
 	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
 	pkt := transport.Packet{Header: &header, Msg: &transpMsg}
-	marshaledPkt, err := pkt.Marshal()
+	packet, err := nodeA.crypto.EncryptOneToOnePkt(&pkt, &nodeB.crypto.KeyPair.PublicKey)
 	require.NoError(t, err)
-	encryptedPkt, err := nodeA.crypto.EncryptOneToOne(marshaledPkt, &nodeB.crypto.KeyPair.PublicKey)
-	require.NoError(t, err)
-	encryptedMsg := types.O2OEncryptedPkt{Packet: encryptedPkt}
-	data, err = json.Marshal(&encryptedMsg)
-	require.NoError(t, err)
-	transpMsg = transport.Message{Payload: data, Type: encryptedMsg.Name()}
-	header = transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
-	pkt = transport.Packet{Header: &header, Msg: &transpMsg}
-	require.NoError(t, nodeA.conf.Socket.Send(nodeB.GetAddress(), pkt, time.Second))
+
+	require.NoError(t, nodeA.conf.Socket.Send(nodeB.GetAddress(), *packet, time.Second))
 	time.Sleep(time.Second * 2)
+	fmt.Println(chatMsg.Message)
 }
 
 func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
@@ -161,6 +156,7 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	receiversMap[nodeC.GetAddress()] = struct{}{}
 	require.NoError(t, nodeA.Multicast(transpMsg, receiversMap))
 	time.Sleep(time.Second * 2)
+	fmt.Println(chatMsg.Message)
 }
 
 // A,B,C,D fully connected

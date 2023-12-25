@@ -86,7 +86,7 @@ func (m O2OEncryptedPkt) Name() string {
 
 // String implements types.Message.
 func (m O2OEncryptedPkt) String() string {
-	return fmt.Sprintf("{O2OEncryptedPkt %v}", m.Packet)
+	return fmt.Sprintf("{O2OEncryptedPkt %v - %v}", m.Key, m.Packet)
 }
 
 // HTML implements types.Message.

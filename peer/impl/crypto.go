@@ -109,6 +109,49 @@ func (c *Crypto) DecryptOneToOne(msg []byte) ([]byte, error) {
 	return decryptedMsg, nil
 }
 
+func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, key *rsa.PublicKey) (*transport.Packet, error) {
+	marshaledPkt, err := pkt.Marshal()
+	if err != nil {
+		return nil, xerrors.Errorf("error when marshaling packet for O2O encryption: %v", err)
+	}
+	randomKey, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, xerrors.Errorf("error when generating random key for O2O encryption: %v", err)
+	}
+
+	encryptedKey, err := c.EncryptOneToOne(randomKey.PublicKey().Bytes(), key)
+	if err != nil {
+		return nil, xerrors.Errorf("error when encrypting packet for O2O encryption: %v", err)
+	}
+
+	ciph, err := aes.NewCipher(randomKey.PublicKey().Bytes())
+	if err != nil {
+		return nil, xerrors.Errorf("error encrypting packet for O2O encryption: %v", err)
+	}
+
+	gcm, err := cipher.NewGCM(ciph)
+	if err != nil {
+		return nil, xerrors.Errorf("error encrypting packet for O2O encryption: %v", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, xerrors.Errorf("error encrypting packet for O2O encryption: %v", err)
+	}
+
+	encryptedPkt := gcm.Seal(nonce, nonce, marshaledPkt, nil)
+
+	encryptedMsg := types.O2OEncryptedPkt{Packet: encryptedPkt, Key: encryptedKey}
+	data, err := json.Marshal(&encryptedMsg)
+	if err != nil {
+		return nil, xerrors.Errorf("error when marshaling encrypted packet for O2O encryption: %v", err)
+	}
+	transpMsg := transport.Message{Payload: data, Type: encryptedMsg.Name()}
+	header := pkt.Header.Copy()
+	packet := transport.Packet{Header: &header, Msg: &transpMsg}
+	return &packet, nil
+}
+
 func (c *Crypto) GenerateDHCurve() {
 	c.DHCurve = ecdh.X25519()
 }
@@ -674,12 +717,35 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	if !ok {
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
-	dectyptedPkt, err := n.crypto.DecryptOneToOne(message.Packet)
+
+	dectyptedKey, err := n.crypto.DecryptOneToOne(message.Key)
 	if err != nil {
 		return xerrors.Errorf("error decrypting O2O encrypted pkt: %v", err)
 	}
+
+	ciph, err := aes.NewCipher(dectyptedKey)
+	if err != nil {
+		return xerrors.Errorf("error decrypting msg for O2O encryption: %v", err)
+	}
+
+	gcm, err := cipher.NewGCM(ciph)
+	if err != nil {
+		return xerrors.Errorf("error decrypting msg for O2O encryption: %v", err)
+	}
+
+	nonceSize := gcm.NonceSize()
+	if len(message.Packet) < nonceSize {
+		return xerrors.Errorf("error decrypting msg for O2O encryption: msg size is smaller than nonce")
+	}
+
+	nonce, ciphertext := message.Packet[:nonceSize], message.Packet[nonceSize:]
+	decryptedPkt, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return xerrors.Errorf("error decrypting msg for O2O encryption: %v", err)
+	}
+
 	var pkt transport.Packet
-	err = pkt.Unmarshal(dectyptedPkt)
+	err = pkt.Unmarshal(decryptedPkt)
 	if err != nil {
 		return xerrors.Errorf("error unmarshaling O2O encrypted packet: %v", err)
 	}
