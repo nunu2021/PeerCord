@@ -63,7 +63,7 @@ func (m DHEncryptedPkt) Name() string {
 
 // String implements types.Message.
 func (m DHEncryptedPkt) String() string {
-	return fmt.Sprintf("{DHEncryptedPkt %v}", m.Packet)
+	return fmt.Sprintf("{DHEncryptedPkt %v - %v - %v}", m.Packet, m.RemoteKey, m.Signature)
 }
 
 // HTML implements types.Message.
@@ -86,7 +86,7 @@ func (m O2OEncryptedPkt) Name() string {
 
 // String implements types.Message.
 func (m O2OEncryptedPkt) String() string {
-	return fmt.Sprintf("{O2OEncryptedPkt %v - %v}", m.Key, m.Packet)
+	return fmt.Sprintf("{O2OEncryptedPkt %v - %v - %v - %v}", m.Key, m.Packet, m.RemoteKey, m.Signature)
 }
 
 // HTML implements types.Message.

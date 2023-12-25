@@ -78,6 +78,9 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	nodeA.Start()
 	nodeB.Start()
 
+	nodeA.crypto.GenerateKeyPair()
+	nodeB.crypto.GenerateKeyPair()
+
 	size := randInt(500)
 	randomBytes := make([]byte, size)
 	rand.Read(randomBytes)
@@ -125,6 +128,10 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	nodeB.Start()
 	nodeC.Start()
 
+	nodeA.crypto.GenerateKeyPair()
+	nodeB.crypto.GenerateKeyPair()
+	nodeC.crypto.GenerateKeyPair()
+
 	receivers := make([]string, 2)
 	receivers[0] = nodeB.GetAddress()
 	receivers[1] = nodeC.GetAddress()
@@ -138,22 +145,17 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	data, err := json.Marshal(&chatMsg)
 	require.NoError(t, err)
 	nodeB.crypto.GenerateKeyPair()
-	transpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
+	trpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
 	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
-	pkt := transport.Packet{Header: &header, Msg: &transpMsg}
-	marshaledPkt, err := pkt.Marshal()
+	pkt := transport.Packet{Header: &header, Msg: &trpMsg}
+
+	transpMsg, err := nodeA.crypto.EncryptDHPkt(&pkt)
 	require.NoError(t, err)
-	encryptedPkt, err := nodeA.crypto.EncryptDH(marshaledPkt)
-	require.NoError(t, err)
-	encryptedMsg := types.DHEncryptedPkt{Packet: encryptedPkt}
-	data, err = json.Marshal(&encryptedMsg)
-	require.NoError(t, err)
-	transpMsg = transport.Message{Payload: data, Type: encryptedMsg.Name()}
 
 	receiversMap := make(map[string]struct{})
 	receiversMap[nodeB.GetAddress()] = struct{}{}
 	receiversMap[nodeC.GetAddress()] = struct{}{}
-	require.NoError(t, nodeA.Multicast(transpMsg, receiversMap))
+	require.NoError(t, nodeA.Multicast(*transpMsg, receiversMap))
 	time.Sleep(time.Second * 2)
 	nodeA.logger.Info().Msg(chatMsg.Message)
 }

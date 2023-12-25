@@ -26,6 +26,7 @@
 package impl
 
 import (
+	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
@@ -93,6 +94,20 @@ func (c *Crypto) VerifyPK(peer, key string) bool {
 	return ok && knownKey == key
 }
 
+func (c *Crypto) Sign(key, packet []byte) ([]byte, error) {
+	hash := sha256.New()
+	_, err := hash.Write(key)
+	if err != nil {
+		return nil, xerrors.Errorf("error when hashing msg: %v", err)
+	}
+	_, err = hash.Write(packet)
+	if err != nil {
+		return nil, xerrors.Errorf("error when hashing msg: %v", err)
+	}
+	hashSum := hash.Sum(nil)
+	return rsa.SignPSS(rand.Reader, c.KeyPair, crypto.SHA256, hashSum, nil)
+}
+
 func (c *Crypto) EncryptOneToOne(msg []byte, key *rsa.PublicKey) ([]byte, error) {
 	encryptedMsg, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, key, msg, nil)
 	if err != nil {
@@ -141,7 +156,17 @@ func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, key *rsa.PublicKey) (
 
 	encryptedPkt := gcm.Seal(nonce, nonce, marshaledPkt, nil)
 
-	encryptedMsg := types.O2OEncryptedPkt{Packet: encryptedPkt, Key: encryptedKey}
+	pkBytes, err := x509.MarshalPKIXPublicKey(&c.KeyPair.PublicKey)
+	if err != nil {
+		return nil, xerrors.Errorf("error when marshaling local PK: %v", err)
+	}
+
+	sig, err := c.Sign(encryptedKey, encryptedPkt)
+	if err != nil {
+		return nil, xerrors.Errorf("error when signing packet in O2O pkt encryption: %v", err)
+	}
+
+	encryptedMsg := types.O2OEncryptedPkt{Packet: encryptedPkt, Key: encryptedKey, RemoteKey: pkBytes, Signature: sig}
 	data, err := json.Marshal(&encryptedMsg)
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling encrypted packet for O2O encryption: %v", err)
@@ -200,6 +225,37 @@ func (c *Crypto) DecryptDH(msg []byte) ([]byte, error) {
 		return nil, xerrors.Errorf("error decrypting message for group call: %v", err)
 	}
 	return plaintext, nil
+}
+
+func (c *Crypto) EncryptDHPkt(pkt *transport.Packet) (*transport.Message, error) {
+	marshaledPkt, err := pkt.Marshal()
+	if err != nil {
+		return nil, xerrors.Errorf("error when marshaling packet in DH pkt encryption: %v", err)
+	}
+
+	pkA, err := x509.MarshalPKIXPublicKey(&c.KeyPair.PublicKey)
+	if err != nil {
+		return nil, xerrors.Errorf("error when marshaling local PK in DH pkt encryption: %v", err)
+	}
+
+	encryptedPkt, err := c.EncryptDH(marshaledPkt)
+	if err != nil {
+		return nil, xerrors.Errorf("error when encrypting packet in DH pkt encryption: %v", err)
+	}
+
+	sig, err := c.Sign(nil, encryptedPkt)
+	if err != nil {
+		return nil, xerrors.Errorf("error when signing packet in DH pkt encryption: %v", err)
+	}
+
+	encryptedMsg := types.DHEncryptedPkt{Packet: encryptedPkt, RemoteKey: pkA, Signature: sig}
+	data, err := json.Marshal(&encryptedMsg)
+	if err != nil {
+		return nil, xerrors.Errorf("error when marshaling msg in DH pkt encryption: %v", err)
+	}
+
+	transpMsg := transport.Message{Payload: data, Type: encryptedMsg.Name()}
+	return &transpMsg, nil
 }
 
 func ConstructKeyToSend(n *node, dest string) (*ecdh.PublicKey, error) {
@@ -716,6 +772,31 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	message, ok := msg.(*types.O2OEncryptedPkt)
 	if !ok {
 		return xerrors.Errorf("type mismatch: %T", msg)
+	}
+
+	hash := sha256.New()
+	_, err := hash.Write(message.Key)
+	if err != nil {
+		return xerrors.Errorf("error when hashing msg: %v", err)
+	}
+	_, err = hash.Write(message.Packet)
+	if err != nil {
+		return xerrors.Errorf("error when hashing msg: %v", err)
+	}
+	hashSum := hash.Sum(nil)
+
+	remoteK, err := x509.ParsePKIXPublicKey(message.RemoteKey)
+	if err != nil {
+		return xerrors.Errorf("error when parsing remote PK: %v", err)
+	}
+	remoteKey, ok := remoteK.(*rsa.PublicKey)
+	if !ok {
+		return xerrors.Errorf("error when casting remote PK to rsa.PK: %v")
+	}
+
+	err = rsa.VerifyPSS(remoteKey, crypto.SHA256, hashSum, message.Signature, nil)
+	if err != nil {
+		return xerrors.Errorf("signature mismatch: %v", err)
 	}
 
 	dectyptedKey, err := n.crypto.DecryptOneToOne(message.Key)
