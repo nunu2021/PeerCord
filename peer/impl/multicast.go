@@ -77,16 +77,14 @@ func (n *node) DeleteMulticastGroup(id string) error {
 	return nil
 }
 
-// JoinMulticastGroup allows a peer to be added to the multicast group with the
-// given id and created by the given peer. It sends a packet containing the
-// request to join the group. It blocks until the request is accepted, retrying
-// if needed.
-func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
-	// If the peer already receives the messages of the group, start processing
-	// them.
-	group, exists := n.multicast.groups[groupID]
+// Internal function allowing a peer to request receiving the messages of a
+// multicast group without actually joining the group: it will not process the
+// messages.  The function sends a packet containing the request to join the
+// group. It blocks until the request is accepted, retrying if needed.
+func (n *node) joinMulticastTree(groupSender string, groupID string) error {
+	// Nothing to do
+	_, exists := n.multicast.groups[groupID]
 	if exists {
-		group.isInGroup = true
 		return nil
 	}
 
@@ -95,18 +93,18 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 		return UnknownMulticastGroupError(groupID)
 	}
 
-	// Send the request
-	req := types.JoinMulticastGroupRequestMessage{
-		GroupSender: groupSender,
-		GroupID:     groupID,
-	}
-
+	// Find the next hop
 	next, exists := n.routingTable.get(groupSender)
-
 	if !exists {
 		err := RoutingError{SourceAddr: n.GetAddress(), DestAddr: groupSender}
 		n.logger.Warn().Err(err).Msg("can't send packet: unknown route")
 		return err
+	}
+
+	// Send the request
+	req := types.JoinMulticastGroupRequestMessage{
+		GroupSender: groupSender,
+		GroupID:     groupID,
 	}
 
 	err := n.marshalAndUnicast(next, req)
@@ -116,6 +114,34 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 	}
 
 	// TODO wait until an ack is received, retry if needed
+
+	// Create the group
+	n.multicast.groups[groupID] = MulticastGroup{
+		sender:          groupSender,
+		nextHopToSender: next,
+		forwards:        make(map[string]struct{}),
+		isInGroup:       false,
+	}
+
+	return nil
+}
+
+// JoinMulticastGroup allows a peer to be added to the multicast group with the
+// given id and created by the given peer.
+func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
+	err := n.joinMulticastTree(groupSender, groupID)
+	if err != nil {
+		return err
+	}
+
+	group, ok := n.multicast.groups[groupID]
+	if !ok {
+		err := UnknownMulticastGroupError(groupID)
+		n.logger.Error().Err(err).Msg("can't find new group: was it already deleted?")
+		return err
+	}
+
+	group.isInGroup = true
 
 	return nil
 }
@@ -139,6 +165,23 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 
 	source := pkt.Header.Source
 	group, ok := n.multicast.groups[msg.GroupID]
+
+	// TODO do this in another goroutine to avoid blocking the reception of messages
+
+	// If the peer already receive the messages of the group
+	if !ok {
+		err := n.JoinMulticastGroup(msg.GroupSender, msg.GroupID)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't join multicast group")
+			return err
+		}
+
+		group, ok = n.multicast.groups[msg.GroupID]
+	}
+
+	group.forwards[source] = struct{}{}
+	return nil
+
 	if !ok {
 		newGroup := MulticastGroup{
 			sender:   msg.GroupSender,
