@@ -201,6 +201,12 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 func (n *node) Multicast(msg transport.Message, groupID string) error {
 	group, ok := n.multicast.groups[groupID]
 	if !ok {
+		n.logger.Error().Msg("can't send message to unknown multicast group")
+		return UnknownMulticastGroupError(groupID)
+	}
+
+	if group.sender != n.GetAddress() {
+		n.logger.Error().Msg("can't send message to a multicast group of another peer")
 		return UnknownMulticastGroupError(groupID)
 	}
 
