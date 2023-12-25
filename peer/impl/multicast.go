@@ -18,14 +18,23 @@ func (n *node) NaiveMulticast(msg transport.Message, recipients map[string]struc
 	return nil
 }
 
+// MulticastGroup contains information about a multicast group:
+// - the sender
+// - the neighbors to forward
+type MulticastGroup struct {
+	sender   string
+	forwards map[string]struct{}
+}
+
 type Multicast struct {
-	// Contains the IDs of the multicast groups
-	groups map[string]struct{}
+	// Information about each multicast group.
+	// The sender may be the node itself.
+	groups map[string]MulticastGroup
 }
 
 func NewMulticast() Multicast {
 	return Multicast{
-		groups: make(map[string]struct{}),
+		groups: make(map[string]MulticastGroup),
 	}
 }
 
@@ -33,7 +42,10 @@ func NewMulticast() Multicast {
 // peers need this ID to join the group
 func (n *node) NewMulticastGroup() string {
 	id := xid.New().String()
-	n.multicast.groups[id] = struct{}{}
+	n.multicast.groups[id] = MulticastGroup{
+		sender:   n.GetAddress(),
+		forwards: make(map[string]struct{}),
+	}
 	return id
 }
 
