@@ -66,7 +66,6 @@ func (n *node) NewMulticastGroup() string {
 
 // DeleteMulticastGroup deletes an existing multicast group. It sends a message
 // to all the peers of the group to inform them of the deletion.
-// TODO delete?
 func (n *node) DeleteMulticastGroup(id string) error {
 	_, ok := n.multicast.groups[id]
 	if !ok {
