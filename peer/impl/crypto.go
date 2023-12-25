@@ -39,6 +39,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -362,12 +363,19 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 	for _, s := range receivers {
 		n.crypto.DHchannels[s] = make(chan struct{})
 		wg.Add(1)
-		go func(c <-chan struct{}) {
+		go func(c chan struct{}, peer string) {
 			defer wg.Done()
-			for range c {
+			select {
+			case <-c:
 				return
+			case <-time.After(time.Second):
+				//assume the remote node is malicious or dead
+				delete(n.crypto.DHchannels, peer)
+				close(c)
+				delete(n.crypto.DHInitSecrets, peer)
+				delete(n.crypto.DHPartialSecrets, peer)
 			}
-		}(n.crypto.DHchannels[s])
+		}(n.crypto.DHchannels[s], s)
 	}
 
 	err = n.Multicast(initTransportMsg, multicastReceivers)
@@ -566,12 +574,18 @@ func (n *node) GroupCallAdd(member string) error {
 	var wg sync.WaitGroup
 	n.crypto.DHchannels[member] = make(chan struct{})
 	wg.Add(1)
-	go func(c <-chan struct{}) {
+	go func(c chan struct{}, peer string) {
 		defer wg.Done()
-		for range c {
+		select {
+		case <-c:
 			return
+		case <-time.After(time.Second):
+			delete(n.crypto.DHchannels, peer)
+			close(c)
+			delete(n.crypto.DHPartialSecrets, peer)
+			delete(n.crypto.DHInitSecrets, peer)
 		}
-	}(n.crypto.DHchannels[member])
+	}(n.crypto.DHchannels[member], member)
 
 	err = n.Unicast(member, initTransportMsg)
 	if err != nil {
@@ -669,7 +683,10 @@ func (n *node) ExecGroupCallDHIndividual(msg types.Message, packet transport.Pac
 			return xerrors.Errorf("error in individual DH key exchange when generating secret: %v", err)
 		}
 		n.crypto.DHInitSecrets[packet.Header.Source] = sharedSecret
-		n.crypto.DHchannels[packet.Header.Source] <- struct{}{}
+		returnChan, ok := n.crypto.DHchannels[packet.Header.Source]
+		if ok {
+			returnChan <- struct{}{}
+		}
 		close(n.crypto.DHchannels[packet.Header.Source])
 		delete(n.crypto.DHchannels, packet.Header.Source)
 		return nil
