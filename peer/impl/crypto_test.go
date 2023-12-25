@@ -132,3 +132,169 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
 }
+
+// A,B,C,D,E fully connected
+// A starts a key exchange with B,C
+// Then D joins
+func TestCrypto_DH_Addition(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	defer nodeA.Stop()
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confB := peer.Configuration{Socket: socketB, MessageRegistry: standard.NewRegistry()}
+	nodeB := NewPeer(confB).(*node)
+	defer nodeB.Stop()
+	socketC, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confC := peer.Configuration{Socket: socketC, MessageRegistry: standard.NewRegistry()}
+	nodeC := NewPeer(confC).(*node)
+	defer nodeC.Stop()
+	socketD, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confD := peer.Configuration{Socket: socketD, MessageRegistry: standard.NewRegistry()}
+	nodeD := NewPeer(confD).(*node)
+	defer nodeD.Stop()
+	nodeA.AddPeer(nodeB.GetAddress())
+	nodeA.AddPeer(nodeC.GetAddress())
+	nodeA.AddPeer(nodeD.GetAddress())
+	nodeB.AddPeer(nodeA.GetAddress())
+	nodeB.AddPeer(nodeC.GetAddress())
+	nodeB.AddPeer(nodeD.GetAddress())
+	nodeC.AddPeer(nodeA.GetAddress())
+	nodeC.AddPeer(nodeB.GetAddress())
+	nodeC.AddPeer(nodeD.GetAddress())
+	nodeD.AddPeer(nodeA.GetAddress())
+	nodeD.AddPeer(nodeB.GetAddress())
+	nodeD.AddPeer(nodeC.GetAddress())
+	nodeA.Start()
+	nodeB.Start()
+	nodeC.Start()
+	nodeD.Start()
+
+	receivers := make([]string, 2)
+	receivers[0] = nodeB.GetAddress()
+	receivers[1] = nodeC.GetAddress()
+	err = nodeA.StartDHKeyExchange(receivers)
+	require.NoError(t, err)
+
+	time.Sleep(time.Second * 2)
+
+	curve := nodeA.crypto.DHCurve
+	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
+	require.NoError(t, err)
+	abSK, err := curve.NewPrivateKey(ab)
+	require.NoError(t, err)
+	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
+	require.NoError(t, err)
+	acSK, err := curve.NewPrivateKey(ac)
+	require.NoError(t, err)
+	abac, err := abSK.ECDH(acSK.PublicKey())
+	require.NoError(t, err)
+	abacPK, err := curve.NewPublicKey(abac)
+	require.NoError(t, err)
+
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abacPK))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
+
+	err = nodeA.GroupCallAdd(nodeD.GetAddress())
+	require.NoError(t, err)
+
+	time.Sleep(time.Second * 2)
+
+	require.NotEqual(t, nil, nodeD.crypto.DHSharedSecret)
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
+}
+
+// A,B,C,D fully connected
+// A starts a key exchange with B,C,D
+// Then C leaves
+func TestCrypto_DH_Removal(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	defer nodeA.Stop()
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confB := peer.Configuration{Socket: socketB, MessageRegistry: standard.NewRegistry()}
+	nodeB := NewPeer(confB).(*node)
+	defer nodeB.Stop()
+	socketC, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confC := peer.Configuration{Socket: socketC, MessageRegistry: standard.NewRegistry()}
+	nodeC := NewPeer(confC).(*node)
+	defer nodeC.Stop()
+	socketD, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confD := peer.Configuration{Socket: socketD, MessageRegistry: standard.NewRegistry()}
+	nodeD := NewPeer(confD).(*node)
+	defer nodeD.Stop()
+	nodeA.AddPeer(nodeB.GetAddress())
+	nodeA.AddPeer(nodeC.GetAddress())
+	nodeA.AddPeer(nodeD.GetAddress())
+	nodeB.AddPeer(nodeA.GetAddress())
+	nodeB.AddPeer(nodeC.GetAddress())
+	nodeB.AddPeer(nodeD.GetAddress())
+	nodeC.AddPeer(nodeA.GetAddress())
+	nodeC.AddPeer(nodeB.GetAddress())
+	nodeC.AddPeer(nodeD.GetAddress())
+	nodeD.AddPeer(nodeA.GetAddress())
+	nodeD.AddPeer(nodeB.GetAddress())
+	nodeD.AddPeer(nodeC.GetAddress())
+	nodeA.Start()
+	nodeB.Start()
+	nodeC.Start()
+	nodeD.Start()
+
+	receivers := make([]string, 3)
+	receivers[0] = nodeB.GetAddress()
+	receivers[1] = nodeC.GetAddress()
+	receivers[2] = nodeD.GetAddress()
+	err = nodeA.StartDHKeyExchange(receivers)
+	require.NoError(t, err)
+
+	time.Sleep(time.Second * 2)
+
+	curve := nodeA.crypto.DHCurve
+	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
+	require.NoError(t, err)
+	abSK, err := curve.NewPrivateKey(ab)
+	require.NoError(t, err)
+	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
+	require.NoError(t, err)
+	acSK, err := curve.NewPrivateKey(ac)
+	require.NoError(t, err)
+	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey)
+	require.NoError(t, err)
+	adSK, err := curve.NewPrivateKey(ad)
+	require.NoError(t, err)
+	abac, err := abSK.ECDH(acSK.PublicKey())
+	require.NoError(t, err)
+	abacPK, err := curve.NewPublicKey(abac)
+	require.NoError(t, err)
+	abacad, err := adSK.ECDH(abacPK)
+	require.NoError(t, err)
+	abacadPK, err := curve.NewPublicKey(abacad)
+	require.NoError(t, err)
+
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abacadPK))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
+
+	nodeA.GroupCallRemove(nodeC.GetAddress())
+
+	time.Sleep(time.Second * 2)
+
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
+	require.NotEqual(t, nil, nodeA.crypto.DHSharedSecret)
+}

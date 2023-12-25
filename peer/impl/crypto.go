@@ -1,11 +1,11 @@
 // HOW TO USE
 // when a group call starts, the initiator should call n.StartDHKeyExchange(members)
-// with members a slice containing the adresses of all other members of the call
+// with members a slice containing the addresses of all other members of the call
 // (all members except the initiator)
 // When a peer is added to the call, the initiator should call n.GroupCallAdd(member)
-// with member being the adress of the peer to add
+// with member being the address of the peer to add
 // When a peer is to me removed, the initiator should call n.GroupCallRemove(member)
-// with member being the adress of the peer to remove
+// with member being the address of the peer to remove
 // The addition/removal functions can be called on every members of the call,
 // if the node isn't the initiator the function will not do anything
 // but if possible, do only call it on the initiator
@@ -35,6 +35,8 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"io"
+	"strconv"
+	"strings"
 	"sync"
 
 	"go.dedis.ch/cs438/transport"
@@ -56,10 +58,11 @@ type Crypto struct {
 	DHPublicKey    *ecdh.PublicKey
 	DHSharedSecret *ecdh.PublicKey
 
-	DHIsLeader       bool
-	DHchannels       map[string](chan struct{})
-	DHInitSecrets    map[string](*ecdh.PrivateKey)
-	DHPartialSecrets map[string](*ecdh.PublicKey)
+	DHIsLeader             bool
+	DHSharedPersonalSecret *ecdh.PublicKey
+	DHchannels             map[string](chan struct{})
+	DHInitSecrets          map[string](*ecdh.PrivateKey)
+	DHPartialSecrets       map[string](*ecdh.PublicKey)
 }
 
 func (c *Crypto) GenerateKeyPair() error {
@@ -234,7 +237,9 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 	n.crypto.DHPublicKey = DHPrivateKey.PublicKey()
 	multicastReceivers := make(map[string]struct{})
 	for _, s := range receivers {
-		multicastReceivers[s] = struct{}{}
+		if IsAddress(s) {
+			multicastReceivers[s] = struct{}{}
+		}
 	}
 
 	localPKBytes, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
@@ -277,7 +282,11 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 }
 
 func SendPartialSecretsRemove(n *node, member string) error {
+	newSharedSecretSet := false
 	for dest := range n.crypto.DHPartialSecrets {
+		if dest == n.GetAddress() {
+			continue
+		}
 		var keyToSend = n.crypto.DHPartialSecrets[n.GetAddress()]
 		for j, k := range n.crypto.DHInitSecrets {
 			if dest == j {
@@ -313,11 +322,25 @@ func SendPartialSecretsRemove(n *node, member string) error {
 		if err != nil {
 			return xerrors.Errorf("error when marshaling DH init msg: %v", err)
 		}
+		if !newSharedSecretSet {
+			newSS, err := n.crypto.DHInitSecrets[dest].ECDH(keyToSend)
+			if err != nil {
+				return xerrors.Errorf("error when computing new DH SS bytes for removal of %v: %v", member, err)
+			}
+			n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(newSS)
+			if err != nil {
+				return xerrors.Errorf("error when computing new DH SS for removal of %v: %v", member, err)
+			}
+			newSharedSecretSet = true
+		}
 	}
 	return nil
 }
 
 func (n *node) GroupCallRemove(member string) error {
+	if !IsAddress(member) {
+		return xerrors.Errorf("error in GoupCallRemove: member isn't an IP address with port")
+	}
 	if !n.crypto.DHIsLeader {
 		return nil
 	}
@@ -356,7 +379,7 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 	if !ok {
 		return xerrors.Errorf("error when retrieving new member (%v)'s shared secret", member)
 	}
-	newSharedSecretBytes, err := newMemberSecret.ECDH(n.crypto.DHPublicKey)
+	newSharedSecretBytes, err := newMemberSecret.ECDH(n.crypto.DHSharedSecret)
 	if err != nil {
 		return xerrors.Errorf("error when generating new shared PK bytes to add member %v: %v", member, err)
 	}
@@ -409,11 +432,19 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 }
 
 func (n *node) GroupCallAdd(member string) error {
+	if !IsAddress(member) {
+		return xerrors.Errorf("error in GoupCallAdd: member isn't an IP address with port")
+	}
 	if !n.crypto.DHIsLeader {
 		return nil
 	}
 
-	initMsg := types.GroupCallDHIndividual{RemoteKey: n.crypto.DHPublicKey.Bytes()}
+	localPKBytes, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
+	if err != nil {
+		return xerrors.Errorf("error when marshaling local DH PK to add member %v: %v", member, err)
+	}
+
+	initMsg := types.GroupCallDHIndividual{RemoteKey: localPKBytes}
 	data, err := json.Marshal(&initMsg)
 
 	if err != nil {
@@ -546,7 +577,7 @@ func (n *node) ExecGroupCallDHIndividual(msg types.Message, packet transport.Pac
 	if err != nil {
 		return xerrors.Errorf("error in individual DH key exchange when generating secret bytes: %v", err)
 	}
-	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(sharedSecret)
+	n.crypto.DHSharedPersonalSecret, err = n.crypto.DHCurve.NewPublicKey(sharedSecret)
 	if err != nil {
 		return xerrors.Errorf("error in individual DH key exchange when generating secret: %v", err)
 	}
@@ -585,7 +616,7 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	if !ok {
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
-	sharedSecretSK, err := n.crypto.DHCurve.NewPrivateKey(n.crypto.DHSharedSecret.Bytes())
+	sharedSecretSK, err := n.crypto.DHCurve.NewPrivateKey(n.crypto.DHSharedPersonalSecret.Bytes())
 	if err != nil {
 		return xerrors.Errorf("error when casting shared secret to private key: %v", err)
 	}
@@ -606,4 +637,26 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 		return xerrors.Errorf("error when creating shared secret: %v", err)
 	}
 	return nil
+}
+
+func IsAddress(s string) bool {
+	parts := strings.Split(s, ":")
+	if len(parts) != 2 {
+		return false
+	}
+	port := parts[1]
+	addr := parts[0]
+	addrParts := strings.Split(addr, ".")
+	if len(addrParts) != 4 {
+		return false
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		return false
+	}
+	for _, part := range addrParts {
+		if _, err := strconv.Atoi(part); err != nil {
+			return false
+		}
+	}
+	return true
 }
