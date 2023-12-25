@@ -2,6 +2,8 @@ package impl
 
 import (
 	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
 	"math/big"
 	"testing"
 	"time"
@@ -9,7 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/registry/standard"
+	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/transport/udp"
+	"go.dedis.ch/cs438/types"
 )
 
 func randInt(N int) int {
@@ -53,6 +57,111 @@ func TestCrypto_OtO_Enc_Dec(t *testing.T) {
 	t.Logf("decryption time = %v", time.Since(tim))
 	require.NoError(t, err)
 	require.Equal(t, string(decryptedMsg), string(randomBytes))
+}
+
+func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	defer nodeA.Stop()
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confB := peer.Configuration{Socket: socketB, MessageRegistry: standard.NewRegistry()}
+	nodeB := NewPeer(confB).(*node)
+	defer nodeB.Stop()
+
+	nodeA.AddPeer(nodeB.GetAddress())
+	nodeB.AddPeer(nodeA.GetAddress())
+
+	nodeA.Start()
+	nodeB.Start()
+
+	size := randInt(100)
+	randomBytes := make([]byte, size)
+	size, _ = rand.Read(randomBytes)
+	chatMsg := types.ChatMessage{Message: hex.EncodeToString(randomBytes)}
+	data, err := json.Marshal(&chatMsg)
+	require.NoError(t, err)
+	nodeB.crypto.GenerateKeyPair()
+	transpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
+	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
+	pkt := transport.Packet{Header: &header, Msg: &transpMsg}
+	marshaledPkt, err := pkt.Marshal()
+	require.NoError(t, err)
+	encryptedPkt, err := nodeA.crypto.EncryptOneToOne(marshaledPkt, &nodeB.crypto.KeyPair.PublicKey)
+	require.NoError(t, err)
+	encryptedMsg := types.O2OEncryptedPkt{Packet: encryptedPkt}
+	data, err = json.Marshal(&encryptedMsg)
+	require.NoError(t, err)
+	transpMsg = transport.Message{Payload: data, Type: encryptedMsg.Name()}
+	header = transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
+	pkt = transport.Packet{Header: &header, Msg: &transpMsg}
+	require.NoError(t, nodeA.conf.Socket.Send(nodeB.GetAddress(), pkt, time.Second))
+	time.Sleep(time.Second * 2)
+}
+
+func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	defer nodeA.Stop()
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confB := peer.Configuration{Socket: socketB, MessageRegistry: standard.NewRegistry()}
+	nodeB := NewPeer(confB).(*node)
+	defer nodeB.Stop()
+	socketC, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confC := peer.Configuration{Socket: socketC, MessageRegistry: standard.NewRegistry()}
+	nodeC := NewPeer(confC).(*node)
+	defer nodeC.Stop()
+
+	nodeA.AddPeer(nodeB.GetAddress())
+	nodeB.AddPeer(nodeA.GetAddress())
+	nodeA.AddPeer(nodeC.GetAddress())
+	nodeB.AddPeer(nodeC.GetAddress())
+	nodeC.AddPeer(nodeB.GetAddress())
+	nodeC.AddPeer(nodeA.GetAddress())
+
+	nodeA.Start()
+	nodeB.Start()
+	nodeC.Start()
+
+	receivers := make([]string, 2)
+	receivers[0] = nodeB.GetAddress()
+	receivers[1] = nodeC.GetAddress()
+	require.NoError(t, nodeA.StartDHKeyExchange(receivers))
+	time.Sleep(time.Second)
+
+	size := randInt(500)
+	randomBytes := make([]byte, size)
+	size, _ = rand.Read(randomBytes)
+	chatMsg := types.ChatMessage{Message: hex.EncodeToString(randomBytes)}
+	data, err := json.Marshal(&chatMsg)
+	require.NoError(t, err)
+	nodeB.crypto.GenerateKeyPair()
+	transpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
+	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
+	pkt := transport.Packet{Header: &header, Msg: &transpMsg}
+	marshaledPkt, err := pkt.Marshal()
+	require.NoError(t, err)
+	encryptedPkt, err := nodeA.crypto.EncryptDH(marshaledPkt)
+	require.NoError(t, err)
+	encryptedMsg := types.DHEncryptedPkt{Packet: encryptedPkt}
+	data, err = json.Marshal(&encryptedMsg)
+	require.NoError(t, err)
+	transpMsg = transport.Message{Payload: data, Type: encryptedMsg.Name()}
+	header = transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
+	pkt = transport.Packet{Header: &header, Msg: &transpMsg}
+	receiversMap := make(map[string]struct{})
+	receiversMap[nodeB.GetAddress()] = struct{}{}
+	receiversMap[nodeC.GetAddress()] = struct{}{}
+	require.NoError(t, nodeA.Multicast(transpMsg, receiversMap))
+	time.Sleep(time.Second * 2)
 }
 
 // A,B,C,D fully connected

@@ -47,3 +47,49 @@ func (m GroupCallDHSharedSecret) String() string {
 func (m GroupCallDHSharedSecret) HTML() string {
 	return m.String()
 }
+
+// -----------------------------------------------------------------------------
+// DHEncryptedPkt
+
+// NewEmpty implements types.Message.
+func (m DHEncryptedPkt) NewEmpty() Message {
+	return &DHEncryptedPkt{}
+}
+
+// Name implements types.Message.
+func (m DHEncryptedPkt) Name() string {
+	return "DHEncryptedPkt"
+}
+
+// String implements types.Message.
+func (m DHEncryptedPkt) String() string {
+	return fmt.Sprintf("{DHEncryptedPkt %v}", m.Packet)
+}
+
+// HTML implements types.Message.
+func (m DHEncryptedPkt) HTML() string {
+	return m.String()
+}
+
+// -----------------------------------------------------------------------------
+// O2OEncryptedPkt
+
+// NewEmpty implements types.Message.
+func (m O2OEncryptedPkt) NewEmpty() Message {
+	return &O2OEncryptedPkt{}
+}
+
+// Name implements types.Message.
+func (m O2OEncryptedPkt) Name() string {
+	return "O2OEncryptedPkt"
+}
+
+// String implements types.Message.
+func (m O2OEncryptedPkt) String() string {
+	return fmt.Sprintf("{O2OEncryptedPkt %v}", m.Packet)
+}
+
+// HTML implements types.Message.
+func (m O2OEncryptedPkt) HTML() string {
+	return m.String()
+}

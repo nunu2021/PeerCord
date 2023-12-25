@@ -185,6 +185,9 @@ func ConstructKeyToSend(n *node, dest string) (*ecdh.PublicKey, error) {
 func SendPartialSecrets(n *node, receivers []string) error {
 	for i, dest := range receivers {
 		keyToSend, err := ConstructKeyToSend(n, dest)
+		if err != nil {
+			return err
+		}
 		if i == 0 {
 			sharedSecretBytes, err := n.crypto.DHInitSecrets[dest].ECDH(keyToSend)
 			if err != nil {
@@ -667,4 +670,40 @@ func IsAddress(s string) bool {
 		}
 	}
 	return true
+}
+
+func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) error {
+	message, ok := msg.(*types.O2OEncryptedPkt)
+	if !ok {
+		return xerrors.Errorf("type mismatch: %T", msg)
+	}
+	dectyptedPkt, err := n.crypto.DecryptOneToOne(message.Packet)
+	if err != nil {
+		return xerrors.Errorf("error decrypting O2O encrypted pkt: %v", err)
+	}
+	var pkt transport.Packet
+	err = pkt.Unmarshal(dectyptedPkt)
+	if err != nil {
+		return xerrors.Errorf("error unmarshaling O2O encrypted packet: %v", err)
+	}
+	n.processPacket(pkt)
+	return nil
+}
+
+func (n *node) ExecDHEncryptedPkt(msg types.Message, packet transport.Packet) error {
+	message, ok := msg.(*types.DHEncryptedPkt)
+	if !ok {
+		return xerrors.Errorf("type mismatch: %T", msg)
+	}
+	dectyptedPkt, err := n.crypto.DecryptDH(message.Packet)
+	if err != nil {
+		return xerrors.Errorf("error decrypting DH encrypted pkt: %v", err)
+	}
+	var pkt transport.Packet
+	err = pkt.Unmarshal(dectyptedPkt)
+	if err != nil {
+		return xerrors.Errorf("error unmarshaling DH encrypted packet: %v", err)
+	}
+	n.processPacket(pkt)
+	return nil
 }
