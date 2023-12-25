@@ -17,7 +17,7 @@ func (msg JoinMulticastGroupRequestMessage) Name() string {
 
 // String implements types.Message.
 func (msg JoinMulticastGroupRequestMessage) String() string {
-	return fmt.Sprintf("join multicast group %s of request", msg.ID)
+	return fmt.Sprintf("join multicast group %s (sender: %s) of request", msg.GroupID, msg.GroupSender)
 }
 
 // HTML implements types.Message.
@@ -40,7 +40,7 @@ func (msg LeaveMulticastGroupRequestMessage) Name() string {
 
 // String implements types.Message.
 func (msg LeaveMulticastGroupRequestMessage) String() string {
-	return fmt.Sprintf("leave multicast group %s request", msg.ID)
+	return fmt.Sprintf("leave multicast group %s request", msg.GroupID)
 }
 
 // HTML implements types.Message.
