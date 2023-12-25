@@ -19,11 +19,8 @@ type LeaveMulticastGroupRequestMessage struct {
 
 // MulticastMessage represents a message that is sent to many peers at the same time
 type MulticastMessage struct {
-	// Source of the multicast message
-	source string
-
 	// ID of the multicast group
-	id string
+	GroupID string
 
 	// The embedded message
 	Msg *transport.Message

@@ -103,11 +103,24 @@ func (n *node) LeaveMulticastGroup(peer string, id string) error {
 	return nil
 }
 
-func (n *node) Multicast(msg transport.Message, recipients map[string]struct{}) error {
-	/*multicastMsg := types.MulticastMessage{
-		Recipients: recipients,
-		Msg:        &msg,
-	}*/
+func (n *node) Multicast(msg transport.Message, groupID string) error {
+	group, ok := n.multicast.groups[groupID]
+	if !ok {
+		return UnknownMulticastGroupError(groupID)
+	}
 
-	return n.NaiveMulticast(msg, recipients)
+	multicastMsg := types.MulticastMessage{
+		GroupID: groupID,
+		Msg:     &msg,
+	}
+
+	for dest := range group.forwards {
+		err := n.marshalAndUnicast(dest, multicastMsg)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't unicast message for multicast")
+			return err
+		}
+	}
+
+	return nil
 }
