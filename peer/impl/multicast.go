@@ -163,39 +163,28 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 		panic("not a join multicast group request message")
 	}
 
-	source := pkt.Header.Source
 	group, ok := n.multicast.groups[msg.GroupID]
 
 	// TODO do this in another goroutine to avoid blocking the reception of messages
 
-	// If the peer already receive the messages of the group
+	// If the peer is not already in the tree
 	if !ok {
-		err := n.JoinMulticastGroup(msg.GroupSender, msg.GroupID)
+		err := n.joinMulticastTree(msg.GroupSender, msg.GroupID)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't join multicast group")
 			return err
 		}
 
 		group, ok = n.multicast.groups[msg.GroupID]
-	}
-
-	group.forwards[source] = struct{}{}
-	return nil
-
-	if !ok {
-		newGroup := MulticastGroup{
-			sender:   msg.GroupSender,
-			forwards: make(map[string]struct{}),
+		if !ok {
+			err := UnknownMulticastGroupError(msg.GroupID)
+			n.logger.Error().Err(err).Msg("can't find new group: was it already deleted?")
+			return err
 		}
-		newGroup.forwards[source] = struct{}{}
-
-		return UnknownMulticastGroupError(msg.GroupID)
 	}
 
-	// Add the source to the nodes to the forwarding table
-	group.forwards[source] = struct{}{}
-
-	// If the peer is not the root of the tree, transmit the message
+	// Update the forwarding table
+	group.forwards[pkt.Header.Source] = struct{}{}
 
 	return nil
 }
