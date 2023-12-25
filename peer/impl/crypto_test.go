@@ -38,6 +38,24 @@ func TestCrypto_DH_Enc_Dec(t *testing.T) {
 	require.Equal(t, string(decryptedMsg), string(randomBytes))
 }
 
+func TestCrypto_DH_Enc_Dec_Wrong_Key(t *testing.T) {
+	size := randInt(100000)
+	randomBytes := make([]byte, size)
+	rand.Read(randomBytes)
+	var crypto1 Crypto
+	crypto1.GenerateDHCurve()
+	privateKey, _ := crypto1.DHCurve.GenerateKey(rand.Reader)
+	var crypto2 Crypto
+	crypto2.GenerateDHCurve()
+	crypto1.DHSharedSecret = privateKey.PublicKey()
+	privateKey, _ = crypto1.DHCurve.GenerateKey(rand.Reader)
+	crypto2.DHSharedSecret = privateKey.PublicKey()
+	encryptedMsg, err := crypto1.EncryptDH(randomBytes)
+	require.NoError(t, err)
+	_, err = crypto2.DecryptDH(encryptedMsg)
+	require.Error(t, err)
+}
+
 func TestCrypto_OtO_Enc_Dec(t *testing.T) {
 	size := randInt(446) //Above 446 is too large for rsa key size
 	randomBytes := make([]byte, size)
@@ -57,6 +75,23 @@ func TestCrypto_OtO_Enc_Dec(t *testing.T) {
 	t.Logf("decryption time = %v", time.Since(tim))
 	require.NoError(t, err)
 	require.Equal(t, string(decryptedMsg), string(randomBytes))
+}
+
+func TestCrypto_OtO_Enc_Dec_Wrong_Key(t *testing.T) {
+	size := randInt(446) //Above 446 is too large for rsa key size
+	randomBytes := make([]byte, size)
+	size, _ = rand.Read(randomBytes)
+	t.Logf("bytes size = %v", size)
+	var crypto1 Crypto
+	err := crypto1.GenerateKeyPair()
+	require.NoError(t, err)
+	var crypto2 Crypto
+	require.NoError(t, crypto2.GenerateKeyPair())
+	pubKey := crypto2.KeyPair.PublicKey
+	encryptedMsg, err := crypto2.EncryptOneToOne(randomBytes, &pubKey)
+	require.NoError(t, err)
+	_, err = crypto1.DecryptOneToOne(encryptedMsg)
+	require.Error(t, err)
 }
 
 func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
@@ -132,9 +167,9 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	nodeB.crypto.GenerateKeyPair()
 	nodeC.crypto.GenerateKeyPair()
 
-	receivers := make([]string, 2)
-	receivers[0] = nodeB.GetAddress()
-	receivers[1] = nodeC.GetAddress()
+	receivers := make(map[string]struct{})
+	receivers[nodeB.GetAddress()] = struct{}{}
+	receivers[nodeC.GetAddress()] = struct{}{}
 	require.NoError(t, nodeA.StartDHKeyExchange(receivers))
 	time.Sleep(time.Second)
 
@@ -201,10 +236,10 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	nodeC.Start()
 	nodeD.Start()
 
-	receivers := make([]string, 3)
-	receivers[0] = nodeB.GetAddress()
-	receivers[1] = nodeC.GetAddress()
-	receivers[2] = nodeD.GetAddress()
+	receivers := make(map[string]struct{})
+	receivers[nodeB.GetAddress()] = struct{}{}
+	receivers[nodeC.GetAddress()] = struct{}{}
+	receivers[nodeD.GetAddress()] = struct{}{}
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
@@ -234,6 +269,69 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abacadPK))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
+}
+
+// A,B,C,D fully connected
+// A starts a key exchange with B,C,D
+// B refuses to answer
+func TestCrypto_DH_Key_Exchange_Ignoring_Peer(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	defer nodeA.Stop()
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	socketC, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confC := peer.Configuration{Socket: socketC, MessageRegistry: standard.NewRegistry()}
+	nodeC := NewPeer(confC).(*node)
+	defer nodeC.Stop()
+	socketD, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confD := peer.Configuration{Socket: socketD, MessageRegistry: standard.NewRegistry()}
+	nodeD := NewPeer(confD).(*node)
+	defer nodeD.Stop()
+	nodeA.AddPeer(socketB.GetAddress())
+	nodeA.AddPeer(nodeC.GetAddress())
+	nodeA.AddPeer(nodeD.GetAddress())
+	nodeC.AddPeer(nodeA.GetAddress())
+	nodeC.AddPeer(socketB.GetAddress())
+	nodeC.AddPeer(nodeD.GetAddress())
+	nodeD.AddPeer(nodeA.GetAddress())
+	nodeD.AddPeer(socketB.GetAddress())
+	nodeD.AddPeer(nodeC.GetAddress())
+	nodeA.Start()
+	nodeC.Start()
+	nodeD.Start()
+
+	receivers := make(map[string]struct{})
+	receivers[socketB.GetAddress()] = struct{}{}
+	receivers[nodeC.GetAddress()] = struct{}{}
+	receivers[nodeD.GetAddress()] = struct{}{}
+	err = nodeA.StartDHKeyExchange(receivers)
+	require.NoError(t, err)
+
+	time.Sleep(time.Second * 5)
+
+	curve := nodeA.crypto.DHCurve
+	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
+	require.NoError(t, err)
+	acSK, err := curve.NewPrivateKey(ac)
+	require.NoError(t, err)
+	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey)
+	require.NoError(t, err)
+	adSK, err := curve.NewPrivateKey(ad)
+	require.NoError(t, err)
+	acad, err := acSK.ECDH(adSK.PublicKey())
+	require.NoError(t, err)
+	acadPK, err := curve.NewPublicKey(acad)
+	require.NoError(t, err)
+
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(acadPK))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
 }
@@ -280,9 +378,9 @@ func TestCrypto_DH_Addition(t *testing.T) {
 	nodeC.Start()
 	nodeD.Start()
 
-	receivers := make([]string, 2)
-	receivers[0] = nodeB.GetAddress()
-	receivers[1] = nodeC.GetAddress()
+	receivers := make(map[string]struct{})
+	receivers[nodeB.GetAddress()] = struct{}{}
+	receivers[nodeC.GetAddress()] = struct{}{}
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
@@ -359,10 +457,10 @@ func TestCrypto_DH_Removal(t *testing.T) {
 	nodeC.Start()
 	nodeD.Start()
 
-	receivers := make([]string, 3)
-	receivers[0] = nodeB.GetAddress()
-	receivers[1] = nodeC.GetAddress()
-	receivers[2] = nodeD.GetAddress()
+	receivers := make(map[string]struct{})
+	receivers[nodeB.GetAddress()] = struct{}{}
+	receivers[nodeC.GetAddress()] = struct{}{}
+	receivers[nodeD.GetAddress()] = struct{}{}
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 

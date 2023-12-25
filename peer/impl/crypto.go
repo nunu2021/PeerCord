@@ -35,6 +35,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -282,13 +283,15 @@ func ConstructKeyToSend(n *node, dest string) (*ecdh.PublicKey, error) {
 }
 
 // Auxiliary function for StartDHKeyExchange sending the partial secrets to all other call members
-func SendPartialSecrets(n *node, receivers []string) error {
-	for i, dest := range receivers {
+func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
+	first := true
+	for dest := range receivers {
 		keyToSend, err := ConstructKeyToSend(n, dest)
 		if err != nil {
 			return err
 		}
-		if i == 0 {
+		if first {
+			first = false
 			sharedSecretBytes, err := n.crypto.DHInitSecrets[dest].ECDH(keyToSend)
 			if err != nil {
 				return xerrors.Errorf("error when generating shared secret bytes: %v", err)
@@ -323,7 +326,7 @@ func SendPartialSecrets(n *node, receivers []string) error {
 	return nil
 }
 
-func (n *node) StartDHKeyExchange(receivers []string) error {
+func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 	n.crypto.DHIsLeader = true
 	n.crypto.DHInitSecrets = make(map[string](*ecdh.PrivateKey))
 	n.crypto.DHchannels = make(map[string]chan struct{})
@@ -336,11 +339,12 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 	n.crypto.DHPrivateKey = DHPrivateKey
 	n.crypto.DHPublicKey = DHPrivateKey.PublicKey()
 	multicastReceivers := make(map[string]struct{})
-	for _, s := range receivers {
+	for s := range receivers {
 		if IsAddress(s) {
 			multicastReceivers[s] = struct{}{}
 		}
 	}
+	receivers = multicastReceivers
 
 	localPKBytes, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
 	if err != nil {
@@ -360,7 +364,8 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 	}
 
 	var wg sync.WaitGroup
-	for _, s := range receivers {
+	var lock sync.Mutex
+	for s := range receivers {
 		n.crypto.DHchannels[s] = make(chan struct{})
 		wg.Add(1)
 		go func(c chan struct{}, peer string) {
@@ -369,11 +374,15 @@ func (n *node) StartDHKeyExchange(receivers []string) error {
 			case <-c:
 				return
 			case <-time.After(time.Second):
+				fmt.Println("removing", peer)
 				//assume the remote node is malicious or dead
+				lock.Lock()
+				delete(receivers, peer)
 				delete(n.crypto.DHchannels, peer)
 				close(c)
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
+				lock.Unlock()
 			}
 		}(n.crypto.DHchannels[s], s)
 	}
