@@ -56,6 +56,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		rumorsReceived:    make(map[string][]types.Rumor),
 		fileSharing:       NewFileSharing(),
 		paxos:             NewPaxos(),
+		eigenTrust: NewEigenTrust()
 	}
 
 	// Register the different kinds of messages
@@ -134,6 +135,9 @@ type node struct {
 
 	//Cryptography for peer-cord
 	crypto Crypto
+
+	// EigenTrust Trust system for peer-cord
+	eigenTrust EigenTrust
 }
 
 // GetAddress returns the address of the node
