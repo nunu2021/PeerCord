@@ -37,6 +37,7 @@ func Test_Multicast(t *testing.T) {
 	// Create the nodes
 	nodes := make([]z.TestNode, nbNodes)
 	var isInGroup [nbNodes][nbNodes]bool
+	var nbMessagesReceivedExpected [nbNodes]int
 	var multicastGroups [nbNodes]string
 
 	for i := 0; i < nbNodes; i++ {
@@ -90,9 +91,19 @@ func Test_Multicast(t *testing.T) {
 			}
 			require.NoError(t, nodes[i].Multicast(msg, multicastGroups[i]))
 
-			//len(n.GetChatMsgs())
-		}
+			for j := 0; j < nbNodes; j++ {
+				if isInGroup[i][j] {
+					nbMessagesReceivedExpected[j]++
+				}
+			}
 
-		time.Sleep(10 * time.Millisecond)
+			// Wait for the messages to propagate through the network
+			time.Sleep(time.Millisecond)
+
+			// Check that each peer has received the right number of messages
+			for j := 0; j < nbNodes; j++ {
+				require.Equal(t, nbMessagesReceivedExpected[j], len(nodes[j].GetChatMsgs()))
+			}
+		}
 	}
 }
