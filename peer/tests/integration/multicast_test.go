@@ -1,10 +1,13 @@
 package integration
 
 import (
+	"encoding/json"
 	"github.com/stretchr/testify/require"
 	z "go.dedis.ch/cs438/internal/testing"
 	"go.dedis.ch/cs438/peer/impl"
+	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/transport/channel"
+	"go.dedis.ch/cs438/types"
 	"math/rand"
 	"testing"
 	"time"
@@ -77,11 +80,23 @@ func Test_Multicast(t *testing.T) {
 			}
 		}
 
+		time.Sleep(10 * time.Millisecond)
+
 		// Each peer sends a message to its multicast group
 		for i := 0; i < nbNodes; i++ {
-			//nodes[i].Multicast()
+			chat := types.ChatMessage{Message: "chat message"}
+			data, err := json.Marshal(&chat)
+			require.NoError(t, err)
+
+			msg := transport.Message{
+				Type:    chat.Name(),
+				Payload: data,
+			}
+			require.NoError(t, nodes[i].Multicast(msg, multicastGroups[i]))
+
+			//len(n.GetChatMsgs())
 		}
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
