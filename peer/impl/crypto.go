@@ -35,6 +35,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -283,6 +284,34 @@ func ConstructKeyToSend(n *node, dest string) (*ecdh.PublicKey, error) {
 
 // Auxiliary function for StartDHKeyExchange sending the partial secrets to all other call members
 func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
+	var waitGrp sync.WaitGroup
+	var lock sync.Mutex
+	removedPeers := make([]string, 0)
+	for s := range receivers {
+		if s == n.GetAddress() {
+			continue
+		}
+		n.crypto.DHchannels[s] = make(chan struct{})
+		waitGrp.Add(1)
+		go func(c chan struct{}, peer string) {
+			defer waitGrp.Done()
+			select {
+			case <-c:
+				return
+			case <-time.After(time.Second * 5):
+				//assume the remote node is malicious or dead
+				lock.Lock()
+				removedPeers = append(removedPeers, peer)
+				delete(receivers, peer)
+				delete(n.crypto.DHchannels, peer)
+				close(c)
+				delete(n.crypto.DHInitSecrets, peer)
+				delete(n.crypto.DHPartialSecrets, peer)
+				lock.Unlock()
+			}
+		}(n.crypto.DHchannels[s], s)
+	}
+
 	first := true
 	for dest := range receivers {
 		keyToSend, err := ConstructKeyToSend(n, dest)
@@ -322,6 +351,12 @@ func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
 			return xerrors.Errorf("error when marshaling DH init msg: %v", err)
 		}
 	}
+	waitGrp.Wait()
+
+	for _, removedPeer := range removedPeers {
+		n.GroupCallRemove(removedPeer)
+	}
+
 	return nil
 }
 
@@ -372,7 +407,7 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 			select {
 			case <-c:
 				return
-			case <-time.After(time.Second):
+			case <-time.After(time.Second * 5):
 				//assume the remote node is malicious or dead
 				lock.Lock()
 				delete(receivers, peer)
@@ -414,6 +449,33 @@ func SendPartialSecretsRemoveBuildKeyToSend(n *node, dest string) (*ecdh.PublicK
 }
 
 func SendPartialSecretsRemove(n *node, member string) error {
+	var waitGrp sync.WaitGroup
+	var lock sync.Mutex
+	removedPeers := make([]string, 0)
+	for s := range n.crypto.DHInitSecrets {
+		if s == n.GetAddress() {
+			continue
+		}
+		n.crypto.DHchannels[s] = make(chan struct{})
+		waitGrp.Add(1)
+		go func(c chan struct{}, peer string) {
+			defer waitGrp.Done()
+			select {
+			case <-c:
+				return
+			case <-time.After(time.Second * 5):
+				//assume the remote node is malicious or dead
+				lock.Lock()
+				removedPeers = append(removedPeers, peer)
+				delete(n.crypto.DHchannels, peer)
+				close(c)
+				delete(n.crypto.DHInitSecrets, peer)
+				delete(n.crypto.DHPartialSecrets, peer)
+				lock.Unlock()
+			}
+		}(n.crypto.DHchannels[s], s)
+	}
+
 	newSharedSecretSet := false
 	for dest := range n.crypto.DHPartialSecrets {
 		if dest == n.GetAddress() {
@@ -456,6 +518,12 @@ func SendPartialSecretsRemove(n *node, member string) error {
 			newSharedSecretSet = true
 		}
 	}
+	waitGrp.Wait()
+
+	for _, removedPeer := range removedPeers {
+		n.GroupCallRemove(removedPeer)
+	}
+
 	return nil
 }
 
@@ -495,6 +563,32 @@ func (n *node) GroupCallRemove(member string) error {
 }
 
 func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKey) error {
+	var waitGrp sync.WaitGroup
+	var lock sync.Mutex
+	removedPeers := make([]string, 0)
+	for s := range n.crypto.DHPartialSecrets {
+		if s == n.GetAddress() {
+			continue
+		}
+		n.crypto.DHchannels[s] = make(chan struct{})
+		waitGrp.Add(1)
+		go func(c chan struct{}, peer string) {
+			defer waitGrp.Done()
+			select {
+			case <-c:
+				return
+			case <-time.After(time.Second * 5):
+				//assume the remote node is malicious or dead
+				lock.Lock()
+				removedPeers = append(removedPeers, peer)
+				delete(n.crypto.DHchannels, peer)
+				close(c)
+				delete(n.crypto.DHInitSecrets, peer)
+				delete(n.crypto.DHPartialSecrets, peer)
+				lock.Unlock()
+			}
+		}(n.crypto.DHchannels[s], s)
+	}
 
 	//Now we send the key to the new member
 	newMemberSecret, ok := n.crypto.DHInitSecrets[member]
@@ -550,6 +644,12 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 			return xerrors.Errorf("error when unicasting new partial secret to %v for adding member %v: %v", s, member, err)
 		}
 	}
+	waitGrp.Wait()
+
+	for _, removedPeer := range removedPeers {
+		n.GroupCallRemove(removedPeer)
+	}
+
 	return nil
 }
 
@@ -586,7 +686,8 @@ func (n *node) GroupCallAdd(member string) error {
 		select {
 		case <-c:
 			return
-		case <-time.After(time.Second):
+		case <-time.After(time.Second * 5):
+			fmt.Println(n.GetAddress(), "removing", peer)
 			delete(n.crypto.DHchannels, peer)
 			close(c)
 			delete(n.crypto.DHPartialSecrets, peer)
@@ -693,9 +794,9 @@ func (n *node) ExecGroupCallDHIndividual(msg types.Message, packet transport.Pac
 		returnChan, ok := n.crypto.DHchannels[packet.Header.Source]
 		if ok {
 			returnChan <- struct{}{}
+			close(n.crypto.DHchannels[packet.Header.Source])
+			delete(n.crypto.DHchannels, packet.Header.Source)
 		}
-		close(n.crypto.DHchannels[packet.Header.Source])
-		delete(n.crypto.DHchannels, packet.Header.Source)
 		return nil
 	}
 	n.crypto.DHCurve = remoteKey.Curve()
@@ -747,6 +848,15 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	if !ok {
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
+	if n.crypto.DHIsLeader {
+		returnChan, ok := n.crypto.DHchannels[packet.Header.Source]
+		if ok {
+			returnChan <- struct{}{}
+			close(n.crypto.DHchannels[packet.Header.Source])
+			delete(n.crypto.DHchannels, packet.Header.Source)
+		}
+		return nil
+	}
 	sharedSecretSK, err := n.crypto.DHCurve.NewPrivateKey(n.crypto.DHSharedPersonalSecret.Bytes())
 	if err != nil {
 		return xerrors.Errorf("error when casting shared secret to private key: %v", err)
@@ -767,6 +877,15 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	if err != nil {
 		return xerrors.Errorf("error when creating shared secret: %v", err)
 	}
+
+	ackMsg := types.GroupCallDHSharedSecret{}
+	data, err := json.Marshal(&ackMsg)
+	if err != nil {
+		return xerrors.Errorf("error in DH Shared secret ACK marshaling: %v", err)
+	}
+	trspMsg := transport.Message{Payload: data, Type: ackMsg.Name()}
+	n.Unicast(packet.Header.Source, trspMsg)
+
 	return nil
 }
 
