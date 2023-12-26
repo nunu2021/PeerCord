@@ -735,12 +735,3 @@ func GenerateRandomGraph(peers []*node) {
 		addrToPeer[k].AddPeer(v...)
 	}
 }
-
-func contains(list []string, v string) bool {
-	for _, e := range list {
-		if e == v {
-			return true
-		}
-	}
-	return false
-}

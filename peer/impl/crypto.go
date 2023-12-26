@@ -35,7 +35,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -282,8 +281,7 @@ func ConstructKeyToSend(n *node, dest string) (*ecdh.PublicKey, error) {
 	return keyToSend, nil
 }
 
-// Auxiliary function for StartDHKeyExchange sending the partial secrets to all other call members
-func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
+func DHRound2(n *node, receivers map[string]struct{}) error {
 	var waitGrp sync.WaitGroup
 	var lock sync.Mutex
 	removedPeers := make([]string, 0)
@@ -311,7 +309,20 @@ func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
 			}
 		}(n.crypto.DHchannels[s], s)
 	}
+	err := SendPartialSecrets(n, receivers)
+	waitGrp.Wait()
+	for _, removedPeer := range removedPeers {
+		erro := n.GroupCallRemove(removedPeer)
+		if erro != nil {
+			return xerrors.Errorf("error when removing unanswering peer: %v", err)
+		}
+	}
 
+	return err
+}
+
+// Auxiliary function for StartDHKeyExchange sending the partial secrets to all other call members
+func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
 	first := true
 	for dest := range receivers {
 		keyToSend, err := ConstructKeyToSend(n, dest)
@@ -350,11 +361,6 @@ func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
 		if err != nil {
 			return xerrors.Errorf("error when marshaling DH init msg: %v", err)
 		}
-	}
-	waitGrp.Wait()
-
-	for _, removedPeer := range removedPeers {
-		n.GroupCallRemove(removedPeer)
 	}
 
 	return nil
@@ -427,7 +433,7 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 
 	wg.Wait()
 
-	return SendPartialSecrets(n, receivers)
+	return DHRound2(n, receivers)
 }
 
 func SendPartialSecretsRemoveBuildKeyToSend(n *node, dest string) (*ecdh.PublicKey, error) {
@@ -448,7 +454,7 @@ func SendPartialSecretsRemoveBuildKeyToSend(n *node, dest string) (*ecdh.PublicK
 	return keyToSend, nil
 }
 
-func SendPartialSecretsRemove(n *node, member string) error {
+func DHRemoveRound2(n *node, member string) error {
 	var waitGrp sync.WaitGroup
 	var lock sync.Mutex
 	removedPeers := make([]string, 0)
@@ -475,6 +481,20 @@ func SendPartialSecretsRemove(n *node, member string) error {
 			}
 		}(n.crypto.DHchannels[s], s)
 	}
+	err := SendPartialSecretsRemove(n, member)
+	waitGrp.Wait()
+
+	for _, removedPeer := range removedPeers {
+		erro := n.GroupCallRemove(removedPeer)
+		if erro != nil {
+			return xerrors.Errorf("error when removing unanswering peer: %v", err)
+		}
+	}
+
+	return err
+}
+
+func SendPartialSecretsRemove(n *node, member string) error {
 
 	newSharedSecretSet := false
 	for dest := range n.crypto.DHPartialSecrets {
@@ -518,11 +538,6 @@ func SendPartialSecretsRemove(n *node, member string) error {
 			newSharedSecretSet = true
 		}
 	}
-	waitGrp.Wait()
-
-	for _, removedPeer := range removedPeers {
-		n.GroupCallRemove(removedPeer)
-	}
 
 	return nil
 }
@@ -559,10 +574,10 @@ func (n *node) GroupCallRemove(member string) error {
 
 	delete(n.crypto.DHInitSecrets, member)
 	delete(n.crypto.DHPartialSecrets, member)
-	return SendPartialSecretsRemove(n, member)
+	return DHRemoveRound2(n, member)
 }
 
-func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKey) error {
+func DHAddRound2(n *node, member string, newKey *ecdh.PrivateKey) error {
 	var waitGrp sync.WaitGroup
 	var lock sync.Mutex
 	removedPeers := make([]string, 0)
@@ -589,6 +604,20 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 			}
 		}(n.crypto.DHchannels[s], s)
 	}
+
+	err := SendPartialSecretsInAddition(n, member, newKey)
+	waitGrp.Wait()
+
+	for _, removedPeer := range removedPeers {
+		erro := n.GroupCallRemove(removedPeer)
+		if erro != nil {
+			return xerrors.Errorf("error when removing unanswering peer: %v", err)
+		}
+	}
+	return err
+}
+
+func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKey) error {
 
 	//Now we send the key to the new member
 	newMemberSecret, ok := n.crypto.DHInitSecrets[member]
@@ -644,11 +673,6 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 			return xerrors.Errorf("error when unicasting new partial secret to %v for adding member %v: %v", s, member, err)
 		}
 	}
-	waitGrp.Wait()
-
-	for _, removedPeer := range removedPeers {
-		n.GroupCallRemove(removedPeer)
-	}
 
 	return nil
 }
@@ -687,7 +711,6 @@ func (n *node) GroupCallAdd(member string) error {
 		case <-c:
 			return
 		case <-time.After(time.Second * 5):
-			fmt.Println(n.GetAddress(), "removing", peer)
 			delete(n.crypto.DHchannels, peer)
 			close(c)
 			delete(n.crypto.DHPartialSecrets, peer)
@@ -748,7 +771,7 @@ func (n *node) GroupCallAdd(member string) error {
 		return xerrors.Errorf("error when unicasting partial secret to additional member %v: %v", member, err)
 	}
 
-	return SendPartialSecretsInAddition(n, member, newKey)
+	return DHAddRound2(n, member, newKey)
 }
 
 func (c *Crypto) GroupCallEnd() {
@@ -884,7 +907,10 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 		return xerrors.Errorf("error in DH Shared secret ACK marshaling: %v", err)
 	}
 	trspMsg := transport.Message{Payload: data, Type: ackMsg.Name()}
-	n.Unicast(packet.Header.Source, trspMsg)
+	err = n.Unicast(packet.Header.Source, trspMsg)
+	if err != nil {
+		return xerrors.Errorf("error when unicasting SS ACK: %v", err)
+	}
 
 	return nil
 }
