@@ -148,10 +148,21 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 // LeaveMulticastGroup allows a peer to leave the multicast group with the
 // given id and created by the given peer. It sends a packet containing the
 // request to leave the group.
-func (n *node) LeaveMulticastGroup(groupSender string, id string) error {
-	// TODO
+func (n *node) LeaveMulticastGroup(groupSender string, groupID string) error {
+	group, ok := n.multicast.groups[groupID]
+	if !ok {
+		n.logger.Info().Str("groupID", groupID).Msg("can't leave unknown group")
+		return nil
+	}
 
-	// TODO wait for an ACK?
+	if !group.isInGroup {
+		n.logger.Info().Str("groupID", groupID).Msg("can't leave unjoined group")
+		return nil
+	}
+
+	group.isInGroup = false
+
+	// TODO send the request, wait for an ACK?
 
 	return nil
 }

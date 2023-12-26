@@ -65,7 +65,7 @@ func Test_Multicast(t *testing.T) {
 		// Update the multicast groups
 		for i := 0; i < nbNodes; i++ {
 			for j := 0; j < nbNodes; j++ {
-				if i != j && rng.Float32() < 0.2 {
+				if rng.Float32() < 0.2 {
 					if isInGroup[i][j] {
 						require.NoError(t, nodes[j].LeaveMulticastGroup(nodes[i].GetAddr(), multicastGroups[i]))
 						isInGroup[i][j] = false
