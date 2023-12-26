@@ -50,6 +50,10 @@ type Messaging interface {
 	// request to leave the group.
 	LeaveMulticastGroup(peer string, id string) error
 
+	// Multicast sends a message to a multicast group. The peer must be the root
+	// of the tree
+	Multicast(msg transport.Message, groupID string) error
+
 	// AddPeer adds new known addresses to the node. It must update the
 	// routing table of the node. Adding ourself should have no effect.
 	//
