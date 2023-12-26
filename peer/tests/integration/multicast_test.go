@@ -59,10 +59,6 @@ func Test_Multicast(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	for _, n := range nodes {
-		println(n.GetRoutingTable().String())
-	}
-
 	// Perform several steps of multicast
 	for step := 0; step < nbSteps; step++ {
 		// Update the multicast groups
