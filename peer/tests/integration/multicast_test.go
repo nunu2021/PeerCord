@@ -21,11 +21,14 @@ func Test_Multicast(t *testing.T) {
 	type Edge struct {
 		x, y int
 	}
-	const nbNodes int = 5
+	const nbNodes int = 6
 	edges := []Edge{
 		Edge{x: 0, y: 1},
-		Edge{x: 0, y: 3},
+		Edge{x: 1, y: 2},
+		Edge{x: 2, y: 0},
+		Edge{x: 2, y: 3},
 		Edge{x: 3, y: 4},
+		Edge{x: 3, y: 5},
 	}
 
 	// Create the nodes
@@ -35,7 +38,14 @@ func Test_Multicast(t *testing.T) {
 
 	for i := 0; i < nbNodes; i++ {
 		// Only the first heartbeat is needed
-		nodes[i] = z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour), z.WithAntiEntropy(100*time.Millisecond))
+		nodes[i] = z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0",
+			z.WithHeartbeat(time.Hour),
+			z.WithAntiEntropy(time.Second),
+			z.WithContinueMongering(0.5),
+		)
+		defer nodes[i].Stop()
+
+		multicastGroups[i] = nodes[i].NewMulticastGroup()
 	}
 
 	// Add the edges
@@ -44,14 +54,11 @@ func Test_Multicast(t *testing.T) {
 		nodes[e.y].AddPeer(nodes[e.x].GetAddr())
 	}
 
-	// Start the nodes
-	for i := 0; i < nbNodes; i++ {
-		require.NoError(t, nodes[i].Start())
-		defer require.NoError(t, nodes[i].Stop())
+	time.Sleep(3 * time.Second)
 
-		multicastGroups[i] = nodes[i].NewMulticastGroup()
+	for _, n := range nodes {
+		println(n.GetRoutingTable().String())
 	}
-	time.Sleep(time.Second)
 
 	// Perform several steps of multicast
 	for step := 0; step < nbSteps; step++ {
