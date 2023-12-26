@@ -42,12 +42,12 @@ type MulticastGroup struct {
 type Multicast struct {
 	// Information about each multicast group.
 	// The sender may be the node itself.
-	groups map[string]MulticastGroup
+	groups map[string]*MulticastGroup
 }
 
 func NewMulticast() Multicast {
 	return Multicast{
-		groups: make(map[string]MulticastGroup),
+		groups: make(map[string]*MulticastGroup),
 	}
 }
 
@@ -55,7 +55,7 @@ func NewMulticast() Multicast {
 // peers need this ID to join the group
 func (n *node) NewMulticastGroup() string {
 	id := xid.New().String()
-	n.multicast.groups[id] = MulticastGroup{
+	n.multicast.groups[id] = &MulticastGroup{
 		sender:          n.GetAddress(),
 		nextHopToSender: "",
 		forwards:        make(map[string]struct{}),
@@ -116,7 +116,7 @@ func (n *node) joinMulticastTree(groupSender string, groupID string) error {
 	// TODO wait until an ack is received, retry if needed
 
 	// Create the group
-	n.multicast.groups[groupID] = MulticastGroup{
+	n.multicast.groups[groupID] = &MulticastGroup{
 		sender:          groupSender,
 		nextHopToSender: next,
 		forwards:        make(map[string]struct{}),
@@ -142,7 +142,6 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 	}
 
 	group.isInGroup = true
-
 	return nil
 }
 
