@@ -19,6 +19,10 @@
 // n.crypto.DecryptOneToOne(msg) decrypts the msg with the local private key
 // n.crypto.EncryptDH(msg) encrypts the msg with the DH shared secret
 // n.crypto.DecryptDH(msg) decrypts the msg with the DH shared secret
+// n.crypto.EncryptOneToOnePkt(pkt, key) encrypts the pkt with the remote PK key
+// then packs it in an O2OEncryptedPkt message packet (works for any size)
+// n.crypto.EncryptDHPkt(pkt) encrypts the pkt with the DH shared secret and
+// returns a transport.Message (DHEncryptedPkt type)
 
 // Group DH is based on "Elliptic Curve Based Dynamic Contributory Group Key Agreement Protocol
 // For Secure Group Communication Over Ad-hoc Networks" by Naresh et al.
@@ -775,6 +779,8 @@ func (n *node) GroupCallAdd(member string) error {
 }
 
 func (c *Crypto) GroupCallEnd() {
+	c.DHCurve = nil
+	c.DHSharedPersonalSecret = nil
 	c.DHSharedSecret = nil
 	c.DHPrivateKey = nil
 	c.DHPublicKey = nil
