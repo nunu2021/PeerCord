@@ -68,8 +68,8 @@ type StrStrMap struct {
 func (m *StrStrMap) Get(peer string) (StrBytesPair, bool) {
 	m.Mutex.Lock()
 	defer m.Mutex.Unlock()
-	pubId, ok := m.Map[peer]
-	return pubId, ok
+	pubID, ok := m.Map[peer]
+	return pubID, ok
 }
 
 type Crypto struct {
