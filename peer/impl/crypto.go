@@ -1,4 +1,8 @@
 // HOW TO USE
+
+// Note that when creating a node n, the parameter n.crypto.PublicID should be set to an hard to forge unique ID
+// (ex a phone number that we assumed to be verified before entering the node creation system)
+
 // when a group call starts, the initiator should call n.StartDHKeyExchange(members)
 // with members a slice containing the addresses of all other members of the call
 // (all members except the initiator)
@@ -30,6 +34,7 @@
 package impl
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/aes"
 	"crypto/cipher"
@@ -50,12 +55,25 @@ import (
 	"golang.org/x/xerrors"
 )
 
+type StrBytesPair struct {
+	Str   string
+	Bytes []byte
+}
+
 type StrStrMap struct {
 	Mutex sync.Mutex
-	Map   map[string]string
+	Map   map[string]StrBytesPair
+}
+
+func (m *StrStrMap) Get(peer string) (StrBytesPair, bool) {
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+	pubId, ok := m.Map[peer]
+	return pubId, ok
 }
 
 type Crypto struct {
+	PublicID string
 	KeyPair  *rsa.PrivateKey
 	KnownPKs StrStrMap
 
@@ -80,9 +98,9 @@ func (c *Crypto) GenerateKeyPair() error {
 	return nil
 }
 
-func (c *Crypto) AddPublicKey(peer, key string) {
+func (c *Crypto) AddPublicKey(peer, pubID string, key []byte) {
 	c.KnownPKs.Mutex.Lock()
-	c.KnownPKs.Map[peer] = key
+	c.KnownPKs.Map[peer] = StrBytesPair{Str: pubID, Bytes: key}
 	c.KnownPKs.Mutex.Unlock()
 }
 
@@ -92,11 +110,11 @@ func (c *Crypto) RemovePublicKey(peer string) {
 	c.KnownPKs.Mutex.Unlock()
 }
 
-func (c *Crypto) VerifyPK(peer, key string) bool {
+func (c *Crypto) VerifyPK(peer, pubID string, key []byte) bool {
 	c.KnownPKs.Mutex.Lock()
 	defer c.KnownPKs.Mutex.Unlock()
 	knownKey, ok := c.KnownPKs.Map[peer]
-	return ok && knownKey == key
+	return ok && bytes.Equal(key, knownKey.Bytes) && knownKey.Str == pubID
 }
 
 func (c *Crypto) Sign(key, packet []byte) ([]byte, error) {
@@ -113,7 +131,22 @@ func (c *Crypto) Sign(key, packet []byte) ([]byte, error) {
 	return rsa.SignPSS(rand.Reader, c.KeyPair, crypto.SHA256, hashSum, nil)
 }
 
-func (c *Crypto) EncryptOneToOne(msg []byte, key *rsa.PublicKey) ([]byte, error) {
+func (c *Crypto) EncryptOneToOne(msg []byte, peer string) ([]byte, error) {
+	pubID, ok := c.KnownPKs.Get(peer)
+	if !ok {
+		return nil, xerrors.Errorf("error when retrieving known Public key: unregistered")
+	}
+
+	keyBytes := pubID.Bytes
+	keyUnmapped, err := x509.ParsePKIXPublicKey(keyBytes)
+	if err != nil {
+		return nil, xerrors.Errorf("error when parsing stored key: %v", err)
+	}
+	key, ok := keyUnmapped.(*rsa.PublicKey)
+	if !ok {
+		return nil, xerrors.Errorf("error when casting stored key")
+	}
+
 	encryptedMsg, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, key, msg, nil)
 	if err != nil {
 		return nil, xerrors.Errorf("error when encrypting a 1to1 message: %v", err)
@@ -129,7 +162,7 @@ func (c *Crypto) DecryptOneToOne(msg []byte) ([]byte, error) {
 	return decryptedMsg, nil
 }
 
-func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, key *rsa.PublicKey) (*transport.Packet, error) {
+func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transport.Packet, error) {
 	marshaledPkt, err := pkt.Marshal()
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling packet for O2O encryption: %v", err)
@@ -139,7 +172,7 @@ func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, key *rsa.PublicKey) (
 		return nil, xerrors.Errorf("error when generating random key for O2O encryption: %v", err)
 	}
 
-	encryptedKey, err := c.EncryptOneToOne(randomKey.PublicKey().Bytes(), key)
+	encryptedKey, err := c.EncryptOneToOne(randomKey.PublicKey().Bytes(), peer)
 	if err != nil {
 		return nil, xerrors.Errorf("error when encrypting packet for O2O encryption: %v", err)
 	}
@@ -171,7 +204,8 @@ func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, key *rsa.PublicKey) (
 		return nil, xerrors.Errorf("error when signing packet in O2O pkt encryption: %v", err)
 	}
 
-	encryptedMsg := types.O2OEncryptedPkt{Packet: encryptedPkt, Key: encryptedKey, RemoteKey: pkBytes, Signature: sig}
+	encryptedMsg := types.O2OEncryptedPkt{
+		Packet: encryptedPkt, Key: encryptedKey, RemoteID: c.PublicID, RemoteKey: pkBytes, Signature: sig}
 	data, err := json.Marshal(&encryptedMsg)
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling encrypted packet for O2O encryption: %v", err)
@@ -947,6 +981,11 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	message, ok := msg.(*types.O2OEncryptedPkt)
 	if !ok {
 		return xerrors.Errorf("type mismatch: %T", msg)
+	}
+
+	if !n.crypto.VerifyPK(packet.Header.Source, message.RemoteID, message.RemoteKey) {
+		//We neglect the msg because it's assumed to be forged by a malicious node
+		return nil
 	}
 
 	hash := sha256.New()

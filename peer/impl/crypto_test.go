@@ -2,6 +2,7 @@ package impl
 
 import (
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"math/big"
@@ -68,7 +69,11 @@ func TestCrypto_OtO_Enc_Dec(t *testing.T) {
 	var crypto2 Crypto
 	pubKey := crypto1.KeyPair.PublicKey
 	tim := time.Now()
-	encryptedMsg, err := crypto2.EncryptOneToOne(randomBytes, &pubKey)
+	keyBytes, err := x509.MarshalPKIXPublicKey(&pubKey)
+	require.NoError(t, err)
+	crypto2.KnownPKs = StrStrMap{Map: make(map[string]StrBytesPair)}
+	crypto2.AddPublicKey("127.0.0.1:0", "+33600000000", keyBytes)
+	encryptedMsg, err := crypto2.EncryptOneToOne(randomBytes, "127.0.0.1:0")
 	t.Logf("encryption time = %v", time.Since(tim))
 	require.NoError(t, err)
 	tim = time.Now()
@@ -89,7 +94,11 @@ func TestCrypto_OtO_Enc_Dec_Wrong_Key(t *testing.T) {
 	var crypto2 Crypto
 	require.NoError(t, crypto2.GenerateKeyPair())
 	pubKey := crypto2.KeyPair.PublicKey
-	encryptedMsg, err := crypto2.EncryptOneToOne(randomBytes, &pubKey)
+	keyBytes, err := x509.MarshalPKIXPublicKey(&pubKey)
+	require.NoError(t, err)
+	crypto2.KnownPKs = StrStrMap{Map: make(map[string]StrBytesPair)}
+	crypto2.AddPublicKey("127.0.0.1:0", "+33600000000", keyBytes)
+	encryptedMsg, err := crypto2.EncryptOneToOne(randomBytes, "127.0.0.1:0")
 	require.NoError(t, err)
 	_, err = crypto1.DecryptOneToOne(encryptedMsg)
 	require.Error(t, err)
@@ -127,7 +136,10 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	transpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
 	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
 	pkt := transport.Packet{Header: &header, Msg: &transpMsg}
-	packet, err := nodeA.crypto.EncryptOneToOnePkt(&pkt, &nodeB.crypto.KeyPair.PublicKey)
+	keyBytes, err := x509.MarshalPKIXPublicKey(&nodeB.crypto.KeyPair.PublicKey)
+	require.NoError(t, err)
+	nodeA.crypto.AddPublicKey(nodeB.GetAddress(), "+33600000000", keyBytes)
+	packet, err := nodeA.crypto.EncryptOneToOnePkt(&pkt, nodeB.GetAddress())
 	require.NoError(t, err)
 
 	require.NoError(t, nodeA.conf.Socket.Send(nodeB.GetAddress(), *packet, time.Second))

@@ -17,6 +17,7 @@ type DHEncryptedPkt struct {
 type O2OEncryptedPkt struct {
 	Key       []byte
 	Packet    []byte
+	RemoteID  string
 	RemoteKey []byte
 	Signature []byte
 }
