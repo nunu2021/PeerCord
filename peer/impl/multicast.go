@@ -42,12 +42,12 @@ type MulticastGroup struct {
 type Multicast struct {
 	// Information about each multicast group.
 	// The sender may be the node itself.
-	groups map[string]*MulticastGroup
+	groups safeMap[string, *MulticastGroup]
 }
 
 func NewMulticast() Multicast {
 	return Multicast{
-		groups: make(map[string]*MulticastGroup),
+		groups: newSafeMap[string, *MulticastGroup](),
 	}
 }
 
@@ -55,22 +55,23 @@ func NewMulticast() Multicast {
 // peers need this ID to join the group
 func (n *node) NewMulticastGroup() string {
 	id := xid.New().String()
-	n.multicast.groups[id] = &MulticastGroup{
+	n.multicast.groups.set(id, &MulticastGroup{
 		sender:          n.GetAddress(),
 		nextHopToSender: "",
 		forwards:        make(map[string]struct{}),
 		isInGroup:       false,
-	}
+	})
 	return id
 }
 
 // DeleteMulticastGroup deletes an existing multicast group. It sends a message
 // to all the peers of the group to inform them of the deletion.
 func (n *node) DeleteMulticastGroup(id string) error {
-	_, ok := n.multicast.groups[id]
+	_, ok := n.multicast.groups.getReference(id)
 	if !ok {
 		return UnknownMulticastGroupError(id)
 	}
+	defer n.multicast.groups.unlock()
 
 	// TODO
 
@@ -83,7 +84,7 @@ func (n *node) DeleteMulticastGroup(id string) error {
 // group. It blocks until the request is accepted, retrying if needed.
 func (n *node) joinMulticastTree(groupSender string, groupID string) error {
 	// Nothing to do
-	_, exists := n.multicast.groups[groupID]
+	_, exists := n.multicast.groups.get(groupID)
 	if exists {
 		return nil
 	}
@@ -116,12 +117,12 @@ func (n *node) joinMulticastTree(groupSender string, groupID string) error {
 	// TODO wait until an ack is received, retry if needed
 
 	// Create the group
-	n.multicast.groups[groupID] = &MulticastGroup{
+	n.multicast.groups.set(groupID, &MulticastGroup{
 		sender:          groupSender,
 		nextHopToSender: next,
 		forwards:        make(map[string]struct{}),
 		isInGroup:       false,
-	}
+	})
 
 	return nil
 }
@@ -134,12 +135,13 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 		return err
 	}
 
-	group, ok := n.multicast.groups[groupID]
+	group, ok := n.multicast.groups.getReference(groupID)
 	if !ok {
 		err := UnknownMulticastGroupError(groupID)
 		n.logger.Error().Err(err).Msg("can't find new group: was it already deleted?")
 		return err
 	}
+	defer n.multicast.groups.unlock()
 
 	group.isInGroup = true
 	return nil
@@ -149,11 +151,12 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 // given id and created by the given peer. It sends a packet containing the
 // request to leave the group.
 func (n *node) LeaveMulticastGroup(groupSender string, groupID string) error {
-	group, ok := n.multicast.groups[groupID]
+	group, ok := n.multicast.groups.getReference(groupID)
 	if !ok {
 		n.logger.Info().Str("groupID", groupID).Msg("can't leave unknown group")
 		return nil
 	}
+	defer n.multicast.groups.unlock()
 
 	if !group.isInGroup {
 		n.logger.Info().Str("groupID", groupID).Msg("can't leave unjoined group")
@@ -173,7 +176,7 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 		panic("not a join multicast group request message")
 	}
 
-	group, ok := n.multicast.groups[msg.GroupID]
+	group, ok := n.multicast.groups.getReference(msg.GroupID)
 
 	// TODO do this in another goroutine to avoid blocking the reception of messages
 
@@ -185,7 +188,7 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 			return err
 		}
 
-		group, ok = n.multicast.groups[msg.GroupID]
+		group, ok = n.multicast.groups.getReference(msg.GroupID)
 		if !ok {
 			err := UnknownMulticastGroupError(msg.GroupID)
 			n.logger.Error().Err(err).Msg("can't find new group: was it already deleted?")
@@ -195,6 +198,8 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 
 	// Update the forwarding table
 	group.forwards[pkt.Header.Source] = struct{}{}
+
+	n.multicast.groups.unlock()
 
 	return nil
 }
@@ -214,11 +219,12 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 // If isNewMessage is true, raises an error if the peer is not the sender of the
 // multicast group
 func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage bool) error {
-	group, ok := n.multicast.groups[groupID]
+	group, ok := n.multicast.groups.getReference(groupID)
 	if !ok {
 		n.logger.Error().Msg("can't send message to unknown multicast group")
 		return UnknownMulticastGroupError(groupID)
 	}
+	defer n.multicast.groups.unlock()
 
 	if isNewMessage && group.sender != n.GetAddress() {
 		n.logger.Error().Msg("can't send message to a multicast group of another peer")
