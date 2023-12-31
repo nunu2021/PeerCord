@@ -224,10 +224,10 @@ func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage
 		n.logger.Error().Msg("can't send message to unknown multicast group")
 		return UnknownMulticastGroupError(groupID)
 	}
-	defer n.multicast.groups.unlock()
 
 	if isNewMessage && group.sender != n.GetAddress() {
 		n.logger.Error().Msg("can't send message to a multicast group of another peer")
+		n.multicast.groups.unlock()
 		return UnknownMulticastGroupError(groupID)
 	}
 
@@ -240,12 +240,16 @@ func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage
 		err := n.marshalAndUnicast(dest, multicastMsg)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't unicast message for multicast")
+			n.multicast.groups.unlock()
 			return err
 		}
 	}
 
 	if group.isInGroup {
+		n.multicast.groups.unlock()
 		n.processMessage(msg)
+	} else {
+		n.multicast.groups.unlock()
 	}
 
 	return nil
