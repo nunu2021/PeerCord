@@ -18,7 +18,7 @@ func Test_Multicast(t *testing.T) {
 	rng := rand.New(rand.NewSource(42))
 
 	// Define the simulation parameters
-	nbSteps := 3 // TODO more
+	nbSteps := 100
 
 	// Define the graph
 	type Edge struct {
@@ -98,7 +98,7 @@ func Test_Multicast(t *testing.T) {
 			}
 
 			// Wait for the messages to propagate through the network
-			time.Sleep(time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 
 			// Check that each peer has received the right number of messages
 			for j := 0; j < nbNodes; j++ {
