@@ -56,7 +56,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		rumorsReceived:    make(map[string][]types.Rumor),
 		fileSharing:       NewFileSharing(),
 		paxos:             NewPaxos(),
-		eigenTrust: NewEigenTrust(n.conf.EigenAValue, n.conf.TotalPeers),
+		eigenTrust:        NewEigenTrust(),
 	}
 
 	// Register the different kinds of messages
@@ -79,6 +79,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHSharedSecret{}, n.ExecGroupCallDHSharedSecret)
 	conf.MessageRegistry.RegisterMessageCallback(types.DHEncryptedPkt{}, n.ExecDHEncryptedPkt)
 	conf.MessageRegistry.RegisterMessageCallback(types.O2OEncryptedPkt{}, n.ExecO2OEncryptedPkt)
+	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustRequestMessage{}, n.ExecEigenTrustRequestMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustResponseMessage{}, n.ExecEigenTrustResponseMessage)
 
 	return n
 }
@@ -173,13 +175,12 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 }
 
 // all peers will compute a new global trust value every 2 minutes
-func (n* node) initiateEigenTrust() {
+func (n *node) initiateEigenTrust() {
 	for {
-		select {
-		case time.Now().Unix() % n.EigenPulseWait == 0:
+		if time.Now().Unix()%n.conf.EigenPulseWait == 0 {
 			n.ComputeGlobalTrustValue()
-		default:
 		}
+
 	}
 }
 

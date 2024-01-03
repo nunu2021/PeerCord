@@ -1,10 +1,11 @@
 package peer
 
 import (
+	"time"
+
 	"go.dedis.ch/cs438/registry"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
-	"time"
 )
 
 // Peer defines the interface of a peer in the Peerster system. It embeds all
@@ -81,15 +82,18 @@ type Configuration struct {
 	PaxosProposerRetry time.Duration
 
 	// Determines how much of a priori turst we want to use in the EigenTrust System.
-	// Should be less than 1. 
+	// Should be less than 1.
 	// A lower value means less trusting on a priori value (will value the peers opinion more than the a priori trust)
 	// Default: 0.5
 	EigenAValue float32
 
-	// how much time to wait before calculating next eigen trust value (in seconds)
+	// How much time to wait before calculating next eigen trust value (in seconds)
 	// Default: 120
-	EigenPulseWait int
+	EigenPulseWait int64
 
+	// threshold of delta to end eigen trust computation iterations
+	// Default: 0.002
+	EigenEpsilon float32
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must
