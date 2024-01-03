@@ -24,83 +24,111 @@ func randInt(N int) int {
 }
 
 func TestCrypto_DH_Enc_Dec(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confB := peer.Configuration{Socket: socketB, MessageRegistry: standard.NewRegistry()}
+	nodeB := NewPeer(confB).(*node)
 	size := randInt(100000)
 	randomBytes := make([]byte, size)
 	rand.Read(randomBytes)
-	var crypto1 Crypto
-	crypto1.GenerateDHCurve()
-	privateKey, _ := crypto1.DHCurve.GenerateKey(rand.Reader)
-	var crypto2 Crypto
-	crypto2.DHSharedSecret = privateKey.PublicKey()
-	crypto1.DHSharedSecret = privateKey.PublicKey()
-	encryptedMsg, err := crypto1.EncryptDH(randomBytes)
+	nodeA.GenerateDHCurve()
+	privateKey, _ := nodeA.crypto.DHCurve.GenerateKey(rand.Reader)
+	nodeB.crypto.DHSharedSecret = privateKey.PublicKey()
+	nodeA.crypto.DHSharedSecret = privateKey.PublicKey()
+	encryptedMsg, err := nodeA.EncryptDH(randomBytes)
 	require.NoError(t, err)
-	decryptedMsg, err := crypto2.DecryptDH(encryptedMsg)
+	decryptedMsg, err := nodeB.DecryptDH(encryptedMsg)
 	require.NoError(t, err)
 	require.Equal(t, string(decryptedMsg), string(randomBytes))
 }
 
 func TestCrypto_DH_Enc_Dec_Wrong_Key(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confB := peer.Configuration{Socket: socketB, MessageRegistry: standard.NewRegistry()}
+	nodeB := NewPeer(confB).(*node)
 	size := randInt(100000)
 	randomBytes := make([]byte, size)
 	rand.Read(randomBytes)
-	var crypto1 Crypto
-	crypto1.GenerateDHCurve()
-	privateKey, _ := crypto1.DHCurve.GenerateKey(rand.Reader)
-	var crypto2 Crypto
-	crypto2.GenerateDHCurve()
-	crypto1.DHSharedSecret = privateKey.PublicKey()
-	privateKey, _ = crypto1.DHCurve.GenerateKey(rand.Reader)
-	crypto2.DHSharedSecret = privateKey.PublicKey()
-	encryptedMsg, err := crypto1.EncryptDH(randomBytes)
+	nodeA.GenerateDHCurve()
+	privateKey, _ := nodeA.crypto.DHCurve.GenerateKey(rand.Reader)
+	nodeB.GenerateDHCurve()
+	nodeA.crypto.DHSharedSecret = privateKey.PublicKey()
+	privateKey, _ = nodeA.crypto.DHCurve.GenerateKey(rand.Reader)
+	nodeB.crypto.DHSharedSecret = privateKey.PublicKey()
+	encryptedMsg, err := nodeA.EncryptDH(randomBytes)
 	require.NoError(t, err)
-	_, err = crypto2.DecryptDH(encryptedMsg)
+	_, err = nodeB.DecryptDH(encryptedMsg)
 	require.Error(t, err)
 }
 
 func TestCrypto_OtO_Enc_Dec(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confB := peer.Configuration{Socket: socketB, MessageRegistry: standard.NewRegistry()}
+	nodeB := NewPeer(confB).(*node)
 	size := randInt(446) //Above 446 is too large for rsa key size
 	randomBytes := make([]byte, size)
 	size, _ = rand.Read(randomBytes)
 	t.Logf("bytes size = %v", size)
-	var crypto1 Crypto
-	err := crypto1.GenerateKeyPair()
+	err = nodeA.GenerateKeyPair()
 	require.NoError(t, err)
-	var crypto2 Crypto
-	pubKey := crypto1.KeyPair.PublicKey
+	pubKey := nodeA.crypto.KeyPair.PublicKey
 	tim := time.Now()
 	keyBytes, err := x509.MarshalPKIXPublicKey(&pubKey)
 	require.NoError(t, err)
-	crypto2.KnownPKs = StrStrMap{Map: make(map[string]StrBytesPair)}
-	crypto2.AddPublicKey("127.0.0.1:0", "+33600000000", keyBytes)
-	encryptedMsg, err := crypto2.EncryptOneToOne(randomBytes, "127.0.0.1:0")
+	nodeB.crypto.KnownPKs = StrStrMap{Map: make(map[string]StrBytesPair)}
+	nodeB.AddPublicKey("127.0.0.1:0", "+33600000000", keyBytes)
+	encryptedMsg, err := nodeB.EncryptOneToOne(randomBytes, "127.0.0.1:0")
 	t.Logf("encryption time = %v", time.Since(tim))
 	require.NoError(t, err)
 	tim = time.Now()
-	decryptedMsg, err := crypto1.DecryptOneToOne(encryptedMsg)
+	decryptedMsg, err := nodeA.DecryptOneToOne(encryptedMsg)
 	t.Logf("decryption time = %v", time.Since(tim))
 	require.NoError(t, err)
 	require.Equal(t, string(decryptedMsg), string(randomBytes))
 }
 
 func TestCrypto_OtO_Enc_Dec_Wrong_Key(t *testing.T) {
+	udpTransport := udp.NewUDP()
+	socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry()}
+	nodeA := NewPeer(confA).(*node)
+	socketB, err := udpTransport.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	confB := peer.Configuration{Socket: socketB, MessageRegistry: standard.NewRegistry()}
+	nodeB := NewPeer(confB).(*node)
 	size := randInt(446) //Above 446 is too large for rsa key size
 	randomBytes := make([]byte, size)
 	size, _ = rand.Read(randomBytes)
 	t.Logf("bytes size = %v", size)
-	var crypto1 Crypto
-	err := crypto1.GenerateKeyPair()
+	err = nodeA.GenerateKeyPair()
 	require.NoError(t, err)
-	var crypto2 Crypto
-	require.NoError(t, crypto2.GenerateKeyPair())
-	pubKey := crypto2.KeyPair.PublicKey
+	require.NoError(t, nodeB.GenerateKeyPair())
+	pubKey := nodeB.crypto.KeyPair.PublicKey
 	keyBytes, err := x509.MarshalPKIXPublicKey(&pubKey)
 	require.NoError(t, err)
-	crypto2.KnownPKs = StrStrMap{Map: make(map[string]StrBytesPair)}
-	crypto2.AddPublicKey("127.0.0.1:0", "+33600000000", keyBytes)
-	encryptedMsg, err := crypto2.EncryptOneToOne(randomBytes, "127.0.0.1:0")
+	nodeB.crypto.KnownPKs = StrStrMap{Map: make(map[string]StrBytesPair)}
+	nodeB.AddPublicKey("127.0.0.1:0", "+33600000000", keyBytes)
+	encryptedMsg, err := nodeB.EncryptOneToOne(randomBytes, "127.0.0.1:0")
 	require.NoError(t, err)
-	_, err = crypto1.DecryptOneToOne(encryptedMsg)
+	_, err = nodeA.DecryptOneToOne(encryptedMsg)
 	require.Error(t, err)
 }
 
@@ -123,8 +151,10 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	nodeA.Start()
 	nodeB.Start()
 
-	nodeA.crypto.GenerateKeyPair()
-	nodeB.crypto.GenerateKeyPair()
+	nodeA.GenerateKeyPair()
+	nodeA.SetPublicID("+33600000000")
+	nodeB.GenerateKeyPair()
+	nodeB.SetPublicID("+33600000001")
 
 	size := randInt(500)
 	randomBytes := make([]byte, size)
@@ -132,17 +162,24 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	chatMsg := types.ChatMessage{Message: hex.EncodeToString(randomBytes)}
 	data, err := json.Marshal(&chatMsg)
 	require.NoError(t, err)
-	nodeB.crypto.GenerateKeyPair()
+	nodeB.GenerateKeyPair()
 	transpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
 	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
 	pkt := transport.Packet{Header: &header, Msg: &transpMsg}
-	keyBytes, err := x509.MarshalPKIXPublicKey(&nodeB.crypto.KeyPair.PublicKey)
+
+	nodeAPK := nodeA.GetPK()
+	keyBytes, err := x509.MarshalPKIXPublicKey(&nodeAPK)
 	require.NoError(t, err)
-	nodeA.crypto.AddPublicKey(nodeB.GetAddress(), "+33600000000", keyBytes)
-	packet, err := nodeA.crypto.EncryptOneToOnePkt(&pkt, nodeB.GetAddress())
+	nodeB.AddPublicKey(nodeA.GetAddress(), "+33600000000", keyBytes)
+
+	keyBytes, err = x509.MarshalPKIXPublicKey(&nodeB.crypto.KeyPair.PublicKey)
+	require.NoError(t, err)
+	nodeA.AddPublicKey(nodeB.GetAddress(), "+33600000001", keyBytes)
+
+	msg, err := nodeA.EncryptOneToOnePkt(&pkt, nodeB.GetAddress())
 	require.NoError(t, err)
 
-	require.NoError(t, nodeA.conf.Socket.Send(nodeB.GetAddress(), *packet, time.Second))
+	require.NoError(t, nodeA.Unicast(nodeB.GetAddress(), *msg))
 	time.Sleep(time.Second * 2)
 	nodeA.logger.Info().Msg(chatMsg.Message)
 }
@@ -176,9 +213,9 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	nodeB.Start()
 	nodeC.Start()
 
-	nodeA.crypto.GenerateKeyPair()
-	nodeB.crypto.GenerateKeyPair()
-	nodeC.crypto.GenerateKeyPair()
+	nodeA.GenerateKeyPair()
+	nodeB.GenerateKeyPair()
+	nodeC.GenerateKeyPair()
 
 	receivers := make(map[string]struct{})
 	receivers[nodeB.GetAddress()] = struct{}{}
@@ -192,12 +229,12 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	chatMsg := types.ChatMessage{Message: hex.EncodeToString(randomBytes)}
 	data, err := json.Marshal(&chatMsg)
 	require.NoError(t, err)
-	nodeB.crypto.GenerateKeyPair()
+	nodeB.GenerateKeyPair()
 	trpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
 	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
 	pkt := transport.Packet{Header: &header, Msg: &trpMsg}
 
-	transpMsg, err := nodeA.crypto.EncryptDHPkt(&pkt)
+	transpMsg, err := nodeA.EncryptDHPkt(&pkt)
 	require.NoError(t, err)
 
 	receiversMap := make(map[string]struct{})
@@ -566,7 +603,7 @@ func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 			peers[members[0]].StartDHKeyExchange(receivers)
 			times = append(times, time.Since(t))
 			for _, v := range members {
-				peers[v].crypto.GroupCallEnd()
+				peers[v].GroupCallEnd()
 			}
 		}
 		t.Logf("%v: %v,", i, times)
@@ -637,7 +674,7 @@ func TestCrypto_Perf_DH_Addition(t *testing.T) {
 			peers[members[0]].GroupCallAdd(peers[members[len(members)-1]].GetAddress())
 			times = append(times, time.Since(t))
 			for _, v := range members {
-				peers[v].crypto.GroupCallEnd()
+				peers[v].GroupCallEnd()
 			}
 		}
 		t.Logf("%v: %v,", i-1, times)
@@ -708,7 +745,7 @@ func TestCrypto_Perf_DH_Removal(t *testing.T) {
 			peers[members[0]].GroupCallRemove(peers[members[len(members)-1]].GetAddress())
 			times = append(times, time.Since(t))
 			for _, v := range members {
-				peers[v].crypto.GroupCallEnd()
+				peers[v].GroupCallEnd()
 			}
 		}
 		t.Logf("%v: %v,", i, times)
@@ -779,7 +816,7 @@ func TestCrypto_Perf_DH_Key_Exchange_Network_Size(t *testing.T) {
 		peers[members[0]].StartDHKeyExchange(receivers)
 		times = append(times, time.Since(ti))
 		for _, v := range members {
-			peers[v].crypto.GroupCallEnd()
+			peers[v].GroupCallEnd()
 		}
 	}
 	t.Logf("%v: %v,", size, times)
@@ -849,7 +886,7 @@ func TestCrypto_Perf_DH_Addition_Network_Size(t *testing.T) {
 		peers[members[0]].GroupCallAdd(peers[members[len(members)-1]].GetAddress())
 		times = append(times, time.Since(t))
 		for _, v := range members {
-			peers[v].crypto.GroupCallEnd()
+			peers[v].GroupCallEnd()
 		}
 	}
 	t.Logf("%v: %v,", size-1, times)
@@ -920,7 +957,7 @@ func TestCrypto_Perf_DH_Removal_Network_Size(t *testing.T) {
 		peers[members[0]].GroupCallRemove(peers[members[len(members)-1]].GetAddress())
 		times = append(times, time.Since(t))
 		for _, v := range members {
-			peers[v].crypto.GroupCallEnd()
+			peers[v].GroupCallEnd()
 		}
 	}
 	t.Logf("%v: %v,", size, times)

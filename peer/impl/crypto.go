@@ -89,35 +89,43 @@ type Crypto struct {
 	DHPartialSecrets       map[string](*ecdh.PublicKey)
 }
 
-func (c *Crypto) GenerateKeyPair() error {
+func (n *node) GenerateKeyPair() error {
 	keyPair, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return xerrors.Errorf("error when generating keypair: %v", err)
 	}
-	c.KeyPair = keyPair
+	n.crypto.KeyPair = keyPair
 	return nil
 }
 
-func (c *Crypto) AddPublicKey(peer, pubID string, key []byte) {
-	c.KnownPKs.Mutex.Lock()
-	c.KnownPKs.Map[peer] = StrBytesPair{Str: pubID, Bytes: key}
-	c.KnownPKs.Mutex.Unlock()
+func (n *node) SetPublicID(id string) {
+	n.crypto.PublicID = id
 }
 
-func (c *Crypto) RemovePublicKey(peer string) {
-	c.KnownPKs.Mutex.Lock()
-	delete(c.KnownPKs.Map, peer)
-	c.KnownPKs.Mutex.Unlock()
+func (n *node) GetPK() rsa.PublicKey {
+	return n.crypto.KeyPair.PublicKey
 }
 
-func (c *Crypto) VerifyPK(peer, pubID string, key []byte) bool {
-	c.KnownPKs.Mutex.Lock()
-	defer c.KnownPKs.Mutex.Unlock()
-	knownKey, ok := c.KnownPKs.Map[peer]
+func (n *node) AddPublicKey(peer, pubID string, key []byte) {
+	n.crypto.KnownPKs.Mutex.Lock()
+	n.crypto.KnownPKs.Map[peer] = StrBytesPair{Str: pubID, Bytes: key}
+	n.crypto.KnownPKs.Mutex.Unlock()
+}
+
+func (n *node) RemovePublicKey(peer string) {
+	n.crypto.KnownPKs.Mutex.Lock()
+	delete(n.crypto.KnownPKs.Map, peer)
+	n.crypto.KnownPKs.Mutex.Unlock()
+}
+
+func (n *node) VerifyPK(peer, pubID string, key []byte) bool {
+	n.crypto.KnownPKs.Mutex.Lock()
+	defer n.crypto.KnownPKs.Mutex.Unlock()
+	knownKey, ok := n.crypto.KnownPKs.Map[peer]
 	return ok && bytes.Equal(key, knownKey.Bytes) && knownKey.Str == pubID
 }
 
-func (c *Crypto) Sign(key, packet []byte) ([]byte, error) {
+func (n *node) Sign(key, packet []byte) ([]byte, error) {
 	hash := sha256.New()
 	_, err := hash.Write(key)
 	if err != nil {
@@ -128,11 +136,11 @@ func (c *Crypto) Sign(key, packet []byte) ([]byte, error) {
 		return nil, xerrors.Errorf("error when hashing msg: %v", err)
 	}
 	hashSum := hash.Sum(nil)
-	return rsa.SignPSS(rand.Reader, c.KeyPair, crypto.SHA256, hashSum, nil)
+	return rsa.SignPSS(rand.Reader, n.crypto.KeyPair, crypto.SHA256, hashSum, nil)
 }
 
-func (c *Crypto) EncryptOneToOne(msg []byte, peer string) ([]byte, error) {
-	pubID, ok := c.KnownPKs.Get(peer)
+func (n *node) EncryptOneToOne(msg []byte, peer string) ([]byte, error) {
+	pubID, ok := n.crypto.KnownPKs.Get(peer)
 	if !ok {
 		return nil, xerrors.Errorf("error when retrieving known Public key: unregistered")
 	}
@@ -154,15 +162,16 @@ func (c *Crypto) EncryptOneToOne(msg []byte, peer string) ([]byte, error) {
 	return encryptedMsg, nil
 }
 
-func (c *Crypto) DecryptOneToOne(msg []byte) ([]byte, error) {
-	decryptedMsg, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, c.KeyPair, msg, nil)
+func (n *node) DecryptOneToOne(msg []byte) ([]byte, error) {
+	decryptedMsg, err := rsa.DecryptOAEP(sha256.New(), rand.Reader, n.crypto.KeyPair, msg, nil)
 	if err != nil {
 		return nil, xerrors.Errorf("error when decrypting a 1to1 message: %v", err)
 	}
 	return decryptedMsg, nil
 }
 
-func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transport.Packet, error) {
+func (n *node) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transport.Message, error) {
+	c := &n.crypto
 	marshaledPkt, err := pkt.Marshal()
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling packet for O2O encryption: %v", err)
@@ -172,7 +181,7 @@ func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transp
 		return nil, xerrors.Errorf("error when generating random key for O2O encryption: %v", err)
 	}
 
-	encryptedKey, err := c.EncryptOneToOne(randomKey.PublicKey().Bytes(), peer)
+	encryptedKey, err := n.EncryptOneToOne(randomKey.PublicKey().Bytes(), peer)
 	if err != nil {
 		return nil, xerrors.Errorf("error when encrypting packet for O2O encryption: %v", err)
 	}
@@ -199,7 +208,7 @@ func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transp
 		return nil, xerrors.Errorf("error when marshaling local PK: %v", err)
 	}
 
-	sig, err := c.Sign(encryptedKey, encryptedPkt)
+	sig, err := n.Sign(encryptedKey, encryptedPkt)
 	if err != nil {
 		return nil, xerrors.Errorf("error when signing packet in O2O pkt encryption: %v", err)
 	}
@@ -211,16 +220,45 @@ func (c *Crypto) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transp
 		return nil, xerrors.Errorf("error when marshaling encrypted packet for O2O encryption: %v", err)
 	}
 	transpMsg := transport.Message{Payload: data, Type: encryptedMsg.Name()}
-	header := pkt.Header.Copy()
-	packet := transport.Packet{Header: &header, Msg: &transpMsg}
-	return &packet, nil
+	return &transpMsg, nil
 }
 
-func (c *Crypto) GenerateDHCurve() {
-	c.DHCurve = ecdh.X25519()
+func (n *node) GenerateDHCurve() {
+	n.crypto.DHCurve = ecdh.X25519()
 }
 
-func (c *Crypto) EncryptDH(msg []byte) ([]byte, error) {
+func (n *node) GetDHCurve() ecdh.Curve {
+	return n.crypto.DHCurve
+}
+
+func (n *node) GenerateDHKey() (*ecdh.PrivateKey, error) {
+	DHPrivateKey, err := n.crypto.DHCurve.GenerateKey(rand.Reader)
+	return DHPrivateKey, err
+}
+
+func (n *node) GetDHPK() *ecdh.PublicKey {
+	return n.crypto.DHPublicKey
+}
+
+func (n *node) ECDH(remotePK *ecdh.PublicKey) ([]byte, error) {
+	productPK, err := n.crypto.DHPrivateKey.ECDH(remotePK)
+	return productPK, err
+}
+
+func (n *node) GetDHSharedSecret() *ecdh.PublicKey {
+	return n.crypto.DHSharedSecret
+}
+
+func (n *node) SetDHSharedSecret(secret *ecdh.PublicKey) {
+	n.crypto.DHSharedSecret = secret
+}
+
+func (n *node) DHSharedSecretEqual(key *ecdh.PublicKey) bool {
+	return n.crypto.DHSharedSecret.Equal(key)
+}
+
+func (n *node) EncryptDH(msg []byte) ([]byte, error) {
+	c := &n.crypto
 	key := c.DHSharedSecret.Bytes()
 
 	ciph, err := aes.NewCipher(key)
@@ -241,8 +279,8 @@ func (c *Crypto) EncryptDH(msg []byte) ([]byte, error) {
 	return gcm.Seal(nonce, nonce, msg, nil), nil
 }
 
-func (c *Crypto) DecryptDH(msg []byte) ([]byte, error) {
-
+func (n *node) DecryptDH(msg []byte) ([]byte, error) {
+	c := &n.crypto
 	ciph, err := aes.NewCipher(c.DHSharedSecret.Bytes())
 	if err != nil {
 		return nil, xerrors.Errorf("error decrypting message for group call: %v", err)
@@ -266,7 +304,8 @@ func (c *Crypto) DecryptDH(msg []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func (c *Crypto) EncryptDHPkt(pkt *transport.Packet) (*transport.Message, error) {
+func (n *node) EncryptDHPkt(pkt *transport.Packet) (*transport.Message, error) {
+	c := &n.crypto
 	marshaledPkt, err := pkt.Marshal()
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling packet in DH pkt encryption: %v", err)
@@ -277,12 +316,12 @@ func (c *Crypto) EncryptDHPkt(pkt *transport.Packet) (*transport.Message, error)
 		return nil, xerrors.Errorf("error when marshaling local PK in DH pkt encryption: %v", err)
 	}
 
-	encryptedPkt, err := c.EncryptDH(marshaledPkt)
+	encryptedPkt, err := n.EncryptDH(marshaledPkt)
 	if err != nil {
 		return nil, xerrors.Errorf("error when encrypting packet in DH pkt encryption: %v", err)
 	}
 
-	sig, err := c.Sign(nil, encryptedPkt)
+	sig, err := n.Sign(nil, encryptedPkt)
 	if err != nil {
 		return nil, xerrors.Errorf("error when signing packet in DH pkt encryption: %v", err)
 	}
@@ -409,7 +448,7 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 	n.crypto.DHInitSecrets = make(map[string](*ecdh.PrivateKey))
 	n.crypto.DHchannels = make(map[string]chan struct{})
 	n.crypto.DHPartialSecrets = make(map[string]*ecdh.PublicKey)
-	n.crypto.GenerateDHCurve()
+	n.GenerateDHCurve()
 	DHPrivateKey, err := n.crypto.DHCurve.GenerateKey(rand.Reader)
 	if err != nil {
 		return xerrors.Errorf("error when starting DH key exchange: %v", err)
@@ -812,22 +851,22 @@ func (n *node) GroupCallAdd(member string) error {
 	return DHAddRound2(n, member, newKey)
 }
 
-func (c *Crypto) GroupCallEnd() {
-	c.DHCurve = nil
-	c.DHSharedPersonalSecret = nil
-	c.DHSharedSecret = nil
-	c.DHPrivateKey = nil
-	c.DHPublicKey = nil
-	c.DHIsLeader = false
-	for s, ch := range c.DHchannels {
+func (n *node) GroupCallEnd() {
+	n.crypto.DHCurve = nil
+	n.crypto.DHSharedPersonalSecret = nil
+	n.crypto.DHSharedSecret = nil
+	n.crypto.DHPrivateKey = nil
+	n.crypto.DHPublicKey = nil
+	n.crypto.DHIsLeader = false
+	for s, ch := range n.crypto.DHchannels {
 		close(ch)
-		delete(c.DHchannels, s)
+		delete(n.crypto.DHchannels, s)
 	}
-	for s := range c.DHInitSecrets {
-		delete(c.DHchannels, s)
+	for s := range n.crypto.DHInitSecrets {
+		delete(n.crypto.DHchannels, s)
 	}
-	for s := range c.DHPartialSecrets {
-		delete(c.DHPartialSecrets, s)
+	for s := range n.crypto.DHPartialSecrets {
+		delete(n.crypto.DHPartialSecrets, s)
 	}
 }
 
@@ -983,7 +1022,7 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
 
-	if !n.crypto.VerifyPK(packet.Header.Source, message.RemoteID, message.RemoteKey) {
+	if !n.VerifyPK(packet.Header.Source, message.RemoteID, message.RemoteKey) {
 		//We neglect the msg because it's assumed to be forged by a malicious node
 		return nil
 	}
@@ -1013,7 +1052,7 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 		return xerrors.Errorf("signature mismatch: %v", err)
 	}
 
-	dectyptedKey, err := n.crypto.DecryptOneToOne(message.Key)
+	dectyptedKey, err := n.DecryptOneToOne(message.Key)
 	if err != nil {
 		return xerrors.Errorf("error decrypting O2O encrypted pkt: %v", err)
 	}
@@ -1044,6 +1083,7 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	if err != nil {
 		return xerrors.Errorf("error unmarshaling O2O encrypted packet: %v", err)
 	}
+
 	n.processPacket(pkt)
 	return nil
 }
@@ -1053,7 +1093,7 @@ func (n *node) ExecDHEncryptedPkt(msg types.Message, packet transport.Packet) er
 	if !ok {
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
-	dectyptedPkt, err := n.crypto.DecryptDH(message.Packet)
+	dectyptedPkt, err := n.DecryptDH(message.Packet)
 	if err != nil {
 		return xerrors.Errorf("error decrypting DH encrypted pkt: %v", err)
 	}
