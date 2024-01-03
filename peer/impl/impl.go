@@ -57,6 +57,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		fileSharing:       NewFileSharing(),
 		paxos:             NewPaxos(),
 		crypto:            Crypto{KnownPKs: StrStrMap{Map: make(map[string]StrBytesPair)}},
+		multicast:         NewMulticast(),
 	}
 
 	// Register the different kinds of messages
@@ -70,6 +71,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.receiveDataReply)
 	conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, n.receiveSearchRequest)
 	conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.receiveSearchReply)
+	conf.MessageRegistry.RegisterMessageCallback(types.JoinMulticastGroupRequestMessage{}, n.receiveJoinMulticastGroupMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.LeaveMulticastGroupRequestMessage{}, n.receiveLeaveMulticastGroupMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.MulticastMessage{}, n.receiveMulticastMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosPrepareMessage{}, n.receivePaxosPrepareMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosProposeMessage{}, n.receivePaxosProposeMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, n.receivePaxosAcceptMsg)
@@ -132,6 +136,9 @@ type node struct {
 
 	// Information needed to reach consensus with multi-paxos
 	paxos Paxos
+
+	// Information needed for multicasting
+	multicast Multicast
 
 	//Cryptography for peer-cord
 	crypto Crypto

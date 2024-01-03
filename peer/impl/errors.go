@@ -43,3 +43,11 @@ type NameAlreadyExistsError string
 func (err NameAlreadyExistsError) Error() string {
 	return "name already exists: " + string(err)
 }
+
+// UnknownMulticastGroupError occurs when an operation should be realized on a
+// group that does not exist
+type UnknownMulticastGroupError string
+
+func (err UnknownMulticastGroupError) Error() string {
+	return "group does not exist: " + string(err)
+}

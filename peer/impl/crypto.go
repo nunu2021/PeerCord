@@ -464,7 +464,7 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 		}(n.crypto.DHchannels[s], s)
 	}
 
-	err = n.Multicast(initTransportMsg, multicastReceivers)
+	err = n.NaiveMulticast(initTransportMsg, multicastReceivers)
 	if err != nil {
 		return xerrors.Errorf("error in DH key exchange init multicast: %v", err)
 	}

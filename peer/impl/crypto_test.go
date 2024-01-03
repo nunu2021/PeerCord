@@ -203,7 +203,7 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	receiversMap := make(map[string]struct{})
 	receiversMap[nodeB.GetAddress()] = struct{}{}
 	receiversMap[nodeC.GetAddress()] = struct{}{}
-	require.NoError(t, nodeA.Multicast(*transpMsg, receiversMap))
+	require.NoError(t, nodeA.NaiveMulticast(*transpMsg, receiversMap))
 	time.Sleep(time.Second * 2)
 	nodeA.logger.Info().Msg(chatMsg.Message)
 }

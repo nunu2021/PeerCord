@@ -70,12 +70,3 @@ type PrivateMessage struct {
 	// Msg is the private message to be read by the recipients
 	Msg *transport.Message
 }
-
-// MulticastMessage represents a message that is sent to many peers at the same time
-type MulticastMessage struct {
-	// Set of the addresses of the peers that should receive the message
-	Recipients map[string]struct{}
-
-	// The embedded message
-	Msg *transport.Message
-}
