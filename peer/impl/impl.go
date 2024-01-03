@@ -56,7 +56,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		rumorsReceived:    make(map[string][]types.Rumor),
 		fileSharing:       NewFileSharing(),
 		paxos:             NewPaxos(),
-		eigenTrust: NewEigenTrust()
+		eigenTrust: NewEigenTrust(n.conf.EigenAValue, n.conf.TotalPeers),
 	}
 
 	// Register the different kinds of messages
@@ -136,7 +136,7 @@ type node struct {
 	//Cryptography for peer-cord
 	crypto Crypto
 
-	// EigenTrust Trust system for peer-cord
+	// EigenTrust Trust system fora: aValue,
 	eigenTrust EigenTrust
 }
 
@@ -172,6 +172,17 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 	}
 }
 
+// all peers will compute a new global trust value every 2 minutes
+func (n* node) initiateEigenTrust() {
+	for {
+		select {
+		case time.Now().Unix() % n.EigenPulseWait == 0:
+			n.ComputeGlobalTrustValue()
+		default:
+		}
+	}
+}
+
 func loop(n *node) {
 	timeoutLoop := time.Second
 	if n.conf.HeartbeatInterval != 0 {
@@ -184,6 +195,8 @@ func loop(n *node) {
 
 	// Receive packets (this goroutine is not stopped at the end)
 	go n.receivePackets(receivedPackets)
+
+	go n.initiateEigenTrust()
 
 	for {
 		// Things to do first to avoid blocking

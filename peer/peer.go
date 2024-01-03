@@ -79,6 +79,17 @@ type Configuration struct {
 	// retries to send a prepare when it doesn't get enough promises or accepts.
 	// Default: 5s.
 	PaxosProposerRetry time.Duration
+
+	// Determines how much of a priori turst we want to use in the EigenTrust System.
+	// Should be less than 1. 
+	// A lower value means less trusting on a priori value (will value the peers opinion more than the a priori trust)
+	// Default: 0.5
+	EigenAValue float32
+
+	// how much time to wait before calculating next eigen trust value (in seconds)
+	// Default: 120
+	EigenPulseWait int
+
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must
