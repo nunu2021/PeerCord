@@ -286,9 +286,9 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, true, nodeA.DHSharedSecretEqual(abacadPK))
-	require.Equal(t, true, nodeA.DHSharedSecretEqual(nodeB.GetDHSharedSecret()))
-	require.Equal(t, true, nodeA.DHSharedSecretEqual(nodeC.GetDHSharedSecret()))
-	require.Equal(t, true, nodeA.DHSharedSecretEqual(nodeD.GetDHSharedSecret()))
+	require.Equal(t, true, nodeB.DHSharedSecretEqual(abacadPK))
+	require.Equal(t, true, nodeC.DHSharedSecretEqual(abacadPK))
+	require.Equal(t, true, nodeD.DHSharedSecretEqual(abacadPK))
 }
 
 // A,B,C,D fully connected

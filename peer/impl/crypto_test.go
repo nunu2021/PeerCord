@@ -38,8 +38,8 @@ func TestCrypto_DH_Enc_Dec(t *testing.T) {
 	rand.Read(randomBytes)
 	nodeA.GenerateDHCurve()
 	privateKey, _ := nodeA.crypto.DHCurve.GenerateKey(rand.Reader)
-	nodeB.crypto.DHSharedSecret = privateKey.PublicKey()
-	nodeA.crypto.DHSharedSecret = privateKey.PublicKey()
+	nodeB.crypto.DHSharedSecret.Set(privateKey.PublicKey())
+	nodeA.crypto.DHSharedSecret.Set(privateKey.PublicKey())
 	encryptedMsg, err := nodeA.EncryptDH(randomBytes)
 	require.NoError(t, err)
 	decryptedMsg, err := nodeB.DecryptDH(encryptedMsg)
@@ -63,9 +63,9 @@ func TestCrypto_DH_Enc_Dec_Wrong_Key(t *testing.T) {
 	nodeA.GenerateDHCurve()
 	privateKey, _ := nodeA.crypto.DHCurve.GenerateKey(rand.Reader)
 	nodeB.GenerateDHCurve()
-	nodeA.crypto.DHSharedSecret = privateKey.PublicKey()
+	nodeA.crypto.DHSharedSecret.Set(privateKey.PublicKey())
 	privateKey, _ = nodeA.crypto.DHCurve.GenerateKey(rand.Reader)
-	nodeB.crypto.DHSharedSecret = privateKey.PublicKey()
+	nodeB.crypto.DHSharedSecret.Set(privateKey.PublicKey())
 	encryptedMsg, err := nodeA.EncryptDH(randomBytes)
 	require.NoError(t, err)
 	_, err = nodeB.DecryptDH(encryptedMsg)
@@ -293,16 +293,22 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
-	curve := nodeA.crypto.DHCurve
-	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
+	curve := &nodeA.crypto.DHCurve
+	nodeB.crypto.DHPublicKey.Mutex.Lock()
+	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey.Key)
+	nodeB.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	abSK, err := curve.NewPrivateKey(ab)
 	require.NoError(t, err)
-	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
+	nodeC.crypto.DHPublicKey.Mutex.Lock()
+	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey.Key)
+	nodeC.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	acSK, err := curve.NewPrivateKey(ac)
 	require.NoError(t, err)
-	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey)
+	nodeD.crypto.DHPublicKey.Mutex.Lock()
+	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey.Key)
+	nodeD.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	adSK, err := curve.NewPrivateKey(ad)
 	require.NoError(t, err)
@@ -316,9 +322,9 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abacadPK))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeB.crypto.DHSharedSecret.Equal(abacadPK))
+	require.Equal(t, true, nodeC.crypto.DHSharedSecret.Equal(abacadPK))
+	require.Equal(t, true, nodeD.crypto.DHSharedSecret.Equal(abacadPK))
 }
 
 // A,B,C,D fully connected
@@ -363,12 +369,16 @@ func TestCrypto_DH_Key_Exchange_Ignoring_Peer(t *testing.T) {
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
-	curve := nodeA.crypto.DHCurve
-	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
+	curve := &nodeA.crypto.DHCurve
+	nodeC.crypto.DHPublicKey.Mutex.Lock()
+	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey.Key)
+	nodeC.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	acSK, err := curve.NewPrivateKey(ac)
 	require.NoError(t, err)
-	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey)
+	nodeD.crypto.DHPublicKey.Mutex.Lock()
+	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey.Key)
+	nodeD.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	adSK, err := curve.NewPrivateKey(ad)
 	require.NoError(t, err)
@@ -378,8 +388,8 @@ func TestCrypto_DH_Key_Exchange_Ignoring_Peer(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(acadPK))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeC.crypto.DHSharedSecret.Equal(acadPK))
+	require.Equal(t, true, nodeD.crypto.DHSharedSecret.Equal(acadPK))
 }
 
 // A,B,C,D,E fully connected
@@ -430,12 +440,16 @@ func TestCrypto_DH_Addition(t *testing.T) {
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
-	curve := nodeA.crypto.DHCurve
-	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
+	curve := &nodeA.crypto.DHCurve
+	nodeB.crypto.DHPublicKey.Mutex.Lock()
+	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey.Key)
+	nodeB.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	abSK, err := curve.NewPrivateKey(ab)
 	require.NoError(t, err)
-	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
+	nodeC.crypto.DHPublicKey.Mutex.Lock()
+	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey.Key)
+	nodeC.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	acSK, err := curve.NewPrivateKey(ac)
 	require.NoError(t, err)
@@ -445,16 +459,22 @@ func TestCrypto_DH_Addition(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abacPK))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
+	require.Equal(t, true, nodeB.crypto.DHSharedSecret.Equal(abacPK))
+	require.Equal(t, true, nodeC.crypto.DHSharedSecret.Equal(abacPK))
 
 	err = nodeA.GroupCallAdd(nodeD.GetAddress())
 	require.NoError(t, err)
 
-	require.NotEqual(t, nil, nodeD.crypto.DHSharedSecret)
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
+	nodeD.crypto.DHSharedSecret.Mutex.Lock()
+	require.NotEqual(t, nil, nodeD.crypto.DHSharedSecret.Key)
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret.Key))
+	nodeD.crypto.DHSharedSecret.Mutex.Unlock()
+	nodeB.crypto.DHSharedSecret.Mutex.Lock()
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret.Key))
+	nodeB.crypto.DHSharedSecret.Mutex.Unlock()
+	nodeC.crypto.DHSharedSecret.Mutex.Lock()
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret.Key))
+	nodeC.crypto.DHSharedSecret.Mutex.Unlock()
 }
 
 // A,B,C,D fully connected
@@ -506,16 +526,22 @@ func TestCrypto_DH_Removal(t *testing.T) {
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
-	curve := nodeA.crypto.DHCurve
-	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
+	curve := &nodeA.crypto.DHCurve
+	nodeB.crypto.DHPublicKey.Mutex.Lock()
+	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey.Key)
+	nodeB.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	abSK, err := curve.NewPrivateKey(ab)
 	require.NoError(t, err)
-	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
+	nodeC.crypto.DHPublicKey.Mutex.Lock()
+	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey.Key)
+	nodeC.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	acSK, err := curve.NewPrivateKey(ac)
 	require.NoError(t, err)
-	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey)
+	nodeD.crypto.DHPublicKey.Mutex.Lock()
+	ad, err := nodeA.crypto.DHPrivateKey.ECDH(nodeD.crypto.DHPublicKey.Key)
+	nodeD.crypto.DHPublicKey.Mutex.Unlock()
 	require.NoError(t, err)
 	adSK, err := curve.NewPrivateKey(ad)
 	require.NoError(t, err)
@@ -529,15 +555,27 @@ func TestCrypto_DH_Removal(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(abacadPK))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
+	nodeB.crypto.DHSharedSecret.Mutex.Lock()
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret.Key))
+	nodeB.crypto.DHSharedSecret.Mutex.Unlock()
+	nodeC.crypto.DHSharedSecret.Mutex.Lock()
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeC.crypto.DHSharedSecret.Key))
+	nodeC.crypto.DHSharedSecret.Mutex.Unlock()
+	nodeD.crypto.DHSharedSecret.Mutex.Lock()
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret.Key))
+	nodeD.crypto.DHSharedSecret.Mutex.Unlock()
 
 	nodeA.GroupCallRemove(nodeC.GetAddress())
 
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
-	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
-	require.NotEqual(t, nil, nodeA.crypto.DHSharedSecret)
+	nodeB.crypto.DHSharedSecret.Mutex.Lock()
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret.Key))
+	nodeB.crypto.DHSharedSecret.Mutex.Unlock()
+	nodeD.crypto.DHSharedSecret.Mutex.Lock()
+	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret.Key))
+	nodeD.crypto.DHSharedSecret.Mutex.Unlock()
+	nodeA.crypto.DHSharedSecret.Mutex.Lock()
+	require.NotEqual(t, nil, nodeA.crypto.DHSharedSecret.Key)
+	nodeA.crypto.DHSharedSecret.Mutex.Unlock()
 }
 
 func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
@@ -821,6 +859,7 @@ func TestCrypto_Perf_DH_Key_Exchange_Network_Size(t *testing.T) {
 	}
 	t.Logf("%v: %v,", size, times)
 }
+
 func TestCrypto_Perf_DH_Addition_Network_Size(t *testing.T) {
 	udpTransport := udp.NewUDP()
 

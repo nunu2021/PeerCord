@@ -72,19 +72,187 @@ func (m *StrStrMap) Get(peer string) (StrBytesPair, bool) {
 	return pubID, ok
 }
 
+type StrChanMap struct {
+	Mutex sync.Mutex
+	Map   map[string](chan struct{})
+}
+
+func (m *StrChanMap) Add(s string) {
+	m.Mutex.Lock()
+	m.Map[s] = make(chan struct{})
+	m.Mutex.Unlock()
+}
+
+func (m *StrChanMap) Delete(s string) {
+	m.Mutex.Lock()
+	close(m.Map[s])
+	delete(m.Map, s)
+	m.Mutex.Unlock()
+}
+
+func (m *StrChanMap) Get(s string) chan struct{} {
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+	return m.Map[s]
+}
+
+func (m *StrChanMap) SafeGet(s string) (chan struct{}, bool) {
+	m.Mutex.Lock()
+	defer m.Mutex.Unlock()
+	v, ok := m.Map[s]
+	return v, ok
+}
+
+type DHPrivateKey struct {
+	Mutex sync.Mutex
+	Key   *ecdh.PrivateKey
+}
+
+func (k *DHPrivateKey) Set(key *ecdh.PrivateKey) {
+	k.Mutex.Lock()
+	k.Key = key
+	k.Mutex.Unlock()
+}
+
+func (k *DHPrivateKey) Get() *ecdh.PrivateKey {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+	return k.Key
+}
+
+func (k *DHPrivateKey) ECDH(remote *ecdh.PublicKey) ([]byte, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+	b, err := k.Key.ECDH(remote)
+	return b, err
+}
+
+func (k *DHPrivateKey) Bytes() []byte {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+	return k.Key.Bytes()
+}
+
+type DHPublicKey struct {
+	Mutex sync.Mutex
+	Key   *ecdh.PublicKey
+}
+
+func (k *DHPublicKey) Set(key *ecdh.PublicKey) {
+	k.Mutex.Lock()
+	k.Key = key
+	k.Mutex.Unlock()
+}
+
+func (k *DHPublicKey) Get() *ecdh.PublicKey {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+	return k.Key
+}
+
+func (k *DHPublicKey) Equal(remote *ecdh.PublicKey) bool {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+	return k.Key.Equal(remote)
+}
+
+func (k *DHPublicKey) Bytes() []byte {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+	return k.Key.Bytes()
+}
+
+func (k *DHPublicKey) ECDH(key *ecdh.PrivateKey) ([]byte, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+	v, err := key.ECDH(k.Key)
+	return v, err
+}
+
+func (k *DHPublicKey) Marshal() ([]byte, error) {
+	k.Mutex.Lock()
+	defer k.Mutex.Unlock()
+	v, err := x509.MarshalPKIXPublicKey(k.Key)
+	return v, err
+}
+
+type DHCurve struct {
+	Mutex sync.Mutex
+	Curve ecdh.Curve
+}
+
+func (c *DHCurve) Set(curve ecdh.Curve) {
+	c.Mutex.Lock()
+	c.Curve = curve
+	c.Mutex.Unlock()
+}
+
+func (c *DHCurve) Get() ecdh.Curve {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	return c.Curve
+}
+
+func (c *DHCurve) NewPrivateKey(key []byte) (*ecdh.PrivateKey, error) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	if c.Curve == nil {
+		return nil, xerrors.Errorf("curve is nil")
+	}
+	v, err := c.Curve.NewPrivateKey(key)
+	return v, err
+}
+
+func (c *DHCurve) NewPublicKey(key []byte) (*ecdh.PublicKey, error) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	if c.Curve == nil {
+		return nil, xerrors.Errorf("curve is nil")
+	}
+	v, err := c.Curve.NewPublicKey(key)
+	return v, err
+}
+
+func (c *DHCurve) GenerateKey(reader io.Reader) (*ecdh.PrivateKey, error) {
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	if c.Curve == nil {
+		return nil, xerrors.Errorf("curve is nil")
+	}
+	v, err := c.Curve.GenerateKey(reader)
+	return v, err
+}
+
+type MutexBool struct {
+	Mutex sync.Mutex
+	Bool  bool
+}
+
+func (b *MutexBool) Set(v bool) {
+	b.Mutex.Lock()
+	b.Bool = v
+	b.Mutex.Unlock()
+}
+
+func (b *MutexBool) Get() bool {
+	b.Mutex.Lock()
+	defer b.Mutex.Unlock()
+	return b.Bool
+}
+
 type Crypto struct {
 	PublicID string
 	KeyPair  *rsa.PrivateKey
 	KnownPKs StrStrMap
 
-	DHCurve        ecdh.Curve
-	DHPrivateKey   *ecdh.PrivateKey
-	DHPublicKey    *ecdh.PublicKey
-	DHSharedSecret *ecdh.PublicKey
+	DHCurve        DHCurve
+	DHPrivateKey   DHPrivateKey
+	DHPublicKey    DHPublicKey
+	DHSharedSecret DHPublicKey
 
-	DHIsLeader             bool
-	DHSharedPersonalSecret *ecdh.PublicKey
-	DHchannels             map[string](chan struct{})
+	DHIsLeader             MutexBool
+	DHSharedPersonalSecret DHPublicKey
+	DHchannels             StrChanMap
 	DHInitSecrets          map[string](*ecdh.PrivateKey)
 	DHPartialSecrets       map[string](*ecdh.PublicKey)
 }
@@ -224,11 +392,11 @@ func (n *node) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transpor
 }
 
 func (n *node) GenerateDHCurve() {
-	n.crypto.DHCurve = ecdh.X25519()
+	n.crypto.DHCurve.Set(ecdh.X25519())
 }
 
 func (n *node) GetDHCurve() ecdh.Curve {
-	return n.crypto.DHCurve
+	return n.crypto.DHCurve.Get()
 }
 
 func (n *node) GenerateDHKey() (*ecdh.PrivateKey, error) {
@@ -237,7 +405,7 @@ func (n *node) GenerateDHKey() (*ecdh.PrivateKey, error) {
 }
 
 func (n *node) GetDHPK() *ecdh.PublicKey {
-	return n.crypto.DHPublicKey
+	return n.crypto.DHPublicKey.Get()
 }
 
 func (n *node) ECDH(remotePK *ecdh.PublicKey) ([]byte, error) {
@@ -246,11 +414,11 @@ func (n *node) ECDH(remotePK *ecdh.PublicKey) ([]byte, error) {
 }
 
 func (n *node) GetDHSharedSecret() *ecdh.PublicKey {
-	return n.crypto.DHSharedSecret
+	return n.crypto.DHSharedSecret.Get()
 }
 
 func (n *node) SetDHSharedSecret(secret *ecdh.PublicKey) {
-	n.crypto.DHSharedSecret = secret
+	n.crypto.DHSharedSecret.Set(secret)
 }
 
 func (n *node) DHSharedSecretEqual(key *ecdh.PublicKey) bool {
@@ -366,7 +534,7 @@ func DHRound2(n *node, receivers map[string]struct{}) error {
 		if s == n.GetAddress() {
 			continue
 		}
-		n.crypto.DHchannels[s] = make(chan struct{})
+		n.crypto.DHchannels.Add(s)
 		waitGrp.Add(1)
 		go func(c chan struct{}, peer string) {
 			defer waitGrp.Done()
@@ -378,13 +546,12 @@ func DHRound2(n *node, receivers map[string]struct{}) error {
 				lock.Lock()
 				removedPeers = append(removedPeers, peer)
 				delete(receivers, peer)
-				delete(n.crypto.DHchannels, peer)
-				close(c)
+				n.crypto.DHchannels.Delete(peer)
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
 				lock.Unlock()
 			}
-		}(n.crypto.DHchannels[s], s)
+		}(n.crypto.DHchannels.Get(s), s)
 	}
 	err := SendPartialSecrets(n, receivers)
 	waitGrp.Wait()
@@ -412,10 +579,11 @@ func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
 			if err != nil {
 				return xerrors.Errorf("error when generating shared secret bytes: %v", err)
 			}
-			n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(sharedSecretBytes)
+			secret, err := n.crypto.DHCurve.NewPublicKey(sharedSecretBytes)
 			if err != nil {
 				return xerrors.Errorf("error when generating shared secret: %v", err)
 			}
+			n.crypto.DHSharedSecret.Set(secret)
 		}
 		n.crypto.DHPartialSecrets[dest] = keyToSend
 		localKey, err := x509.MarshalPKIXPublicKey(keyToSend)
@@ -444,17 +612,17 @@ func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
 }
 
 func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
-	n.crypto.DHIsLeader = true
+	n.crypto.DHIsLeader.Set(true)
 	n.crypto.DHInitSecrets = make(map[string](*ecdh.PrivateKey))
-	n.crypto.DHchannels = make(map[string]chan struct{})
+	n.crypto.DHchannels = StrChanMap{Map: make(map[string]chan struct{})}
 	n.crypto.DHPartialSecrets = make(map[string]*ecdh.PublicKey)
 	n.GenerateDHCurve()
 	DHPrivateKey, err := n.crypto.DHCurve.GenerateKey(rand.Reader)
 	if err != nil {
 		return xerrors.Errorf("error when starting DH key exchange: %v", err)
 	}
-	n.crypto.DHPrivateKey = DHPrivateKey
-	n.crypto.DHPublicKey = DHPrivateKey.PublicKey()
+	n.crypto.DHPrivateKey.Set(DHPrivateKey)
+	n.crypto.DHPublicKey.Set(DHPrivateKey.PublicKey())
 	multicastReceivers := make(map[string]struct{})
 	for s := range receivers {
 		if IsAddress(s) {
@@ -463,7 +631,7 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 	}
 	receivers = multicastReceivers
 
-	localPKBytes, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
+	localPKBytes, err := n.crypto.DHPublicKey.Marshal()
 	if err != nil {
 		return xerrors.Errorf("error when marshaling initiator PK: %v", err)
 	}
@@ -482,8 +650,14 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 
 	var wg sync.WaitGroup
 	var lock sync.Mutex
-	for s := range receivers {
-		n.crypto.DHchannels[s] = make(chan struct{})
+
+	multicastReceivers = make(map[string]struct{})
+	for r := range receivers {
+		multicastReceivers[r] = struct{}{}
+	}
+
+	for s := range multicastReceivers {
+		n.crypto.DHchannels.Add(s)
 		wg.Add(1)
 		go func(c chan struct{}, peer string) {
 			defer wg.Done()
@@ -494,13 +668,12 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 				//assume the remote node is malicious or dead
 				lock.Lock()
 				delete(receivers, peer)
-				delete(n.crypto.DHchannels, peer)
-				close(c)
+				n.crypto.DHchannels.Delete(peer)
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
 				lock.Unlock()
 			}
-		}(n.crypto.DHchannels[s], s)
+		}(n.crypto.DHchannels.Get(s), s)
 	}
 
 	err = n.NaiveMulticast(initTransportMsg, multicastReceivers)
@@ -539,7 +712,7 @@ func DHRemoveRound2(n *node, member string) error {
 		if s == n.GetAddress() {
 			continue
 		}
-		n.crypto.DHchannels[s] = make(chan struct{})
+		n.crypto.DHchannels.Add(s)
 		waitGrp.Add(1)
 		go func(c chan struct{}, peer string) {
 			defer waitGrp.Done()
@@ -550,13 +723,12 @@ func DHRemoveRound2(n *node, member string) error {
 				//assume the remote node is malicious or dead
 				lock.Lock()
 				removedPeers = append(removedPeers, peer)
-				delete(n.crypto.DHchannels, peer)
-				close(c)
+				n.crypto.DHchannels.Delete(peer)
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
 				lock.Unlock()
 			}
-		}(n.crypto.DHchannels[s], s)
+		}(n.crypto.DHchannels.Get(s), s)
 	}
 	err := SendPartialSecretsRemove(n, member)
 	waitGrp.Wait()
@@ -608,10 +780,11 @@ func SendPartialSecretsRemove(n *node, member string) error {
 			if err != nil {
 				return xerrors.Errorf("error when computing new DH SS bytes for removal of %v: %v", member, err)
 			}
-			n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(newSS)
+			secret, err := n.crypto.DHCurve.NewPublicKey(newSS)
 			if err != nil {
 				return xerrors.Errorf("error when computing new DH SS for removal of %v: %v", member, err)
 			}
+			n.crypto.DHSharedSecret.Set(secret)
 			newSharedSecretSet = true
 		}
 	}
@@ -623,7 +796,7 @@ func (n *node) GroupCallRemove(member string) error {
 	if !IsAddress(member) {
 		return xerrors.Errorf("error in GoupCallRemove: member isn't an IP address with port")
 	}
-	if !n.crypto.DHIsLeader {
+	if !n.crypto.DHIsLeader.Get() {
 		return nil
 	}
 	//If member = leader: must restart the exchange from a new leader, the leader should chose a new one
@@ -662,7 +835,7 @@ func DHAddRound2(n *node, member string, newKey *ecdh.PrivateKey) error {
 		if s == n.GetAddress() {
 			continue
 		}
-		n.crypto.DHchannels[s] = make(chan struct{})
+		n.crypto.DHchannels.Add(s)
 		waitGrp.Add(1)
 		go func(c chan struct{}, peer string) {
 			defer waitGrp.Done()
@@ -673,13 +846,12 @@ func DHAddRound2(n *node, member string, newKey *ecdh.PrivateKey) error {
 				//assume the remote node is malicious or dead
 				lock.Lock()
 				removedPeers = append(removedPeers, peer)
-				delete(n.crypto.DHchannels, peer)
-				close(c)
+				n.crypto.DHchannels.Delete(peer)
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
 				lock.Unlock()
 			}
-		}(n.crypto.DHchannels[s], s)
+		}(n.crypto.DHchannels.Get(s), s)
 	}
 
 	err := SendPartialSecretsInAddition(n, member, newKey)
@@ -701,14 +873,15 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 	if !ok {
 		return xerrors.Errorf("error when retrieving new member (%v)'s shared secret", member)
 	}
-	newSharedSecretBytes, err := newMemberSecret.ECDH(n.crypto.DHSharedSecret)
+	newSharedSecretBytes, err := n.crypto.DHSharedSecret.ECDH(newMemberSecret)
 	if err != nil {
 		return xerrors.Errorf("error when generating new shared PK bytes to add member %v: %v", member, err)
 	}
-	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(newSharedSecretBytes)
+	secret, err := n.crypto.DHCurve.NewPublicKey(newSharedSecretBytes)
 	if err != nil {
 		return xerrors.Errorf("error when generating new shared PK to add member %v: %v", member, err)
 	}
+	n.crypto.DHSharedSecret.Set(secret)
 
 	for s, key := range n.crypto.DHPartialSecrets {
 		if s == n.GetAddress() {
@@ -758,11 +931,11 @@ func (n *node) GroupCallAdd(member string) error {
 	if !IsAddress(member) {
 		return xerrors.Errorf("error in GoupCallAdd: member isn't an IP address with port")
 	}
-	if !n.crypto.DHIsLeader {
+	if !n.crypto.DHIsLeader.Get() {
 		return nil
 	}
 
-	localPKBytes, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
+	localPKBytes, err := n.crypto.DHPublicKey.Marshal()
 	if err != nil {
 		return xerrors.Errorf("error when marshaling local DH PK to add member %v: %v", member, err)
 	}
@@ -780,7 +953,7 @@ func (n *node) GroupCallAdd(member string) error {
 	}
 
 	var wg sync.WaitGroup
-	n.crypto.DHchannels[member] = make(chan struct{})
+	n.crypto.DHchannels.Add(member)
 	wg.Add(1)
 	go func(c chan struct{}, peer string) {
 		defer wg.Done()
@@ -788,12 +961,11 @@ func (n *node) GroupCallAdd(member string) error {
 		case <-c:
 			return
 		case <-time.After(time.Second * 5):
-			delete(n.crypto.DHchannels, peer)
-			close(c)
+			n.crypto.DHchannels.Delete(peer)
 			delete(n.crypto.DHPartialSecrets, peer)
 			delete(n.crypto.DHInitSecrets, peer)
 		}
-	}(n.crypto.DHchannels[member], member)
+	}(n.crypto.DHchannels.Get(member), member)
 
 	err = n.Unicast(member, initTransportMsg)
 	if err != nil {
@@ -820,16 +992,17 @@ func (n *node) GroupCallAdd(member string) error {
 		}
 	}
 
-	newSSKey, err := newKey.ECDH(n.crypto.DHSharedSecret)
+	newSSKey, err := n.crypto.DHSharedSecret.ECDH(newKey)
 	if err != nil {
 		return xerrors.Errorf("error when generating new SS bytes to add member %v: %v", member, err)
 	}
-	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(newSSKey)
+	secret, err := n.crypto.DHCurve.NewPublicKey(newSSKey)
 	if err != nil {
 		return xerrors.Errorf("error when generating new SS to add member %v: %v", member, err)
 	}
+	n.crypto.DHSharedSecret.Set(secret)
 
-	newPartialSecretKeyMarshaled, err := x509.MarshalPKIXPublicKey(n.crypto.DHSharedSecret)
+	newPartialSecretKeyMarshaled, err := n.crypto.DHSharedSecret.Marshal()
 	if err != nil {
 		return xerrors.Errorf("error when marshaling partial key for %v to add %v: %v", member, member, err)
 	}
@@ -852,18 +1025,20 @@ func (n *node) GroupCallAdd(member string) error {
 }
 
 func (n *node) GroupCallEnd() {
-	n.crypto.DHCurve = nil
-	n.crypto.DHSharedPersonalSecret = nil
-	n.crypto.DHSharedSecret = nil
-	n.crypto.DHPrivateKey = nil
-	n.crypto.DHPublicKey = nil
-	n.crypto.DHIsLeader = false
-	for s, ch := range n.crypto.DHchannels {
+	n.crypto.DHCurve.Set(nil)
+	n.crypto.DHSharedPersonalSecret.Set(nil)
+	n.crypto.DHSharedSecret.Set(nil)
+	n.crypto.DHPrivateKey.Set(nil)
+	n.crypto.DHPublicKey.Set(nil)
+	n.crypto.DHIsLeader.Set(false)
+	n.crypto.DHchannels.Mutex.Lock()
+	for s, ch := range n.crypto.DHchannels.Map {
 		close(ch)
-		delete(n.crypto.DHchannels, s)
+		delete(n.crypto.DHchannels.Map, s)
 	}
+	n.crypto.DHchannels.Mutex.Unlock()
 	for s := range n.crypto.DHInitSecrets {
-		delete(n.crypto.DHchannels, s)
+		delete(n.crypto.DHInitSecrets, s)
 	}
 	for s := range n.crypto.DHPartialSecrets {
 		delete(n.crypto.DHPartialSecrets, s)
@@ -883,7 +1058,7 @@ func (n *node) ExecGroupCallDHIndividual(msg types.Message, packet transport.Pac
 	if !ok {
 		return xerrors.Errorf("error when casting remote DH individual PK: type %T", remoteK)
 	}
-	if n.crypto.DHIsLeader {
+	if n.crypto.DHIsLeader.Get() {
 		sharedSecretBytes, err := n.crypto.DHPrivateKey.ECDH(remoteKey)
 		if err != nil {
 			return xerrors.Errorf("error in individual DH key exchange when generating secret bytes: %v", err)
@@ -893,29 +1068,30 @@ func (n *node) ExecGroupCallDHIndividual(msg types.Message, packet transport.Pac
 			return xerrors.Errorf("error in individual DH key exchange when generating secret: %v", err)
 		}
 		n.crypto.DHInitSecrets[packet.Header.Source] = sharedSecret
-		returnChan, ok := n.crypto.DHchannels[packet.Header.Source]
+		returnChan, ok := n.crypto.DHchannels.SafeGet(packet.Header.Source)
 		if ok {
 			returnChan <- struct{}{}
-			close(n.crypto.DHchannels[packet.Header.Source])
-			delete(n.crypto.DHchannels, packet.Header.Source)
+			n.crypto.DHchannels.Delete(packet.Header.Source)
 		}
 		return nil
 	}
-	n.crypto.DHCurve = remoteKey.Curve()
-	n.crypto.DHPrivateKey, err = remoteKey.Curve().GenerateKey(rand.Reader)
+	n.crypto.DHCurve.Set(remoteKey.Curve())
+	privateK, err := remoteKey.Curve().GenerateKey(rand.Reader)
 	if err != nil {
 		return xerrors.Errorf("error in individual DH key exchange when generating key: %v", err)
 	}
-	n.crypto.DHPublicKey = n.crypto.DHPrivateKey.PublicKey()
+	n.crypto.DHPrivateKey.Set(privateK)
+	n.crypto.DHPublicKey.Set(privateK.PublicKey())
 	sharedSecret, err := n.crypto.DHPrivateKey.ECDH(remoteKey)
 	if err != nil {
 		return xerrors.Errorf("error in individual DH key exchange when generating secret bytes: %v", err)
 	}
-	n.crypto.DHSharedPersonalSecret, err = n.crypto.DHCurve.NewPublicKey(sharedSecret)
+	sharedPersonalSecret, err := n.crypto.DHCurve.NewPublicKey(sharedSecret)
 	if err != nil {
 		return xerrors.Errorf("error in individual DH key exchange when generating secret: %v", err)
 	}
-	localPublicKeyBytes, err := x509.MarshalPKIXPublicKey(n.crypto.DHPublicKey)
+	n.crypto.DHSharedPersonalSecret.Set(sharedPersonalSecret)
+	localPublicKeyBytes, err := n.crypto.DHPublicKey.Marshal()
 	if err != nil {
 		return xerrors.Errorf("error when marshaling DH init answer from %v to %v: %v",
 			n.GetAddress(),
@@ -950,12 +1126,11 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	if !ok {
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
-	if n.crypto.DHIsLeader {
-		returnChan, ok := n.crypto.DHchannels[packet.Header.Source]
+	if n.crypto.DHIsLeader.Get() {
+		returnChan, ok := n.crypto.DHchannels.SafeGet(packet.Header.Source)
 		if ok {
 			returnChan <- struct{}{}
-			close(n.crypto.DHchannels[packet.Header.Source])
-			delete(n.crypto.DHchannels, packet.Header.Source)
+			n.crypto.DHchannels.Delete(packet.Header.Source)
 		}
 		return nil
 	}
@@ -975,10 +1150,11 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	if err != nil {
 		return xerrors.Errorf("error when generating final shared secret: %v", err)
 	}
-	n.crypto.DHSharedSecret, err = n.crypto.DHCurve.NewPublicKey(finalSecretBytes)
+	sharedSecret, err := n.crypto.DHCurve.NewPublicKey(finalSecretBytes)
 	if err != nil {
 		return xerrors.Errorf("error when creating shared secret: %v", err)
 	}
+	n.crypto.DHSharedSecret.Set(sharedSecret)
 
 	ackMsg := types.GroupCallDHSharedSecret{}
 	data, err := json.Marshal(&ackMsg)
