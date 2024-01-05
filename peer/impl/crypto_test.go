@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"math/big"
-	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -578,6 +577,7 @@ func TestCrypto_DH_Removal(t *testing.T) {
 	nodeA.crypto.DHSharedSecret.Mutex.Unlock()
 }
 
+/*
 func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 	udpTransport := udp.NewUDP()
 
@@ -1034,3 +1034,4 @@ func GenerateRandomGraph(peers []*node) {
 		addrToPeer[k].AddPeer(v...)
 	}
 }
+*/

@@ -8,14 +8,8 @@ import (
 	"time"
 
 	z "go.dedis.ch/cs438/internal/testing"
-	"go.dedis.ch/cs438/peer/impl"
 	"go.dedis.ch/cs438/transport/udp"
 )
-
-func randInt(N int) int {
-	randNum, _ := rand.Int(rand.Reader, big.NewInt(int64(N)))
-	return int(randNum.Int64())
-}
 
 //This is not really a performance test file, the tests are measurements
 //They measure the execution time of the key exchange, member addition/removal
@@ -24,6 +18,11 @@ func randInt(N int) int {
 //integration test with basically is the same but for a fixed group size and done only once
 //and merging all 3 perf tests (key exchange, addition and removal)
 
+func randomInt(N int) int {
+	randNum, _ := rand.Int(rand.Reader, big.NewInt(int64(N)))
+	return int(randNum.Int64())
+}
+
 func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 	//Generate the network
 	transp := udp.NewUDP()
@@ -31,7 +30,7 @@ func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < 30; i++ {
-		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
@@ -54,7 +53,7 @@ func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 			members := make([]int, 0)
 			//Create the DH group
 			for j := 0; j < i; j++ {
-				k := randInt(len(peers))
+				k := randomInt(len(peers))
 				found := false
 				for !found {
 					contained := false
@@ -68,7 +67,7 @@ func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 						found = true
 						members = append(members, k)
 					} else {
-						k = randInt(len(peers))
+						k = randomInt(len(peers))
 					}
 				}
 			}
@@ -101,7 +100,7 @@ func TestCrypto_Perf_DH_Addition(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < 30; i++ {
-		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
@@ -121,7 +120,7 @@ func TestCrypto_Perf_DH_Addition(t *testing.T) {
 		for try := 0; try < 50; try++ {
 			members := make([]int, 0)
 			for j := 0; j < i; j++ {
-				k := randInt(len(peers))
+				k := randomInt(len(peers))
 				found := false
 				for !found {
 					contained := false
@@ -135,7 +134,7 @@ func TestCrypto_Perf_DH_Addition(t *testing.T) {
 						found = true
 						members = append(members, k)
 					} else {
-						k = randInt(len(peers))
+						k = randomInt(len(peers))
 					}
 				}
 			}
@@ -167,7 +166,7 @@ func TestCrypto_Perf_DH_Removal(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < 30; i++ {
-		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
@@ -187,7 +186,7 @@ func TestCrypto_Perf_DH_Removal(t *testing.T) {
 		for try := 0; try < 50; try++ {
 			members := make([]int, 0)
 			for j := 0; j < i; j++ {
-				k := randInt(len(peers))
+				k := randomInt(len(peers))
 				found := false
 				for !found {
 					contained := false
@@ -201,7 +200,7 @@ func TestCrypto_Perf_DH_Removal(t *testing.T) {
 						found = true
 						members = append(members, k)
 					} else {
-						k = randInt(len(peers))
+						k = randomInt(len(peers))
 					}
 				}
 			}
@@ -235,7 +234,7 @@ func TestCrypto_Perf_DH_Key_Exchange_Network_Size(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < 30; i++ {
-		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
@@ -255,7 +254,7 @@ func TestCrypto_Perf_DH_Key_Exchange_Network_Size(t *testing.T) {
 	for try := 0; try < 50; try++ {
 		members := make([]int, 0)
 		for j := 0; j < 7; j++ {
-			k := randInt(len(peers))
+			k := randomInt(len(peers))
 			found := false
 			for !found {
 				contained := false
@@ -269,7 +268,7 @@ func TestCrypto_Perf_DH_Key_Exchange_Network_Size(t *testing.T) {
 					found = true
 					members = append(members, k)
 				} else {
-					k = randInt(len(peers))
+					k = randomInt(len(peers))
 				}
 			}
 		}
@@ -301,7 +300,7 @@ func TestCrypto_Perf_DH_Addition_Network_Size(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < 30; i++ {
-		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
@@ -320,7 +319,7 @@ func TestCrypto_Perf_DH_Addition_Network_Size(t *testing.T) {
 	for try := 0; try < 50; try++ {
 		members := make([]int, 0)
 		for j := 0; j < 7; j++ {
-			k := randInt(len(peers))
+			k := randomInt(len(peers))
 			found := false
 			for !found {
 				contained := false
@@ -334,7 +333,7 @@ func TestCrypto_Perf_DH_Addition_Network_Size(t *testing.T) {
 					found = true
 					members = append(members, k)
 				} else {
-					k = randInt(len(peers))
+					k = randomInt(len(peers))
 				}
 			}
 		}
@@ -367,7 +366,7 @@ func TestCrypto_Perf_DH_Removal_Network_Size(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < 30; i++ {
-		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
@@ -386,7 +385,7 @@ func TestCrypto_Perf_DH_Removal_Network_Size(t *testing.T) {
 	for try := 0; try < 50; try++ {
 		members := make([]int, 0)
 		for j := 0; j < 7; j++ {
-			k := randInt(len(peers))
+			k := randomInt(len(peers))
 			found := false
 			for !found {
 				contained := false
@@ -400,7 +399,7 @@ func TestCrypto_Perf_DH_Removal_Network_Size(t *testing.T) {
 					found = true
 					members = append(members, k)
 				} else {
-					k = randInt(len(peers))
+					k = randomInt(len(peers))
 				}
 			}
 		}
