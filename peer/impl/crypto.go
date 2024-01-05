@@ -942,7 +942,7 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 
 	for s, key := range n.crypto.DHPartialSecrets {
 		//For all member we update the shared secret and send it
-		if s == n.GetAddress() || s == member {
+		if s == n.GetAddress() {
 			continue
 		}
 		//Compute the new partial secret
@@ -1069,8 +1069,6 @@ func (n *node) GroupCallAdd(member string) error {
 	}
 	n.crypto.DHSharedSecret.Set(secret)
 
-	n.crypto.DHPartialSecrets[member] = secret
-
 	newPartialSecretKeyMarshaled, err := n.crypto.DHSharedSecret.Marshal()
 	if err != nil {
 		return xerrors.Errorf("error when marshaling partial key for %v to add %v: %v", member, member, err)
@@ -1091,7 +1089,10 @@ func (n *node) GroupCallAdd(member string) error {
 		return xerrors.Errorf("error when unicasting partial secret to additional member %v: %v", member, err)
 	}
 
-	return DHAddRound2(n, member, newKey)
+	err = DHAddRound2(n, member, newKey)
+
+	n.crypto.DHPartialSecrets[member] = secret
+	return err
 }
 
 func (n *node) GroupCallEnd() {
