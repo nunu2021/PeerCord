@@ -17,7 +17,15 @@ func randInt(N int) int {
 	return int(randNum.Int64())
 }
 
+//This is not really a performance test file, the tests are measurements
+//They measure the execution time of the key exchange, member addition/removal
+//for random networks and DH groups with scaling size (of the group)
+//These tests assume the system works (do not check for errors), this is done in the
+//integration test with basically is the same but for a fixed group size and done only once
+//and merging all 3 perf tests (key exchange, addition and removal)
+
 func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
+	//Generate the network
 	transp := udp.NewUDP()
 
 	peers := make([]*z.TestNode, 0)
@@ -39,9 +47,12 @@ func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 	time.Sleep(time.Second * 10)
 
 	for i := 3; i <= 10; i++ {
+		//Do the test for group sizes from 3 to 10
 		times := make([]time.Duration, 0)
 		for try := 0; try < 50; try++ {
+			//Do the measurement 50 times
 			members := make([]int, 0)
+			//Create the DH group
 			for j := 0; j < i; j++ {
 				k := randInt(len(peers))
 				found := false
@@ -61,6 +72,7 @@ func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 					}
 				}
 			}
+			//Create the list of receivers (all except the first member of the group)
 			receivers := make(map[string]struct{})
 			first := true
 			for _, v := range members {
@@ -70,6 +82,7 @@ func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 				}
 				receivers[peers[v].GetAddr()] = struct{}{}
 			}
+			//Measure the DH key exchange execution time
 			t := time.Now()
 			peers[members[0]].StartDHKeyExchange(receivers)
 			times = append(times, time.Since(t))

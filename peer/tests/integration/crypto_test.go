@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	z "go.dedis.ch/cs438/internal/testing"
 	"go.dedis.ch/cs438/peer/impl"
 	"go.dedis.ch/cs438/transport/udp"
@@ -17,9 +18,10 @@ func randInt(N int) int {
 	return int(randNum.Int64())
 }
 
-// Scenario with 50 nodes in network, 10 initially in group call
-// Then 5 are added and 5 removed (random order) every 3 seconds
+// Scenario with 30 nodes in network, 5 initially in group call
+// Then 3 are added and 3 removed (random order) every 3 seconds
 func TestCrypto_Int_DH_Key_Exchange(t *testing.T) {
+	//Generate the random network
 	transp := udp.NewUDP()
 
 	groupSize := 5
@@ -40,6 +42,7 @@ func TestCrypto_Int_DH_Key_Exchange(t *testing.T) {
 		peer.Start()
 	}
 
+	//Wait a bit for every peer to know about every other peer
 	time.Sleep(time.Second * 5)
 
 	members := make([]int, 0)
@@ -90,6 +93,7 @@ func TestCrypto_Int_DH_Key_Exchange(t *testing.T) {
 			}
 		}
 	}
+	//Receivers are all members except the first (it's the one starting the call)
 	receivers := make(map[string]struct{})
 	first := true
 	for _, v := range members {
@@ -99,23 +103,24 @@ func TestCrypto_Int_DH_Key_Exchange(t *testing.T) {
 		}
 		receivers[peers[v].GetAddr()] = struct{}{}
 	}
-	peers[members[0]].StartDHKeyExchange(receivers)
+	//Do the initial key exchange
+	require.NoError(t, peers[members[0]].StartDHKeyExchange(receivers))
 	nbRemoval := 0
 	nbAdd := 0
+	//Do the removals and additions
 	for nbRemoval < 3 || nbAdd < 3 {
-		t.Log(nbAdd, nbRemoval)
 		time.Sleep(time.Second * 5)
 		if nbRemoval == 3 {
-			peers[members[0]].GroupCallAdd(peers[additionalMembers[nbAdd]].GetAddr())
+			require.NoError(t, peers[members[0]].GroupCallAdd(peers[additionalMembers[nbAdd]].GetAddr()))
 			members = append(members, additionalMembers[nbAdd])
 			nbAdd++
 		} else if nbAdd == 3 || randInt(100) < 50 {
 			rdm := randInt(len(members)-1) + 1
-			peers[members[0]].GroupCallRemove(peers[members[rdm]].GetAddr())
+			require.NoError(t, peers[members[0]].GroupCallRemove(peers[members[rdm]].GetAddr()))
 			members = append(members[:rdm], members[rdm+1:]...)
 			nbRemoval++
 		} else {
-			peers[members[0]].GroupCallAdd(peers[additionalMembers[nbAdd]].GetAddr())
+			require.NoError(t, peers[members[0]].GroupCallAdd(peers[additionalMembers[nbAdd]].GetAddr()))
 			members = append(members, additionalMembers[nbAdd])
 			nbAdd++
 		}

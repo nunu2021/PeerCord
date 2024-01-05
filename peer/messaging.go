@@ -72,7 +72,7 @@ type Messaging interface {
 	RemovePublicKey(peer string)
 
 	// Verify the public ID
-	VerifyPK(peer, pubID string, key []byte) bool
+	VerifyPID(peer, pubID string, key []byte) (bool, bool)
 
 	// Sign a message with the given key
 	Sign(key, packet []byte) ([]byte, error)
