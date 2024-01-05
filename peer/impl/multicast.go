@@ -147,6 +147,33 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 	return nil
 }
 
+// Stop receiving messages from the group if needed
+// We suppose that the map containing information about the groups is locked
+func (n *node) leaveMulticastGroupIfNeeded(groupID string, group *MulticastGroup) error {
+	// Don't delete our own group even if nobody is listening
+	if group.sender == n.GetAddress() {
+		return nil
+	}
+
+	if len(group.forwards) == 0 && !group.isInGroup {
+		n.multicast.groups.unsafeDelete(groupID)
+
+		req := types.LeaveMulticastGroupRequestMessage{
+			GroupID: groupID,
+		}
+
+		err := n.marshalAndUnicast(group.nextHopToSender, req)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't unicast leave multicast group request")
+			return err
+		}
+
+		// TODO wait for ACK?
+	}
+
+	return nil
+}
+
 // LeaveMulticastGroup allows a peer to leave the multicast group with the
 // given id and created by the given peer. It sends a packet containing the
 // request to leave the group.
@@ -165,21 +192,10 @@ func (n *node) LeaveMulticastGroup(groupSender string, groupID string) error {
 
 	group.isInGroup = false
 
-	// Stop receiving messages from the group if needed
-	if len(group.forwards) == 0 {
-		n.multicast.groups.unsafeDelete(groupID)
-
-		req := types.LeaveMulticastGroupRequestMessage{
-			GroupID: groupID,
-		}
-
-		err := n.marshalAndUnicast(group.nextHopToSender, req)
-		if err != nil {
-			n.logger.Error().Err(err).Msg("can't unicast leave multicast group request")
-			return err
-		}
-
-		// TODO wait for ACK?
+	err := n.leaveMulticastGroupIfNeeded(groupID, group)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't leave multicast group if needed")
+		return err
 	}
 
 	return nil
@@ -220,10 +236,30 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 }
 
 func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt transport.Packet) error {
-	/*msg, ok := originalMsg.(*types.LeaveMulticastGroupRequestMessage)
+	msg, ok := originalMsg.(*types.LeaveMulticastGroupRequestMessage)
 	if !ok {
 		panic("not a leave multicast group request message")
-	}*/
+	}
+
+	group, ok := n.multicast.groups.getReference(msg.GroupID)
+	if !ok {
+		n.logger.Warn().Str("groupID", msg.GroupID).Msg("can't leave unknown group")
+		return nil
+	}
+	defer n.multicast.groups.unlock()
+
+	_, ok = group.forwards[pkt.Header.Source]
+	if !ok {
+		n.logger.Warn().Msg("peer does not belong to the group")
+		return nil
+	}
+	delete(group.forwards, pkt.Header.Source)
+
+	err := n.leaveMulticastGroupIfNeeded(msg.GroupID, group)
+	if err != nil {
+		n.logger.Error().Err(err).Msg("can't leave multicast group if needed")
+		return err
+	}
 
 	return nil
 }
