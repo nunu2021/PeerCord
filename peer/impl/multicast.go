@@ -165,7 +165,22 @@ func (n *node) LeaveMulticastGroup(groupSender string, groupID string) error {
 
 	group.isInGroup = false
 
-	// TODO send the request, wait for an ACK?
+	// Stop receiving messages from the group if needed
+	if len(group.forwards) == 0 {
+		n.multicast.groups.unsafeDelete(groupID)
+
+		req := types.LeaveMulticastGroupRequestMessage{
+			GroupID: groupID,
+		}
+
+		err := n.marshalAndUnicast(group.nextHopToSender, req)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't unicast leave multicast group request")
+			return err
+		}
+
+		// TODO wait for ACK?
+	}
 
 	return nil
 }

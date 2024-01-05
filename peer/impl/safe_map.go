@@ -57,6 +57,10 @@ func (sm *safeMap[T, U]) delete(key T) {
 	sm.mutex.Unlock()
 }
 
+func (sm *safeMap[T, U]) unsafeDelete(key T) {
+	delete(sm.data, key)
+}
+
 // Returns the internal map. The map must be manually unlocked
 func (sm *safeMap[T, U]) internalMap() map[T]U {
 	sm.mutex.Lock()
