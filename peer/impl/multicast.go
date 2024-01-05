@@ -236,8 +236,11 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage bool) error {
 	group, ok := n.multicast.groups.getReference(groupID)
 	if !ok {
-		n.logger.Error().Msg("can't send message to unknown multicast group")
-		return UnknownMulticastGroupError(groupID)
+		if isNewMessage {
+			n.logger.Error().Msg("can't send message to unknown multicast group")
+			return UnknownMulticastGroupError(groupID)
+		}
+		return nil
 	}
 
 	if isNewMessage && group.sender != n.GetAddress() {
