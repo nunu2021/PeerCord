@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"crypto/ecdh"
 	"crypto/rand"
 	"math/big"
 	mrand "math/rand"
@@ -16,6 +17,57 @@ import (
 func randInt(N int) int {
 	randNum, _ := rand.Int(rand.Reader, big.NewInt(int64(N)))
 	return int(randNum.Int64())
+}
+
+func verifyKeyExchange(t *testing.T, peers []*z.TestNode, members []int) {
+	curve := peers[members[0]].GetDHCurve()
+	leader := peers[members[0]]
+	oneToOneKeys := make(map[int](*ecdh.PrivateKey))
+	for index, i := range members {
+		if index == 0 {
+			continue
+		}
+		k, err := leader.ECDH(peers[i].GetDHPK())
+		require.NoError(t, err)
+		sk, err := curve.NewPrivateKey(k)
+		require.NoError(t, err)
+		oneToOneKeys[index] = sk
+	}
+
+	sharedSecret := oneToOneKeys[1].PublicKey()
+	for i, k := range oneToOneKeys {
+		if i == 1 {
+			continue
+		}
+		pkb, err := k.ECDH(sharedSecret)
+		require.NoError(t, err)
+		sharedSecret, err = curve.NewPublicKey(pkb)
+		require.NoError(t, err)
+	}
+
+	for _, i := range members {
+		require.Equal(t, true, peers[i].DHSharedSecretEqual(sharedSecret))
+	}
+}
+
+func verifyAdd(t *testing.T, peers []*z.TestNode, members []int, addedMember int, prevSecret *ecdh.PublicKey) {
+	leader := peers[members[0]]
+
+	specialMemberSS := peers[addedMember].GetDHSharedSecret()
+	require.NotEqual(t, nil, specialMemberSS)
+	require.Equal(t, false, leader.DHSharedSecretEqual(prevSecret))
+	for _, i := range members {
+		require.Equal(t, true, peers[i].DHSharedSecretEqual(specialMemberSS))
+	}
+}
+
+func verifyRem(t *testing.T, peers []*z.TestNode, members []int, prevSecret *ecdh.PublicKey) {
+	leaderSS := peers[members[0]].GetDHSharedSecret()
+
+	require.Equal(t, false, peers[members[0]].DHSharedSecretEqual(prevSecret))
+	for _, i := range members {
+		require.Equal(t, true, peers[i].DHSharedSecretEqual(leaderSS))
+	}
 }
 
 // Scenario with 30 nodes in network, 5 initially in group call
@@ -105,22 +157,29 @@ func TestCrypto_Int_DH_Key_Exchange(t *testing.T) {
 	}
 	//Do the initial key exchange
 	require.NoError(t, peers[members[0]].StartDHKeyExchange(receivers))
+	verifyKeyExchange(t, peers, members)
 	nbRemoval := 0
 	nbAdd := 0
 	//Do the removals and additions
 	for nbRemoval < 3 || nbAdd < 3 {
 		time.Sleep(time.Second * 5)
 		if nbRemoval == 3 {
+			prevSS := peers[members[0]].GetDHSharedSecret()
 			require.NoError(t, peers[members[0]].GroupCallAdd(peers[additionalMembers[nbAdd]].GetAddr()))
+			verifyAdd(t, peers, members, additionalMembers[nbAdd], prevSS)
 			members = append(members, additionalMembers[nbAdd])
 			nbAdd++
 		} else if nbAdd == 3 || randInt(100) < 50 {
 			rdm := randInt(len(members)-1) + 1
+			prevSS := peers[members[0]].GetDHSharedSecret()
 			require.NoError(t, peers[members[0]].GroupCallRemove(peers[members[rdm]].GetAddr()))
 			members = append(members[:rdm], members[rdm+1:]...)
+			verifyRem(t, peers, members, prevSS)
 			nbRemoval++
 		} else {
+			prevSS := peers[members[0]].GetDHSharedSecret()
 			require.NoError(t, peers[members[0]].GroupCallAdd(peers[additionalMembers[nbAdd]].GetAddr()))
+			verifyAdd(t, peers, members, additionalMembers[nbAdd], prevSS)
 			members = append(members, additionalMembers[nbAdd])
 			nbAdd++
 		}

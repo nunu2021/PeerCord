@@ -754,7 +754,7 @@ func DHRemoveRound2(n *node, member string) error {
 			}
 		}(n.crypto.DHchannels.Get(s), s)
 	}
-	//We send the new partial secrets (with a randomly generated key and
+	//We send the new partial secrets (with the randomly generated key and
 	//without the old member's key)
 	err := SendPartialSecretsRemove(n, member)
 	waitGrp.Wait()
@@ -942,7 +942,7 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 
 	for s, key := range n.crypto.DHPartialSecrets {
 		//For all member we update the shared secret and send it
-		if s == n.GetAddress() {
+		if s == n.GetAddress() || s == member {
 			continue
 		}
 		//Compute the new partial secret
@@ -1068,6 +1068,8 @@ func (n *node) GroupCallAdd(member string) error {
 		return xerrors.Errorf("error when generating new SS to add member %v: %v", member, err)
 	}
 	n.crypto.DHSharedSecret.Set(secret)
+
+	n.crypto.DHPartialSecrets[member] = secret
 
 	newPartialSecretKeyMarshaled, err := n.crypto.DHSharedSecret.Marshal()
 	if err != nil {
