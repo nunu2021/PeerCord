@@ -90,7 +90,7 @@ func TestCrypto_OtO_Enc_Dec(t *testing.T) {
 	//Generate a random message
 	size := randInt(446) //Above 446 is too large for rsa key size
 	randomBytes := make([]byte, size)
-	size, _ = rand.Read(randomBytes)
+	rand.Read(randomBytes)
 	//Generate a key pair
 	err := nodeA.GenerateKeyPair()
 	require.NoError(t, err)
@@ -118,7 +118,7 @@ func TestCrypto_OtO_Enc_Dec_Wrong_Key(t *testing.T) {
 	//Create a random message
 	size := randInt(446) //Above 446 is too large for rsa key size
 	randomBytes := make([]byte, size)
-	size, _ = rand.Read(randomBytes)
+	rand.Read(randomBytes)
 
 	//Create 2 fake key pairs
 	err := nodeA.GenerateKeyPair()

@@ -1,4 +1,4 @@
-package perf
+package impl
 
 import (
 	"crypto/rand"
