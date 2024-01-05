@@ -12,6 +12,7 @@ import (
 type Peer interface {
 	Service
 	Messaging
+	Multicast
 	DataSharing
 }
 
