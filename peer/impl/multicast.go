@@ -44,6 +44,11 @@ type MulticastGroup struct {
 	// sent on this channel when the group should be deleted.
 	mustBeDeleted chan struct{}
 
+	// Only used if the peer is not the sender of the group. A message is sent
+	// on this channel when the peer receives a message on the multicast group.
+	// It is used to detect inactivity on the group.
+	messageReceived chan struct{}
+
 	// Must be locked when using the multicast group
 	mtx sync.Mutex
 }
@@ -146,11 +151,13 @@ func (n *node) watchMulticastGroupNotSender(groupID string) {
 		return
 	}
 
-	for firstIter := true; ; firstIter = false {
-		group.mtx.Lock()
+	creationDate := time.Now()
+	lastMessageReceived, lastJoinSent := time.Now(), time.Time{}
 
+	for {
 		// Delete the group if it is no longer needed
-		if len(group.forwards) == 0 && !group.isInGroup && !firstIter {
+		group.mtx.Lock()
+		if len(group.forwards) == 0 && !group.isInGroup && time.Now().After(creationDate.Add(time.Second)) {
 			n.multicast.groups.delete(groupID)
 
 			req := types.LeaveMulticastGroupRequestMessage{
@@ -164,23 +171,31 @@ func (n *node) watchMulticastGroupNotSender(groupID string) {
 
 			return
 		}
-
 		group.mtx.Unlock()
 
-		// Send a join message
-		req := types.JoinMulticastGroupRequestMessage{
-			GroupSender: group.sender,
-			GroupID:     groupID,
-		}
+		select {
+		case <-time.After(time.Until(lastJoinSent.Add(n.conf.MulticastResendJoinInterval))):
+			// Send a join message
+			req := types.JoinMulticastGroupRequestMessage{
+				GroupSender: group.sender,
+				GroupID:     groupID,
+			}
 
-		err := n.marshalAndUnicast(group.nextHopToSender, req)
-		if err != nil {
-			n.logger.Error().Err(err).Msg("can't unicast join multicast group request")
+			err := n.marshalAndUnicast(group.nextHopToSender, req)
+			if err != nil {
+				n.logger.Error().Err(err).Msg("can't unicast join multicast group request")
+				return
+			}
+			lastJoinSent = time.Now()
+
+		case <-group.messageReceived:
+			lastMessageReceived = time.Now()
+
+		case <-time.After(time.Until(lastMessageReceived.Add(n.conf.MulticastInactivityTimeout))):
+			// Delete the group
+			n.multicast.groups.delete(groupID)
 			return
 		}
-
-		// Wait until the next join message
-		time.Sleep(n.conf.MulticastResendJoinInterval)
 	}
 }
 
@@ -284,6 +299,7 @@ func (n *node) joinMulticastTree(groupSender string, groupID string) error {
 		nextHopToSender: next,
 		forwards:        make(map[string]ForwardsInfo),
 		isInGroup:       false,
+		messageReceived: make(chan struct{}),
 	})
 	go n.watchMulticastGroupNotSender(groupID)
 
@@ -418,6 +434,10 @@ func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage
 			return UnknownMulticastGroupError(groupID)
 		}
 		return nil
+	}
+
+	if group.sender != n.GetAddress() {
+		group.messageReceived <- struct{}{}
 	}
 
 	group.mtx.Lock()
