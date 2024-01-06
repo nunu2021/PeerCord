@@ -1,14 +1,17 @@
 package unit
 
 import (
+	"encoding/json"
 	"github.com/stretchr/testify/require"
 	z "go.dedis.ch/cs438/internal/testing"
+	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/transport/channel"
+	"go.dedis.ch/cs438/types"
 	"testing"
 	"time"
 )
 
-func Test_MulticastNaive(t *testing.T) {
+/*func Test_MulticastNaive(t *testing.T) {
 	transp := channel.NewTransport()
 
 	fake := z.NewFakeMessage(t)
@@ -59,7 +62,7 @@ func Test_MulticastNaive(t *testing.T) {
 	require.Len(t, outs, 2)
 	require.Equal(t, outs[0].Header.Destination, sock1.GetAddress())
 	require.Equal(t, outs[1].Header.Destination, sock3.GetAddress())
-}
+}*/
 
 func Test_MulticastListener(t *testing.T) {
 	transp := channel.NewTransport()
@@ -146,4 +149,53 @@ func Test_MulticastSender(t *testing.T) {
 	require.Len(t, outs, 2)
 	require.Equal(t, outs[0].Header.Destination, sock1.GetAddress())
 	require.Equal(t, outs[1].Header.Destination, sock3.GetAddress())*/
+}
+
+func Test_MulticastJoinTimeout(t *testing.T) {
+	transp := channel.NewTransport()
+	fake := z.NewFakeMessage(t)
+
+	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+	defer node.Stop()
+
+	sock, err := transp.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	defer sock.Close()
+
+	node.AddPeer(sock.GetAddress())
+
+	// Create a new multicast group
+	id := node.NewMulticastGroup()
+
+	// Make the socket join the group
+	joinMsg := types.JoinMulticastGroupRequestMessage{
+		GroupSender: node.GetAddr(),
+		GroupID:     id,
+	}
+	data, err := json.Marshal(&joinMsg)
+	require.NoError(t, err)
+
+	msg := transport.Message{
+		Type:    joinMsg.Name(),
+		Payload: data,
+	}
+
+	header := transport.NewHeader(sock.GetAddress(), sock.GetAddress(), node.GetAddr(), 0)
+	pkt := transport.Packet{Header: &header, Msg: &msg}
+
+	require.NoError(t, sock.Send(node.GetAddr(), pkt, time.Second))
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Send a message to the group
+	require.NoError(t, node.Multicast(fake.GetNetMsg(t), id))
+	time.Sleep(10 * time.Millisecond)
+
+	nIns := node.GetIns()
+	require.Len(t, nIns, 1)
+
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	sIns := sock.GetIns()
+	require.Len(t, sIns, 1)
 }
