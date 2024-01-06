@@ -137,11 +137,11 @@ func (n *node) watchMulticastGroup(groupID string) {
 		return
 	}
 
-	for {
+	for firstIter := true; ; firstIter = false {
 		group.mtx.Lock()
 
 		// Delete the group if it is no longer needed
-		if group.sender != n.GetAddress() && len(group.forwards) == 0 && !group.isInGroup {
+		if group.sender != n.GetAddress() && len(group.forwards) == 0 && !group.isInGroup && !firstIter {
 			n.multicast.groups.delete(groupID)
 
 			req := types.LeaveMulticastGroupRequestMessage{
