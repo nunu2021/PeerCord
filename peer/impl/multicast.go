@@ -100,8 +100,7 @@ func (n *node) watchNeighbor(group *MulticastGroup, neighbor string) {
 				toBeDeleted = false
 				lastEvent = time.Now()
 
-			case <-time.After(lastEvent.Add(10 * time.Second).Sub(time.Now())):
-				// TODO store the timeout delay in a parameter
+			case <-time.After(lastEvent.Add(n.conf.MulticastLeaveTimeout).Sub(time.Now())):
 				// Anything new since the leave event, we stop forwarding
 				isDeleted = true
 			}
@@ -114,8 +113,7 @@ func (n *node) watchNeighbor(group *MulticastGroup, neighbor string) {
 			case <-joinEvents:
 				lastEvent = time.Now()
 
-			case <-time.After(lastEvent.Add(10 * time.Second).Sub(time.Now())):
-				// TODO store the timeout delay in a parameter
+			case <-time.After(lastEvent.Add(n.conf.MulticastJoinTimeout).Sub(time.Now())):
 				// No join event received for a long time, we stop forwarding
 				isDeleted = true
 			}
