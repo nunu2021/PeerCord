@@ -194,9 +194,7 @@ func newConfigTemplate() configTemplate {
 		// time. The values should verify the following constraints:
 		// - Before effectively leaving, the neighbor should have the time to
 		//   send several join messages.
-		// - To be useful, MulticastLeaveTimeout should be significantly smaller
-		//   than MulticastJoinTimeout.
-		MulticastJoinTimeout:        30 * time.Second,
+		MulticastJoinTimeout:        10 * time.Second,
 		MulticastLeaveTimeout:       10 * time.Second,
 		MulticastResendJoinInterval: 3 * time.Second,
 		MulticastHeartbeat:          10 * time.Second,
