@@ -80,6 +80,15 @@ type Configuration struct {
 	// retries to send a prepare when it doesn't get enough promises or accepts.
 	// Default: 5s.
 	PaxosProposerRetry time.Duration
+
+	// Time until a peer removes one of its neighbor from the forwarding table
+	// of a multicast group if no join message is received.
+	MulticastJoinTimeout time.Duration
+
+	// Time until a peer removes one of its neighbor from the forwarding table
+	// of a multicast group if no join message is received after a leave message
+	// has been received.
+	MulticastLeaveTimeout time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

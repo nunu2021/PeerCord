@@ -2,7 +2,6 @@ package testing
 
 import (
 	"bytes"
-
 	"crypto/sha256"
 	"encoding/hex"
 
@@ -150,6 +149,9 @@ type configTemplate struct {
 	paxosThreshold     func(uint) int
 	paxosID            uint
 	paxosProposerRetry time.Duration
+
+	MulticastJoinTimeout  time.Duration
+	MulticastLeaveTimeout time.Duration
 }
 
 func newConfigTemplate() configTemplate {
@@ -184,6 +186,9 @@ func newConfigTemplate() configTemplate {
 		},
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
+
+		MulticastJoinTimeout:  10 * time.Second,
+		MulticastLeaveTimeout: 15 * time.Second,
 	}
 }
 
@@ -293,6 +298,18 @@ func WithPaxosProposerRetry(d time.Duration) Option {
 	}
 }
 
+func WithMulticastJoinTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastJoinTimeout = d
+	}
+}
+
+func WithMulticastLeaveTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastLeaveTimeout = d
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -320,6 +337,8 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.PaxosThreshold = template.paxosThreshold
 	config.PaxosID = template.paxosID
 	config.PaxosProposerRetry = template.paxosProposerRetry
+	config.MulticastJoinTimeout = template.MulticastJoinTimeout
+	config.MulticastLeaveTimeout = template.MulticastLeaveTimeout
 
 	node := f(config)
 

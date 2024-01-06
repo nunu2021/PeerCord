@@ -155,7 +155,9 @@ func Test_MulticastJoinTimeout(t *testing.T) {
 	transp := channel.NewTransport()
 	fake := z.NewFakeMessage(t)
 
-	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
+		z.WithMulticastJoinTimeout(3*time.Second),
+		z.WithMulticastLeaveTimeout(15*time.Second))
 	defer node.Stop()
 
 	sock, err := transp.CreateSocket("127.0.0.1:0")
@@ -187,7 +189,7 @@ func Test_MulticastJoinTimeout(t *testing.T) {
 
 	time.Sleep(10 * time.Millisecond)
 
-	// Send a message to the group
+	// Send a message to the group, the socket should receive it
 	require.NoError(t, node.Multicast(fake.GetNetMsg(t), id))
 	time.Sleep(10 * time.Millisecond)
 
@@ -197,5 +199,19 @@ func Test_MulticastJoinTimeout(t *testing.T) {
 	sock.Recv(time.Millisecond * 10)
 	sock.Recv(time.Millisecond * 10)
 	sIns := sock.GetIns()
+	require.Len(t, sIns, 1)
+
+	// Wait until the timeout expires
+	time.Sleep(5 * time.Second)
+
+	// Send a message to the group, the socket should not receive it
+	require.NoError(t, node.Multicast(fake.GetNetMsg(t), id))
+	time.Sleep(10 * time.Millisecond)
+
+	nIns = node.GetIns()
+	require.Len(t, nIns, 1)
+
+	sock.Recv(time.Millisecond * 10)
+	sIns = sock.GetIns()
 	require.Len(t, sIns, 1)
 }
