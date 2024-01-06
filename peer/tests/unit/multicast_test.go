@@ -151,6 +151,8 @@ func Test_MulticastSender(t *testing.T) {
 	require.Equal(t, outs[1].Header.Destination, sock3.GetAddress())*/
 }
 
+// Check that a node stop forwarding messages if to a neighbor if it has stopped
+// sending join messages
 func Test_MulticastJoinTimeout(t *testing.T) {
 	transp := channel.NewTransport()
 	fake := z.NewFakeMessage(t)
@@ -216,6 +218,8 @@ func Test_MulticastJoinTimeout(t *testing.T) {
 	require.Len(t, sIns, 1)
 }
 
+// Check that a peer stops forwarding message to one of its neighbors a bit
+// after receiving a leave group message.
 func Test_MulticastLeaveTimeout(t *testing.T) {
 	transp := channel.NewTransport()
 	fake := z.NewFakeMessage(t)
