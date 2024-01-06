@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func Test_NaiveMulticast(t *testing.T) {
+func Test_MulticastNaive(t *testing.T) {
 	transp := channel.NewTransport()
 
 	fake := z.NewFakeMessage(t)
