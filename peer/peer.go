@@ -97,6 +97,10 @@ type Configuration struct {
 	// time during this interval. Otherwise, the group may be automatically
 	// deleted by other peers.
 	MulticastHeartbeat time.Duration
+
+	// If no message is sent on the group during this interval, the group is
+	// deleted.
+	MulticastInactivityTimeout time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

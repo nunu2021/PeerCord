@@ -313,3 +313,79 @@ func Test_MulticastHeartbeat(t *testing.T) {
 	sock.Recv(time.Millisecond * 10)
 	require.Len(t, sock.GetIns(), 2)
 }
+
+// Check that a peer deletes a multicast group if it is inactive.
+func Test_MulticastInactivity(t *testing.T) {
+	transp := channel.NewTransport()
+	fake := z.NewFakeMessage(t)
+
+	// n1 <-> n2 <-> s
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+	defer node1.Stop()
+
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
+		z.WithMulticastInactivityTimeout(5*time.Second),
+		z.WithMulticastJoinTimeout(time.Hour))
+	defer node2.Stop()
+
+	sock, err := transp.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	defer sock.Close()
+
+	node1.AddPeer(node2.GetAddr())
+	node2.AddPeer(node1.GetAddr())
+	node2.AddPeer(sock.GetAddress())
+
+	// Create a new multicast group
+	id := node1.NewMulticastGroup()
+	require.NoError(t, node2.JoinMulticastGroup(node1.GetAddr(), id))
+
+	// Make the socket join the group
+	joinMsg := types.JoinMulticastGroupRequestMessage{
+		GroupSender: node1.GetAddr(),
+		GroupID:     id,
+	}
+	data, err := json.Marshal(&joinMsg)
+	require.NoError(t, err)
+
+	msg := transport.Message{
+		Type:    joinMsg.Name(),
+		Payload: data,
+	}
+
+	header := transport.NewHeader(sock.GetAddress(), sock.GetAddress(), node2.GetAddr(), 0)
+	pkt := transport.Packet{Header: &header, Msg: &msg}
+
+	require.NoError(t, sock.Send(node2.GetAddr(), pkt, time.Second))
+
+	// The first messages should be received
+	time.Sleep(time.Second)
+	err = node1.Multicast(fake.GetNetMsg(t), id)
+	time.Sleep(50 * time.Millisecond)
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 1)
+
+	time.Sleep(3 * time.Second)
+	err = node1.Multicast(fake.GetNetMsg(t), id)
+	time.Sleep(50 * time.Millisecond)
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 2)
+
+	time.Sleep(3 * time.Second)
+	err = node1.Multicast(fake.GetNetMsg(t), id)
+	time.Sleep(50 * time.Millisecond)
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 3)
+
+	// Leave the group unattended
+	time.Sleep(10 * time.Second)
+
+	// The socket should not receive the last message
+	err = node1.Multicast(fake.GetNetMsg(t), id)
+	time.Sleep(50 * time.Millisecond)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 3)
+}

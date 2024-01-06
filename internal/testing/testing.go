@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-
 	"encoding/json"
 	"fmt"
 
@@ -154,6 +153,7 @@ type configTemplate struct {
 	MulticastLeaveTimeout       time.Duration
 	MulticastResendJoinInterval time.Duration
 	MulticastHeartbeat          time.Duration
+	MulticastInactivityTimeout  time.Duration
 }
 
 func newConfigTemplate() configTemplate {
@@ -189,10 +189,12 @@ func newConfigTemplate() configTemplate {
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
 
+		// TODO better defaults
 		MulticastJoinTimeout:        10 * time.Second,
 		MulticastLeaveTimeout:       15 * time.Second,
 		MulticastResendJoinInterval: 3 * time.Second,
 		MulticastHeartbeat:          time.Minute,
+		MulticastInactivityTimeout:  5 * time.Minute,
 	}
 }
 
@@ -326,6 +328,12 @@ func WithMulticastHeartbeat(d time.Duration) Option {
 	}
 }
 
+func WithMulticastInactivityTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastInactivityTimeout = d
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -357,6 +365,7 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.MulticastLeaveTimeout = template.MulticastLeaveTimeout
 	config.MulticastResendJoinInterval = template.MulticastResendJoinInterval
 	config.MulticastHeartbeat = template.MulticastHeartbeat
+	config.MulticastInactivityTimeout = template.MulticastInactivityTimeout
 
 	node := f(config)
 
