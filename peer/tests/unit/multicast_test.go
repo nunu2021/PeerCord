@@ -361,6 +361,7 @@ func Test_MulticastInactivity(t *testing.T) {
 	// The first messages should be received
 	time.Sleep(time.Second)
 	err = node1.Multicast(fake.GetNetMsg(t), id)
+	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
 	sock.Recv(time.Millisecond * 10)
 	sock.Recv(time.Millisecond * 10)
@@ -368,6 +369,7 @@ func Test_MulticastInactivity(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 	err = node1.Multicast(fake.GetNetMsg(t), id)
+	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
 	sock.Recv(time.Millisecond * 10)
 	sock.Recv(time.Millisecond * 10)
@@ -375,6 +377,7 @@ func Test_MulticastInactivity(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 	err = node1.Multicast(fake.GetNetMsg(t), id)
+	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
 	sock.Recv(time.Millisecond * 10)
 	sock.Recv(time.Millisecond * 10)
@@ -385,6 +388,7 @@ func Test_MulticastInactivity(t *testing.T) {
 
 	// The socket should not receive the last message
 	err = node1.Multicast(fake.GetNetMsg(t), id)
+	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
 	sock.Recv(time.Millisecond * 10)
 	require.Len(t, sock.GetIns(), 3)
