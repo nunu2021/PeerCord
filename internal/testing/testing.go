@@ -189,12 +189,18 @@ func newConfigTemplate() configTemplate {
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
 
-		// TODO better defaults
-		MulticastJoinTimeout:        10 * time.Second,
-		MulticastLeaveTimeout:       15 * time.Second,
+		// These values are smaller than what they would be in a real system.
+		// It is to test the correctness of the implementation in a reasonable
+		// time. The values should verify the following constraints:
+		// - Before effectively leaving, the neighbor should have the time to
+		//   send several join messages.
+		// - To be useful, MulticastLeaveTimeout should be significantly smaller
+		//   than MulticastJoinTimeout.
+		MulticastJoinTimeout:        30 * time.Second,
+		MulticastLeaveTimeout:       10 * time.Second,
 		MulticastResendJoinInterval: 3 * time.Second,
-		MulticastHeartbeat:          time.Minute,
-		MulticastInactivityTimeout:  5 * time.Minute,
+		MulticastHeartbeat:          10 * time.Second,
+		MulticastInactivityTimeout:  35 * time.Second,
 	}
 }
 
