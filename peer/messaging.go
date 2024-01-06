@@ -75,7 +75,7 @@ type Messaging interface {
 	VerifyPID(peer, pubID string, key []byte) (bool, bool)
 
 	// Sign a message with the given key
-	Sign(key, packet []byte) ([]byte, error)
+	Sign(key, msgType, packet []byte) ([]byte, error)
 
 	// Encrypt msg for peer with its Public Key
 	EncryptOneToOne(msg []byte, peer string) ([]byte, error)
@@ -84,7 +84,7 @@ type Messaging interface {
 	DecryptOneToOne(msg []byte) ([]byte, error)
 
 	// Encrypt a packet to be sent to peer with its Public Key
-	EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transport.Message, error)
+	EncryptOneToOneMsg(msg *transport.Message, peer string) (*transport.Message, error)
 
 	// Generate a DH curve
 	GenerateDHCurve()
@@ -117,7 +117,7 @@ type Messaging interface {
 	DecryptDH(msg []byte) ([]byte, error)
 
 	// Encrypt pkt with DH shared secret
-	EncryptDHPkt(pkt *transport.Packet) (*transport.Message, error)
+	EncryptDHMsg(msg *transport.Message) (*transport.Message, error)
 
 	// Start a DH Key Exchange with receivers
 	StartDHKeyExchange(receivers map[string]struct{}) error

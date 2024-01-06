@@ -163,8 +163,6 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	require.NoError(t, err)
 	nodeB.GenerateKeyPair()
 	transpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
-	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
-	pkt := transport.Packet{Header: &header, Msg: &transpMsg}
 
 	nodeAPK := nodeA.GetPK()
 	keyBytes, err := x509.MarshalPKIXPublicKey(&nodeAPK)
@@ -175,7 +173,7 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	require.NoError(t, err)
 	nodeA.AddPublicKey(nodeB.GetAddress(), "+33600000001", keyBytes)
 
-	msg, err := nodeA.EncryptOneToOnePkt(&pkt, nodeB.GetAddress())
+	msg, err := nodeA.EncryptOneToOneMsg(&transpMsg, nodeB.GetAddress())
 	require.NoError(t, err)
 
 	require.NoError(t, nodeA.Unicast(nodeB.GetAddress(), *msg))
@@ -230,10 +228,8 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	require.NoError(t, err)
 	nodeB.GenerateKeyPair()
 	trpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
-	header := transport.NewHeader(nodeA.GetAddress(), nodeA.GetAddress(), nodeB.GetAddress(), 0)
-	pkt := transport.Packet{Header: &header, Msg: &trpMsg}
 
-	transpMsg, err := nodeA.EncryptDHPkt(&pkt)
+	transpMsg, err := nodeA.EncryptDHMsg(&trpMsg)
 	require.NoError(t, err)
 
 	receiversMap := make(map[string]struct{})

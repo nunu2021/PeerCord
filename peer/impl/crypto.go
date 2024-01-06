@@ -23,9 +23,9 @@
 // n.crypto.DecryptOneToOne(msg) decrypts the msg with the local private key
 // n.crypto.EncryptDH(msg) encrypts the msg with the DH shared secret
 // n.crypto.DecryptDH(msg) decrypts the msg with the DH shared secret
-// n.crypto.EncryptOneToOnePkt(pkt, key) encrypts the pkt with the remote PK key
+// n.crypto.EncryptOneToOneMsg(pkt, key) encrypts the pkt with the remote PK key
 // then packs it in an O2OEncryptedPkt message (works for any size)
-// n.crypto.EncryptDHPkt(pkt) encrypts the pkt with the DH shared secret and
+// n.crypto.EncryptDHMsg(pkt) encrypts the pkt with the DH shared secret and
 // returns a transport.Message (DHEncryptedPkt type)
 
 // Group DH is based on "Elliptic Curve Based Dynamic Contributory Group Key Agreement Protocol
@@ -297,10 +297,14 @@ func (n *node) VerifyPID(peer, pubID string, key []byte) (bool, bool) {
 	return bytes.Equal(key, knownKey.Bytes) && knownKey.Str == pubID, ok
 }
 
-func (n *node) Sign(key, packet []byte) ([]byte, error) {
+func (n *node) Sign(key, msgType, packet []byte) ([]byte, error) {
 	//Sign the packet with the given key
 	hash := sha256.New()
 	_, err := hash.Write(key)
+	if err != nil {
+		return nil, xerrors.Errorf("error when hashing msg: %v", err)
+	}
+	_, err = hash.Write(msgType)
 	if err != nil {
 		return nil, xerrors.Errorf("error when hashing msg: %v", err)
 	}
@@ -348,11 +352,11 @@ func (n *node) DecryptOneToOne(msg []byte) ([]byte, error) {
 	return decryptedMsg, nil
 }
 
-func (n *node) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transport.Message, error) {
+func (n *node) EncryptOneToOneMsg(msg *transport.Message, peer string) (*transport.Message, error) {
 	//Encrypt a packet to be sent to peer with its known public key
 	c := &n.crypto
 	//We marshal the pakcet
-	marshaledPkt, err := pkt.Marshal()
+	marshaledMsg, err := msg.Payload.MarshalJSON()
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling packet for O2O encryption: %v", err)
 	}
@@ -384,7 +388,7 @@ func (n *node) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transpor
 		return nil, xerrors.Errorf("error encrypting packet for O2O encryption: %v", err)
 	}
 
-	encryptedPkt := gcm.Seal(nonce, nonce, marshaledPkt, nil)
+	encryptedPayload := gcm.Seal(nonce, nonce, marshaledMsg, nil)
 
 	//We marshal the local RSA PK
 	pkBytes, err := x509.MarshalPKIXPublicKey(&c.KeyPair.PublicKey)
@@ -393,14 +397,14 @@ func (n *node) EncryptOneToOnePkt(pkt *transport.Packet, peer string) (*transpor
 	}
 
 	//We sign the packet
-	sig, err := n.Sign(encryptedKey, encryptedPkt)
+	sig, err := n.Sign(encryptedKey, []byte(msg.Type), encryptedPayload)
 	if err != nil {
 		return nil, xerrors.Errorf("error when signing packet in O2O pkt encryption: %v", err)
 	}
 
 	//We pack the whole in a message
 	encryptedMsg := types.O2OEncryptedPkt{
-		Packet: encryptedPkt, Key: encryptedKey, RemoteID: c.PublicID, RemoteKey: pkBytes, Signature: sig}
+		Payload: encryptedPayload, Type: msg.Type, Key: encryptedKey, RemoteID: c.PublicID, RemoteKey: pkBytes, Signature: sig}
 	data, err := json.Marshal(&encryptedMsg)
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling encrypted packet for O2O encryption: %v", err)
@@ -492,9 +496,9 @@ func (n *node) DecryptDH(msg []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-func (n *node) EncryptDHPkt(pkt *transport.Packet) (*transport.Message, error) {
+func (n *node) EncryptDHMsg(msg *transport.Message) (*transport.Message, error) {
 	c := &n.crypto
-	marshaledPkt, err := pkt.Marshal()
+	marshaledPayload, err := msg.Payload.MarshalJSON()
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling packet in DH pkt encryption: %v", err)
 	}
@@ -504,17 +508,17 @@ func (n *node) EncryptDHPkt(pkt *transport.Packet) (*transport.Message, error) {
 		return nil, xerrors.Errorf("error when marshaling local PK in DH pkt encryption: %v", err)
 	}
 
-	encryptedPkt, err := n.EncryptDH(marshaledPkt)
+	encryptedPayload, err := n.EncryptDH(marshaledPayload)
 	if err != nil {
 		return nil, xerrors.Errorf("error when encrypting packet in DH pkt encryption: %v", err)
 	}
 
-	sig, err := n.Sign(nil, encryptedPkt)
+	sig, err := n.Sign(nil, []byte(msg.Type), encryptedPayload)
 	if err != nil {
 		return nil, xerrors.Errorf("error when signing packet in DH pkt encryption: %v", err)
 	}
 
-	encryptedMsg := types.DHEncryptedPkt{Packet: encryptedPkt, RemoteKey: pkA, Signature: sig}
+	encryptedMsg := types.DHEncryptedPkt{Payload: encryptedPayload, Type: msg.Type, RemoteKey: pkA, Signature: sig}
 	data, err := json.Marshal(&encryptedMsg)
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling msg in DH pkt encryption: %v", err)
@@ -1297,7 +1301,11 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	if err != nil {
 		return xerrors.Errorf("error when hashing msg: %v", err)
 	}
-	_, err = hash.Write(message.Packet)
+	_, err = hash.Write([]byte(message.Type))
+	if err != nil {
+		return xerrors.Errorf("error when hashing msg: %v", err)
+	}
+	_, err = hash.Write(message.Payload)
 	if err != nil {
 		return xerrors.Errorf("error when hashing msg: %v", err)
 	}
@@ -1335,22 +1343,25 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	}
 
 	nonceSize := gcm.NonceSize()
-	if len(message.Packet) < nonceSize {
+	if len(message.Payload) < nonceSize {
 		return xerrors.Errorf("error decrypting msg for O2O encryption: msg size is smaller than nonce")
 	}
 
-	nonce, ciphertext := message.Packet[:nonceSize], message.Packet[nonceSize:]
-	decryptedPkt, err := gcm.Open(nil, nonce, ciphertext, nil)
+	nonce, ciphertext := message.Payload[:nonceSize], message.Payload[nonceSize:]
+	decryptedMsg, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
 		return xerrors.Errorf("error decrypting msg for O2O encryption: %v", err)
 	}
 
 	//Now that it's decrypted, we can retrieve the packet and process it
-	var pkt transport.Packet
-	err = pkt.Unmarshal(decryptedPkt)
+	var payload json.RawMessage
+	err = payload.UnmarshalJSON(decryptedMsg)
 	if err != nil {
-		return xerrors.Errorf("error unmarshaling O2O encrypted packet: %v", err)
+		return xerrors.Errorf("error when unmarshaling decrypted O2O message: %v", err)
 	}
+
+	header := packet.Header.Copy()
+	pkt := transport.Packet{Header: &header, Msg: &transport.Message{Payload: payload, Type: message.Type}}
 
 	n.processPacket(pkt)
 	return nil
@@ -1363,15 +1374,13 @@ func (n *node) ExecDHEncryptedPkt(msg types.Message, packet transport.Packet) er
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
 	//We just have to decrypt the packet then process it
-	dectyptedPkt, err := n.DecryptDH(message.Packet)
+	decryptedPayload, err := n.DecryptDH(message.Payload)
 	if err != nil {
 		return xerrors.Errorf("error decrypting DH encrypted pkt: %v", err)
 	}
-	var pkt transport.Packet
-	err = pkt.Unmarshal(dectyptedPkt)
-	if err != nil {
-		return xerrors.Errorf("error unmarshaling DH encrypted packet: %v", err)
-	}
+	decryptedMsg := transport.Message{Type: message.Type, Payload: decryptedPayload}
+	header := packet.Header.Copy()
+	pkt := transport.Packet{Header: &header, Msg: &decryptedMsg}
 	n.processPacket(pkt)
 	return nil
 }

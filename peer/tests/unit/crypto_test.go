@@ -167,8 +167,6 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	require.NoError(t, err)
 	nodeB.GenerateKeyPair()
 	transpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
-	header := transport.NewHeader(nodeA.GetAddr(), nodeA.GetAddr(), nodeB.GetAddr(), 0)
-	pkt := transport.Packet{Header: &header, Msg: &transpMsg}
 
 	//Store knowledge of each other's public ID
 	nodeAPK := nodeA.GetPK()
@@ -182,7 +180,7 @@ func TestCrypto_Send_Recv_OtO_Enc_Msg(t *testing.T) {
 	nodeA.AddPublicKey(nodeB.GetAddr(), "+33600000001", keyBytes)
 
 	//Encrypt the message at A
-	msg, err := nodeA.EncryptOneToOnePkt(&pkt, nodeB.GetAddr())
+	msg, err := nodeA.EncryptOneToOneMsg(&transpMsg, nodeB.GetAddr())
 	require.NoError(t, err)
 
 	//Send it to B
@@ -236,11 +234,9 @@ func TestCrypto_Send_Recv_DH_Enc_Msg(t *testing.T) {
 	data, err := json.Marshal(&chatMsg)
 	require.NoError(t, err)
 	trpMsg := transport.Message{Payload: data, Type: chatMsg.Name()}
-	header := transport.NewHeader(nodeA.GetAddr(), nodeA.GetAddr(), nodeB.GetAddr(), 0)
-	pkt := transport.Packet{Header: &header, Msg: &trpMsg}
 
 	//Encrypt at A
-	transpMsg, err := nodeA.EncryptDHPkt(&pkt)
+	transpMsg, err := nodeA.EncryptDHMsg(&trpMsg)
 	require.NoError(t, err)
 
 	//Make A cast to B and C

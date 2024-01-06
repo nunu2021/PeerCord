@@ -9,14 +9,16 @@ type GroupCallDHSharedSecret struct {
 }
 
 type DHEncryptedPkt struct {
-	Packet    []byte
+	Type      string
+	Payload   []byte
 	RemoteKey []byte
 	Signature []byte
 }
 
 type O2OEncryptedPkt struct {
 	Key       []byte
-	Packet    []byte
+	Type      string
+	Payload   []byte
 	RemoteID  string
 	RemoteKey []byte
 	Signature []byte
