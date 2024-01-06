@@ -4,6 +4,7 @@ import (
 	"github.com/rs/xid"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"sync"
 )
 
 func (n *node) NaiveMulticast(msg transport.Message, recipients map[string]struct{}) error {
@@ -37,6 +38,9 @@ type MulticastGroup struct {
 	// Indicates if the peer belongs to the multicast group and should
 	// process the messages.
 	isInGroup bool
+
+	// Must be locked when using the multicast group
+	mtx sync.Mutex
 }
 
 type Multicast struct {
@@ -67,11 +71,10 @@ func (n *node) NewMulticastGroup() string {
 // DeleteMulticastGroup deletes an existing multicast group. It sends a message
 // to all the peers of the group to inform them of the deletion.
 func (n *node) DeleteMulticastGroup(id string) error {
-	_, ok := n.multicast.groups.getReference(id)
+	_, ok := n.multicast.groups.get(id)
 	if !ok {
 		return UnknownMulticastGroupError(id)
 	}
-	defer n.multicast.groups.unlock()
 
 	// TODO
 
@@ -135,20 +138,22 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 		return err
 	}
 
-	group, ok := n.multicast.groups.getReference(groupID)
+	group, ok := n.multicast.groups.get(groupID)
 	if !ok {
 		err := UnknownMulticastGroupError(groupID)
 		n.logger.Error().Err(err).Msg("can't find new group: was it already deleted?")
 		return err
 	}
-	defer n.multicast.groups.unlock()
 
+	group.mtx.Lock()
 	group.isInGroup = true
+	group.mtx.Unlock()
+
 	return nil
 }
 
-// Stop receiving messages from the group if needed
-// We suppose that the map containing information about the groups is locked
+// Stop receiving messages from the group if needed.
+// We suppose that the mutex of the group is already locked.
 func (n *node) leaveMulticastGroupIfNeeded(groupID string, group *MulticastGroup) error {
 	// Don't delete our own group even if nobody is listening
 	if group.sender == n.GetAddress() {
@@ -156,7 +161,7 @@ func (n *node) leaveMulticastGroupIfNeeded(groupID string, group *MulticastGroup
 	}
 
 	if len(group.forwards) == 0 && !group.isInGroup {
-		n.multicast.groups.unsafeDelete(groupID)
+		n.multicast.groups.delete(groupID)
 
 		req := types.LeaveMulticastGroupRequestMessage{
 			GroupID: groupID,
@@ -167,8 +172,6 @@ func (n *node) leaveMulticastGroupIfNeeded(groupID string, group *MulticastGroup
 			n.logger.Error().Err(err).Msg("can't unicast leave multicast group request")
 			return err
 		}
-
-		// TODO wait for ACK?
 	}
 
 	return nil
@@ -178,12 +181,13 @@ func (n *node) leaveMulticastGroupIfNeeded(groupID string, group *MulticastGroup
 // given id and created by the given peer. It sends a packet containing the
 // request to leave the group.
 func (n *node) LeaveMulticastGroup(groupSender string, groupID string) error {
-	group, ok := n.multicast.groups.getReference(groupID)
+	group, ok := n.multicast.groups.get(groupID)
 	if !ok {
 		n.logger.Info().Str("groupID", groupID).Msg("can't leave unknown group")
 		return nil
 	}
-	defer n.multicast.groups.unlock()
+	group.mtx.Lock()
+	defer group.mtx.Unlock()
 
 	if !group.isInGroup {
 		n.logger.Info().Str("groupID", groupID).Msg("can't leave unjoined group")
@@ -207,7 +211,7 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 		panic("not a join multicast group request message")
 	}
 
-	group, ok := n.multicast.groups.getReference(msg.GroupID)
+	group, ok := n.multicast.groups.get(msg.GroupID)
 
 	// TODO do this in another goroutine to avoid blocking the reception of messages
 
@@ -219,7 +223,7 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 			return err
 		}
 
-		group, ok = n.multicast.groups.getReference(msg.GroupID)
+		group, ok = n.multicast.groups.get(msg.GroupID)
 		if !ok {
 			err := UnknownMulticastGroupError(msg.GroupID)
 			n.logger.Error().Err(err).Msg("can't find new group: was it already deleted?")
@@ -227,10 +231,11 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 		}
 	}
 
+	group.mtx.Lock()
+	defer group.mtx.Unlock()
+
 	// Update the forwarding table
 	group.forwards[pkt.Header.Source] = struct{}{}
-
-	n.multicast.groups.unlock()
 
 	return nil
 }
@@ -241,12 +246,14 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 		panic("not a leave multicast group request message")
 	}
 
-	group, ok := n.multicast.groups.getReference(msg.GroupID)
+	group, ok := n.multicast.groups.get(msg.GroupID)
 	if !ok {
 		n.logger.Warn().Str("groupID", msg.GroupID).Msg("can't leave unknown group")
 		return nil
 	}
-	defer n.multicast.groups.unlock()
+
+	group.mtx.Lock()
+	defer group.mtx.Unlock()
 
 	_, ok = group.forwards[pkt.Header.Source]
 	if !ok {
@@ -270,7 +277,7 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 // If isNewMessage is true, raises an error if the peer is not the sender of the
 // multicast group
 func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage bool) error {
-	group, ok := n.multicast.groups.getReference(groupID)
+	group, ok := n.multicast.groups.get(groupID)
 	if !ok {
 		if isNewMessage {
 			n.logger.Error().Msg("can't send message to unknown multicast group")
@@ -279,9 +286,11 @@ func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage
 		return nil
 	}
 
+	group.mtx.Lock()
+
 	if isNewMessage && group.sender != n.GetAddress() {
 		n.logger.Error().Msg("can't send message to a multicast group of another peer")
-		n.multicast.groups.unlock()
+		group.mtx.Unlock()
 		return UnknownMulticastGroupError(groupID)
 	}
 
@@ -294,16 +303,16 @@ func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage
 		err := n.marshalAndUnicast(dest, multicastMsg)
 		if err != nil {
 			n.logger.Error().Err(err).Msg("can't unicast message for multicast")
-			n.multicast.groups.unlock()
+			group.mtx.Unlock()
 			return err
 		}
 	}
 
 	if group.isInGroup {
-		n.multicast.groups.unlock()
+		group.mtx.Unlock()
 		n.processMessage(msg)
 	} else {
-		n.multicast.groups.unlock()
+		group.mtx.Unlock()
 	}
 
 	return nil
