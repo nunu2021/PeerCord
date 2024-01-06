@@ -5,6 +5,7 @@ import (
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"sync"
+	"time"
 )
 
 func (n *node) NaiveMulticast(msg transport.Message, recipients map[string]struct{}) error {
@@ -33,7 +34,7 @@ type MulticastGroup struct {
 	nextHopToSender string
 
 	// Set of the neighbors that the peer should forward the messages to.
-	forwards map[string]struct{}
+	forwards map[string]ForwardsInfo
 
 	// Indicates if the peer belongs to the multicast group and should
 	// process the messages.
@@ -41,6 +42,18 @@ type MulticastGroup struct {
 
 	// Must be locked when using the multicast group
 	mtx sync.Mutex
+}
+
+// ForwardsInfo contains information used to communicate with the goroutine
+// monitoring the neighbor.
+type ForwardsInfo struct {
+	// A message is sent to the channel when the neighbor sends a request to
+	// join the multicast group (in order to stay in the group).
+	joinEvents chan struct{}
+
+	// A message is sent to the channel when the neighbor sends a request to
+	// leave the multicast group.
+	leaveEvents chan struct{}
 }
 
 type Multicast struct {
@@ -55,6 +68,66 @@ func NewMulticast() Multicast {
 	}
 }
 
+// Goroutine in charge of monitoring a neighbor that we are forwarding messages
+// to. It manages the timers, processes the join / leave requests and remove the
+// neighbor from the forwarding table when it is no longer needed
+func (n *node) watchNeighbor(group *MulticastGroup, neighbor string) {
+	group.mtx.Lock()
+	info, ok := group.forwards[neighbor]
+	if !ok {
+		n.logger.Warn().Msg("can't find neighbor in forwarding table: already deleted?")
+		return
+	}
+	leaveEvents, joinEvents := info.leaveEvents, info.joinEvents
+	group.mtx.Unlock()
+
+	// Date at which the last event (join or leave) was received.
+	lastEvent := time.Now()
+
+	// If the neighbor has sent a request to leave the group, becomes true
+	// until the group is actually deleted
+	toBeDeleted := false
+
+	isDeleted := false
+
+	for !isDeleted {
+		if toBeDeleted {
+			select {
+			case <-leaveEvents:
+				// Here, we ignore leave events
+
+			case <-joinEvents:
+				toBeDeleted = false
+				lastEvent = time.Now()
+
+			case <-time.After(lastEvent.Add(10 * time.Second).Sub(time.Now())):
+				// TODO store the timeout delay in a parameter
+				// Anything new since the leave event, we stop forwarding
+				isDeleted = true
+			}
+		} else { // Active state
+			select {
+			case <-leaveEvents:
+				toBeDeleted = true
+				lastEvent = time.Now()
+
+			case <-joinEvents:
+				lastEvent = time.Now()
+
+			case <-time.After(lastEvent.Add(10 * time.Second).Sub(time.Now())):
+				// TODO store the timeout delay in a parameter
+				// No join event received for a long time, we stop forwarding
+				isDeleted = true
+			}
+		}
+	}
+
+	// The neighbor must be removed from the forwarding table
+	group.mtx.Lock()
+	delete(group.forwards, neighbor)
+	group.mtx.Unlock()
+}
+
 // NewMulticastGroup creates a new multicast group and returns its ID. The other
 // peers need this ID to join the group
 func (n *node) NewMulticastGroup() string {
@@ -62,7 +135,7 @@ func (n *node) NewMulticastGroup() string {
 	n.multicast.groups.set(id, &MulticastGroup{
 		sender:          n.GetAddress(),
 		nextHopToSender: "",
-		forwards:        make(map[string]struct{}),
+		forwards:        make(map[string]ForwardsInfo),
 		isInGroup:       false,
 	})
 	return id
@@ -123,7 +196,7 @@ func (n *node) joinMulticastTree(groupSender string, groupID string) error {
 	n.multicast.groups.set(groupID, &MulticastGroup{
 		sender:          groupSender,
 		nextHopToSender: next,
-		forwards:        make(map[string]struct{}),
+		forwards:        make(map[string]ForwardsInfo),
 		isInGroup:       false,
 	})
 
@@ -234,8 +307,20 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 	group.mtx.Lock()
 	defer group.mtx.Unlock()
 
-	// Update the forwarding table
-	group.forwards[pkt.Header.Source] = struct{}{}
+	info, ok := group.forwards[pkt.Header.Source]
+	if ok {
+		// Notify the goroutine that a join message has been received
+		info.joinEvents <- struct{}{}
+	} else {
+		// Create a new entry in the forwarding table
+		group.forwards[pkt.Header.Source] = ForwardsInfo{
+			joinEvents:  make(chan struct{}),
+			leaveEvents: make(chan struct{}),
+		}
+
+		// Start the goroutine monitoring the neighbor
+		go n.watchNeighbor(group, pkt.Header.Source)
+	}
 
 	return nil
 }
@@ -255,18 +340,22 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 	group.mtx.Lock()
 	defer group.mtx.Unlock()
 
-	_, ok = group.forwards[pkt.Header.Source]
+	info, ok := group.forwards[pkt.Header.Source]
 	if !ok {
 		n.logger.Warn().Msg("peer does not belong to the group")
 		return nil
 	}
-	delete(group.forwards, pkt.Header.Source)
+
+	info.leaveEvents <- struct{}{}
+
+	// TODO do it elsewhere
+	/*delete(group.forwards, pkt.Header.Source)
 
 	err := n.leaveMulticastGroupIfNeeded(msg.GroupID, group)
 	if err != nil {
 		n.logger.Error().Err(err).Msg("can't leave multicast group if needed")
 		return err
-	}
+	}*/
 
 	return nil
 }
