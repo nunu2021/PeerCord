@@ -191,16 +191,22 @@ func (n *node) NewMulticastGroup() string {
 	return id
 }
 
-// DeleteMulticastGroup deletes an existing multicast group. It sends a message
-// to all the peers of the group to inform them of the deletion.
+// DeleteMulticastGroup deletes an existing multicast group. It can only be
+// called by the sender of the group. The other nodes of the tree will delete
+// their information about the group a bt after, when they have not received
+// messages for some time. (TODO)
 func (n *node) DeleteMulticastGroup(id string) error {
-	_, ok := n.multicast.groups.get(id)
+	group, ok := n.multicast.groups.get(id)
 	if !ok {
 		return UnknownMulticastGroupError(id)
 	}
 
-	// TODO
+	if group.sender != n.GetAddress() {
+		n.logger.Error().Msg("can't delete group: the peer is not the sender")
+		return nil
+	}
 
+	n.multicast.groups.delete(id)
 	return nil
 }
 
