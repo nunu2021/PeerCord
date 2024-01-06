@@ -303,3 +303,43 @@ func Test_MulticastLeaveTimeout(t *testing.T) {
 	sIns = sock.GetIns()
 	require.Len(t, sIns, 2)
 }
+
+// Check that a node that is part of a multicast group resends periodically
+// join messages to stay in the group
+func Test_MulticastResendJoin(t *testing.T) {
+	transp := channel.NewTransport()
+
+	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
+		z.WithMulticastResendJoinInterval(3*time.Second))
+	defer node.Stop()
+
+	sock, err := transp.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	defer sock.Close()
+
+	node.AddPeer(sock.GetAddress())
+
+	// Make the peer join a fake group
+	require.NoError(t, node.JoinMulticastGroup(sock.GetAddress(), "fake_id"))
+
+	// The socket should have received the join message
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 1)
+
+	// Wait until a new message is sent
+	time.Sleep(4 * time.Second)
+
+	// The socket should have received a new message
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 2)
+
+	// Wait until a new message is sent
+	time.Sleep(3 * time.Second)
+
+	// The socket should have received a new message
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 3)
+}

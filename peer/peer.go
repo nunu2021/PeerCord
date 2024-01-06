@@ -89,6 +89,9 @@ type Configuration struct {
 	// of a multicast group if no join message is received after a leave message
 	// has been received.
 	MulticastLeaveTimeout time.Duration
+
+	// A peer needs to resend join requests to stay in the multicast group.
+	MulticastResendJoinInterval time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

@@ -150,8 +150,9 @@ type configTemplate struct {
 	paxosID            uint
 	paxosProposerRetry time.Duration
 
-	MulticastJoinTimeout  time.Duration
-	MulticastLeaveTimeout time.Duration
+	MulticastJoinTimeout        time.Duration
+	MulticastLeaveTimeout       time.Duration
+	MulticastResendJoinInterval time.Duration
 }
 
 func newConfigTemplate() configTemplate {
@@ -187,8 +188,9 @@ func newConfigTemplate() configTemplate {
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
 
-		MulticastJoinTimeout:  10 * time.Second,
-		MulticastLeaveTimeout: 15 * time.Second,
+		MulticastJoinTimeout:        10 * time.Second,
+		MulticastLeaveTimeout:       15 * time.Second,
+		MulticastResendJoinInterval: 3 * time.Second,
 	}
 }
 
@@ -310,6 +312,12 @@ func WithMulticastLeaveTimeout(d time.Duration) Option {
 	}
 }
 
+func WithMulticastResendJoinInterval(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastResendJoinInterval = d
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -339,6 +347,7 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.PaxosProposerRetry = template.paxosProposerRetry
 	config.MulticastJoinTimeout = template.MulticastJoinTimeout
 	config.MulticastLeaveTimeout = template.MulticastLeaveTimeout
+	config.MulticastResendJoinInterval = template.MulticastResendJoinInterval
 
 	node := f(config)
 
