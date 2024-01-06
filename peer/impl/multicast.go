@@ -40,6 +40,10 @@ type MulticastGroup struct {
 	// process the messages.
 	isInGroup bool
 
+	// Only used if the peer is the sender of the multicast group. A message is
+	// sent on this channel when the group should be deleted.
+	mustBeDeleted chan struct{}
+
 	// Must be locked when using the multicast group
 	mtx sync.Mutex
 }
@@ -130,10 +134,15 @@ func (n *node) watchNeighbor(group *MulticastGroup, neighbor string) {
 // join messages so that the peer stays in the group. If the group is not needed
 // anymore (the forwarding table is empty and the peer doesn't process the
 // messages), it leaves the group's tree.
-func (n *node) watchMulticastGroup(groupID string) {
+func (n *node) watchMulticastGroupNotSender(groupID string) {
 	group, ok := n.multicast.groups.get(groupID)
 	if !ok {
 		n.logger.Error().Msg("group does not exist")
+		return
+	}
+
+	if group.sender == n.GetAddress() {
+		n.logger.Error().Msg("the peer is the sender of the group")
 		return
 	}
 
@@ -141,7 +150,7 @@ func (n *node) watchMulticastGroup(groupID string) {
 		group.mtx.Lock()
 
 		// Delete the group if it is no longer needed
-		if group.sender != n.GetAddress() && len(group.forwards) == 0 && !group.isInGroup && !firstIter {
+		if len(group.forwards) == 0 && !group.isInGroup && !firstIter {
 			n.multicast.groups.delete(groupID)
 
 			req := types.LeaveMulticastGroupRequestMessage{
@@ -159,21 +168,50 @@ func (n *node) watchMulticastGroup(groupID string) {
 		group.mtx.Unlock()
 
 		// Send a join message
-		if group.sender != n.GetAddress() {
-			req := types.JoinMulticastGroupRequestMessage{
-				GroupSender: group.sender,
-				GroupID:     groupID,
-			}
+		req := types.JoinMulticastGroupRequestMessage{
+			GroupSender: group.sender,
+			GroupID:     groupID,
+		}
 
-			err := n.marshalAndUnicast(group.nextHopToSender, req)
+		err := n.marshalAndUnicast(group.nextHopToSender, req)
+		if err != nil {
+			n.logger.Error().Err(err).Msg("can't unicast join multicast group request")
+			return
+		}
+
+		// Wait until the next join message
+		time.Sleep(n.conf.MulticastResendJoinInterval)
+	}
+}
+
+// Goroutine in charge of monitoring a multicast group when the peer is the
+// sender of the group. It regularly multicasts empty messages to keep the group
+// alive.
+func (n *node) watchMulticastGroupSender(groupID string) {
+	group, ok := n.multicast.groups.get(groupID)
+	if !ok {
+		n.logger.Error().Msg("group does not exist")
+		return
+	}
+
+	if group.sender != n.GetAddress() {
+		n.logger.Error().Msg("the peer is not the sender of the group")
+		return
+	}
+
+	for {
+		select {
+		case <-group.mustBeDeleted:
+			return
+
+		case <-time.After(n.conf.MulticastHeartbeat):
+			// Multicast an empty message
+			err := n.marshalAndMulticast(types.EmptyMessage{}, groupID)
 			if err != nil {
 				n.logger.Error().Err(err).Msg("can't unicast join multicast group request")
 				return
 			}
 		}
-
-		// Wait until the next join message
-		time.Sleep(n.conf.MulticastResendJoinInterval)
 	}
 }
 
@@ -186,8 +224,9 @@ func (n *node) NewMulticastGroup() string {
 		nextHopToSender: "",
 		forwards:        make(map[string]ForwardsInfo),
 		isInGroup:       false,
+		mustBeDeleted:   make(chan struct{}),
 	})
-	go n.watchMulticastGroup(id)
+	go n.watchMulticastGroupSender(id)
 	return id
 }
 
@@ -206,7 +245,9 @@ func (n *node) DeleteMulticastGroup(id string) error {
 		return nil
 	}
 
+	group.mustBeDeleted <- struct{}{}
 	n.multicast.groups.delete(id)
+
 	return nil
 }
 
@@ -244,7 +285,7 @@ func (n *node) joinMulticastTree(groupSender string, groupID string) error {
 		forwards:        make(map[string]ForwardsInfo),
 		isInGroup:       false,
 	})
-	go n.watchMulticastGroup(groupID)
+	go n.watchMulticastGroupNotSender(groupID)
 
 	return nil
 }
@@ -413,6 +454,20 @@ func (n *node) multicastStep(msg transport.Message, groupID string, isNewMessage
 
 func (n *node) Multicast(msg transport.Message, groupID string) error {
 	return n.multicastStep(msg, groupID, true)
+}
+
+func (n *node) marshalAndMulticast(msg types.Message, groupID string) error {
+	marshaledMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	err = n.Multicast(marshaledMsg, groupID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (n *node) receiveMulticastMessage(originalMsg types.Message, pkt transport.Packet) error {

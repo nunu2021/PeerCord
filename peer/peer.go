@@ -92,6 +92,11 @@ type Configuration struct {
 
 	// A peer needs to resend join requests to stay in the multicast group.
 	MulticastResendJoinInterval time.Duration
+
+	// The sender of a multicast group must multicast a message at least one
+	// time during this interval. Otherwise, the group may be automatically
+	// deleted by other peers.
+	MulticastHeartbeat time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must
