@@ -212,8 +212,8 @@ func (n *node) DeleteMulticastGroup(id string) error {
 
 // Internal function allowing a peer to request receiving the messages of a
 // multicast group without actually joining the group: it will not process the
-// messages.  The function sends a packet containing the request to join the
-// group. It blocks until the request is accepted, retrying if needed.
+// messages. Once the group is created, the peer will periodically send join
+// messages.
 func (n *node) joinMulticastTree(groupSender string, groupID string) error {
 	n.multicast.groups.lock()
 	defer n.multicast.groups.unlock()
@@ -300,8 +300,6 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 	}
 
 	group, ok := n.multicast.groups.get(msg.GroupID)
-
-	// TODO do this in another goroutine to avoid blocking the reception of messages
 
 	// If the peer is not already in the tree
 	if !ok {
