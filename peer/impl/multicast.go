@@ -248,7 +248,7 @@ func (n *node) NewMulticastGroup() string {
 // DeleteMulticastGroup deletes an existing multicast group. It can only be
 // called by the sender of the group. The other nodes of the tree will delete
 // their information about the group a bt after, when they have not received
-// messages for some time. (TODO)
+// messages for some time.
 func (n *node) DeleteMulticastGroup(id string) error {
 	group, ok := n.multicast.groups.get(id)
 	if !ok {
