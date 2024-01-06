@@ -46,6 +46,12 @@ func Test_Multicast(t *testing.T) {
 			z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5),
+
+			z.WithMulticastJoinTimeout(time.Hour),
+			z.WithMulticastLeaveTimeout(time.Hour),
+			z.WithMulticastResendJoinInterval(time.Hour),
+			z.WithMulticastHeartbeat(time.Hour),
+			z.WithMulticastInactivityTimeout(time.Hour),
 		)
 		defer nodes[i].Stop()
 
