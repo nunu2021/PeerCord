@@ -70,7 +70,11 @@ func Test_MulticastJoinTimeout(t *testing.T) {
 
 	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
 		z.WithMulticastJoinTimeout(3*time.Second),
-		z.WithMulticastLeaveTimeout(15*time.Second))
+		z.WithMulticastLeaveTimeout(time.Hour),
+		z.WithMulticastResendJoinInterval(time.Hour),
+		z.WithMulticastHeartbeat(time.Hour),
+		z.WithMulticastInactivityTimeout(time.Hour),
+	)
 	defer node.Stop()
 
 	sock, err := transp.CreateSocket("127.0.0.1:0")
@@ -136,8 +140,12 @@ func Test_MulticastLeaveTimeout(t *testing.T) {
 	fake := z.NewFakeMessage(t)
 
 	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
-		z.WithMulticastJoinTimeout(time.Hour),
-		z.WithMulticastLeaveTimeout(5*time.Second))
+		z.WithMulticastJoinTimeout(3*time.Second),
+		z.WithMulticastLeaveTimeout(5*time.Second),
+		z.WithMulticastResendJoinInterval(time.Hour),
+		z.WithMulticastHeartbeat(time.Hour),
+		z.WithMulticastInactivityTimeout(time.Hour),
+	)
 	defer node.Stop()
 
 	sock, err := transp.CreateSocket("127.0.0.1:0")
@@ -225,7 +233,12 @@ func Test_MulticastResendJoin(t *testing.T) {
 	transp := channel.NewTransport()
 
 	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
-		z.WithMulticastResendJoinInterval(3*time.Second))
+		z.WithMulticastJoinTimeout(time.Hour),
+		z.WithMulticastLeaveTimeout(time.Hour),
+		z.WithMulticastResendJoinInterval(3*time.Second),
+		z.WithMulticastHeartbeat(time.Hour),
+		z.WithMulticastInactivityTimeout(time.Hour),
+	)
 	defer node.Stop()
 
 	sock, err := transp.CreateSocket("127.0.0.1:0")
@@ -265,7 +278,12 @@ func Test_MulticastHeartbeat(t *testing.T) {
 	transp := channel.NewTransport()
 
 	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
-		z.WithMulticastHeartbeat(3*time.Second))
+		z.WithMulticastJoinTimeout(time.Hour),
+		z.WithMulticastLeaveTimeout(time.Hour),
+		z.WithMulticastResendJoinInterval(time.Hour),
+		z.WithMulticastHeartbeat(3*time.Second),
+		z.WithMulticastInactivityTimeout(time.Hour),
+	)
 	defer node.Stop()
 
 	sock, err := transp.CreateSocket("127.0.0.1:0")
@@ -320,12 +338,22 @@ func Test_MulticastInactivity(t *testing.T) {
 	fake := z.NewFakeMessage(t)
 
 	// n1 <-> n2 <-> s
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
+		z.WithMulticastJoinTimeout(time.Hour),
+		z.WithMulticastLeaveTimeout(time.Hour),
+		z.WithMulticastResendJoinInterval(time.Hour),
+		z.WithMulticastHeartbeat(time.Hour),
+		z.WithMulticastInactivityTimeout(time.Hour),
+	)
 	defer node1.Stop()
 
 	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
+		z.WithMulticastJoinTimeout(time.Hour),
+		z.WithMulticastLeaveTimeout(time.Hour),
+		z.WithMulticastResendJoinInterval(time.Hour),
+		z.WithMulticastHeartbeat(time.Hour),
 		z.WithMulticastInactivityTimeout(5*time.Second),
-		z.WithMulticastJoinTimeout(time.Hour))
+	)
 	defer node2.Stop()
 
 	sock, err := transp.CreateSocket("127.0.0.1:0")
