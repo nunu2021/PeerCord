@@ -126,6 +126,57 @@ func (n *node) watchNeighbor(group *MulticastGroup, neighbor string) {
 	group.mtx.Unlock()
 }
 
+// Goroutine in charge of monitoring a multicast group. It resends periodically
+// join messages so that the peer stays in the group. If the group is not needed
+// anymore (the forwarding table is empty and the peer doesn't process the
+// messages), it leaves the group's tree.
+func (n *node) watchMulticastGroup(groupID string) {
+	group, ok := n.multicast.groups.get(groupID)
+	if !ok {
+		n.logger.Error().Msg("group does not exist")
+		return
+	}
+
+	for {
+		group.mtx.Lock()
+
+		// Delete the group if it is no longer needed
+		if group.sender != n.GetAddress() && len(group.forwards) == 0 && !group.isInGroup {
+			n.multicast.groups.delete(groupID)
+
+			req := types.LeaveMulticastGroupRequestMessage{
+				GroupID: groupID,
+			}
+
+			err := n.marshalAndUnicast(group.nextHopToSender, req)
+			if err != nil {
+				n.logger.Error().Err(err).Msg("can't unicast leave multicast group request")
+			}
+
+			return
+		}
+
+		group.mtx.Unlock()
+
+		// Send a join message
+		if group.sender != n.GetAddress() {
+			req := types.JoinMulticastGroupRequestMessage{
+				GroupSender: group.sender,
+				GroupID:     groupID,
+			}
+
+			err := n.marshalAndUnicast(group.nextHopToSender, req)
+			if err != nil {
+				n.logger.Error().Err(err).Msg("can't unicast join multicast group request")
+				return
+			}
+		}
+
+		// Wait until the next join message
+		time.Sleep(n.conf.MulticastResendJoinInterval)
+	}
+}
+
 // NewMulticastGroup creates a new multicast group and returns its ID. The other
 // peers need this ID to join the group
 func (n *node) NewMulticastGroup() string {
@@ -136,6 +187,7 @@ func (n *node) NewMulticastGroup() string {
 		forwards:        make(map[string]ForwardsInfo),
 		isInGroup:       false,
 	})
+	go n.watchMulticastGroup(id)
 	return id
 }
 
@@ -157,8 +209,11 @@ func (n *node) DeleteMulticastGroup(id string) error {
 // messages.  The function sends a packet containing the request to join the
 // group. It blocks until the request is accepted, retrying if needed.
 func (n *node) joinMulticastTree(groupSender string, groupID string) error {
+	n.multicast.groups.lock()
+	defer n.multicast.groups.unlock()
+
 	// Nothing to do
-	_, exists := n.multicast.groups.get(groupID)
+	_, exists := n.multicast.groups.unsafeGet(groupID)
 	if exists {
 		return nil
 	}
@@ -176,27 +231,14 @@ func (n *node) joinMulticastTree(groupSender string, groupID string) error {
 		return err
 	}
 
-	// Send the request
-	req := types.JoinMulticastGroupRequestMessage{
-		GroupSender: groupSender,
-		GroupID:     groupID,
-	}
-
-	err := n.marshalAndUnicast(next, req)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't unicast join multicast group request")
-		return err
-	}
-
-	// TODO wait until an ack is received, retry if needed
-
 	// Create the group
-	n.multicast.groups.set(groupID, &MulticastGroup{
+	n.multicast.groups.unsafeSet(groupID, &MulticastGroup{
 		sender:          groupSender,
 		nextHopToSender: next,
 		forwards:        make(map[string]ForwardsInfo),
 		isInGroup:       false,
 	})
+	go n.watchMulticastGroup(groupID)
 
 	return nil
 }
@@ -223,31 +265,6 @@ func (n *node) JoinMulticastGroup(groupSender string, groupID string) error {
 	return nil
 }
 
-// Stop receiving messages from the group if needed.
-// We suppose that the mutex of the group is already locked.
-func (n *node) leaveMulticastGroupIfNeeded(groupID string, group *MulticastGroup) error {
-	// Don't delete our own group even if nobody is listening
-	if group.sender == n.GetAddress() {
-		return nil
-	}
-
-	if len(group.forwards) == 0 && !group.isInGroup {
-		n.multicast.groups.delete(groupID)
-
-		req := types.LeaveMulticastGroupRequestMessage{
-			GroupID: groupID,
-		}
-
-		err := n.marshalAndUnicast(group.nextHopToSender, req)
-		if err != nil {
-			n.logger.Error().Err(err).Msg("can't unicast leave multicast group request")
-			return err
-		}
-	}
-
-	return nil
-}
-
 // LeaveMulticastGroup allows a peer to leave the multicast group with the
 // given id and created by the given peer. It sends a packet containing the
 // request to leave the group.
@@ -266,12 +283,6 @@ func (n *node) LeaveMulticastGroup(groupSender string, groupID string) error {
 	}
 
 	group.isInGroup = false
-
-	err := n.leaveMulticastGroupIfNeeded(groupID, group)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't leave multicast group if needed")
-		return err
-	}
 
 	return nil
 }
@@ -345,15 +356,6 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 	}
 
 	info.leaveEvents <- struct{}{}
-
-	// TODO do it elsewhere
-	/*delete(group.forwards, pkt.Header.Source)
-
-	err := n.leaveMulticastGroupIfNeeded(msg.GroupID, group)
-	if err != nil {
-		n.logger.Error().Err(err).Msg("can't leave multicast group if needed")
-		return err
-	}*/
 
 	return nil
 }
