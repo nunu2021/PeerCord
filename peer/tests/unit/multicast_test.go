@@ -258,3 +258,58 @@ func Test_MulticastResendJoin(t *testing.T) {
 	sock.Recv(time.Millisecond * 10)
 	require.Len(t, sock.GetIns(), 3)
 }
+
+// Check that a peer that is the sender of a group multicasts an heartbeat to
+// keep the group alive.
+func Test_MulticastHeartbeat(t *testing.T) {
+	transp := channel.NewTransport()
+
+	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
+		z.WithMulticastHeartbeat(3*time.Second))
+	defer node.Stop()
+
+	sock, err := transp.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	defer sock.Close()
+
+	node.AddPeer(sock.GetAddress())
+
+	// Create a new multicast group
+	id := node.NewMulticastGroup()
+
+	// Make the socket join the group
+	joinMsg := types.JoinMulticastGroupRequestMessage{
+		GroupSender: node.GetAddr(),
+		GroupID:     id,
+	}
+	data, err := json.Marshal(&joinMsg)
+	require.NoError(t, err)
+
+	msg := transport.Message{
+		Type:    joinMsg.Name(),
+		Payload: data,
+	}
+
+	header := transport.NewHeader(sock.GetAddress(), sock.GetAddress(), node.GetAddr(), 0)
+	pkt := transport.Packet{Header: &header, Msg: &msg}
+
+	require.NoError(t, sock.Send(node.GetAddr(), pkt, time.Second))
+
+	time.Sleep(time.Second)
+
+	// No message should have been sent yet
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 0)
+
+	// First heartbeat
+	time.Sleep(3 * time.Second)
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 1)
+
+	// Second heartbeat
+	time.Sleep(3 * time.Second)
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	require.Len(t, sock.GetIns(), 2)
+}
