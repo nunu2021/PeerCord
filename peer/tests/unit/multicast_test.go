@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-/*func Test_MulticastNaive(t *testing.T) {
+func Test_MulticastNaive(t *testing.T) {
 	transp := channel.NewTransport()
 
 	fake := z.NewFakeMessage(t)
@@ -42,27 +42,25 @@ import (
 	err = node.NaiveMulticast(fake.GetNetMsg(t), recipients)
 	require.NoError(t, err)
 
-	time.Sleep(time.Millisecond * 800)
+	time.Sleep(10 * time.Millisecond)
 
-	// will fill the getIns
 	sock1.Recv(time.Millisecond * 10)
 	sock2.Recv(time.Millisecond * 10)
-
-	// to be sure there isn't additional messages
 	sock1.Recv(time.Millisecond * 10)
 	sock2.Recv(time.Millisecond * 10)
 	sock3.Recv(time.Millisecond * 10)
 
-	// > the node should have received no message
-	n1Ins := node.GetIns()
-	require.Len(t, n1Ins, 0)
-
-	// > the node should have sent two messages: one for sock1, one for sock3
+	// The peer should have sent two messages: one for sock1, one for sock3
 	outs := node.GetOuts()
 	require.Len(t, outs, 2)
-	require.Equal(t, outs[0].Header.Destination, sock1.GetAddress())
-	require.Equal(t, outs[1].Header.Destination, sock3.GetAddress())
-}*/
+
+	if outs[0].Header.Destination == sock1.GetAddress() {
+		require.Equal(t, outs[1].Header.Destination, sock3.GetAddress())
+	} else {
+		require.Equal(t, outs[0].Header.Destination, sock3.GetAddress())
+		require.Equal(t, outs[1].Header.Destination, sock1.GetAddress())
+	}
+}
 
 // Check that a node stop forwarding messages if to a neighbor if it has stopped
 // sending join messages
