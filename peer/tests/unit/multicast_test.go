@@ -215,3 +215,91 @@ func Test_MulticastJoinTimeout(t *testing.T) {
 	sIns = sock.GetIns()
 	require.Len(t, sIns, 1)
 }
+
+func Test_MulticastLeaveTimeout(t *testing.T) {
+	transp := channel.NewTransport()
+	fake := z.NewFakeMessage(t)
+
+	node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0",
+		z.WithMulticastJoinTimeout(time.Hour),
+		z.WithMulticastLeaveTimeout(5*time.Second))
+	defer node.Stop()
+
+	sock, err := transp.CreateSocket("127.0.0.1:0")
+	require.NoError(t, err)
+	defer sock.Close()
+
+	node.AddPeer(sock.GetAddress())
+
+	// Create a new multicast group
+	id := node.NewMulticastGroup()
+
+	// Make the socket join the group
+	joinMsg := types.JoinMulticastGroupRequestMessage{
+		GroupSender: node.GetAddr(),
+		GroupID:     id,
+	}
+	data, err := json.Marshal(&joinMsg)
+	require.NoError(t, err)
+
+	msg := transport.Message{
+		Type:    joinMsg.Name(),
+		Payload: data,
+	}
+
+	header := transport.NewHeader(sock.GetAddress(), sock.GetAddress(), node.GetAddr(), 0)
+	pkt := transport.Packet{Header: &header, Msg: &msg}
+
+	require.NoError(t, sock.Send(node.GetAddr(), pkt, time.Second))
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Send a message to the group, the socket should receive it
+	require.NoError(t, node.Multicast(fake.GetNetMsg(t), id))
+	time.Sleep(10 * time.Millisecond)
+
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	sIns := sock.GetIns()
+	require.Len(t, sIns, 1)
+
+	// Make the socket leave the group
+	leaveMsg := types.LeaveMulticastGroupRequestMessage{
+		GroupID: id,
+	}
+	data, err = json.Marshal(&leaveMsg)
+	require.NoError(t, err)
+
+	msg = transport.Message{
+		Type:    leaveMsg.Name(),
+		Payload: data,
+	}
+
+	header = transport.NewHeader(sock.GetAddress(), sock.GetAddress(), node.GetAddr(), 0)
+	pkt = transport.Packet{Header: &header, Msg: &msg}
+
+	require.NoError(t, sock.Send(node.GetAddr(), pkt, time.Second))
+
+	// Wait a bit
+	time.Sleep(time.Second)
+
+	// Send a message to the group, the socket should still receive it
+	require.NoError(t, node.Multicast(fake.GetNetMsg(t), id))
+	time.Sleep(10 * time.Millisecond)
+
+	sock.Recv(time.Millisecond * 10)
+	sock.Recv(time.Millisecond * 10)
+	sIns = sock.GetIns()
+	require.Len(t, sIns, 2)
+
+	// Wait until the timeout expires
+	time.Sleep(5 * time.Second)
+
+	// Send a message to the group, the socket should not receive it
+	require.NoError(t, node.Multicast(fake.GetNetMsg(t), id))
+	time.Sleep(10 * time.Millisecond)
+
+	sock.Recv(time.Millisecond * 10)
+	sIns = sock.GetIns()
+	require.Len(t, sIns, 2)
+}
