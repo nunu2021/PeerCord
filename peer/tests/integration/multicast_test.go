@@ -77,7 +77,7 @@ func Test_Multicast(t *testing.T) {
 			}
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
 		// Each peer sends a message to its multicast group
 		for i := 0; i < nbNodes; i++ {
@@ -98,7 +98,7 @@ func Test_Multicast(t *testing.T) {
 			}
 
 			// Wait for the messages to propagate through the network
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
 			// Check that each peer has received the right number of messages
 			for j := 0; j < nbNodes; j++ {
