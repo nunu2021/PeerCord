@@ -381,12 +381,15 @@ func (n *node) receiveJoinMulticastGroupMessage(originalMsg types.Message, pkt t
 	info, ok := group.forwards[pkt.Header.Source]
 	if ok {
 		// Notify the goroutine that a join message has been received
-		info.joinEvents <- struct{}{}
+		select {
+		case info.joinEvents <- struct{}{}:
+		default:
+		}
 	} else {
 		// Create a new entry in the forwarding table
 		group.forwards[pkt.Header.Source] = ForwardsInfo{
-			joinEvents:  make(chan struct{}),
-			leaveEvents: make(chan struct{}),
+			joinEvents:  make(chan struct{}, 1),
+			leaveEvents: make(chan struct{}, 1),
 		}
 
 		// Start the goroutine monitoring the neighbor
@@ -417,7 +420,10 @@ func (n *node) receiveLeaveMulticastGroupMessage(originalMsg types.Message, pkt 
 		return nil
 	}
 
-	info.leaveEvents <- struct{}{}
+	select {
+	case info.leaveEvents <- struct{}{}:
+	default:
+	}
 
 	return nil
 }
