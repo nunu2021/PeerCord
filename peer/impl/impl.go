@@ -12,6 +12,7 @@ import (
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"golang.org/x/xerrors"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -246,7 +247,10 @@ func (n *node) Start() error {
 	}
 
 	n.isRunning = true
-	n.GenerateKeyPair()
+	err := n.GenerateKeyPair()
+	if err != nil {
+		return xerrors.Errorf("error when generating key pair: %v", err)
+	}
 	go loop(n)
 	return nil
 }

@@ -404,7 +404,13 @@ func (n *node) EncryptOneToOneMsg(msg *transport.Message, peer string) (*transpo
 
 	//We pack the whole in a message
 	encryptedMsg := types.O2OEncryptedPkt{
-		Payload: encryptedPayload, Type: msg.Type, Key: encryptedKey, RemoteID: c.PublicID, RemoteKey: pkBytes, Signature: sig}
+		Payload:   encryptedPayload,
+		Type:      msg.Type,
+		Key:       encryptedKey,
+		RemoteID:  c.PublicID,
+		RemoteKey: pkBytes,
+		Signature: sig,
+	}
 	data, err := json.Marshal(&encryptedMsg)
 	if err != nil {
 		return nil, xerrors.Errorf("error when marshaling encrypted packet for O2O encryption: %v", err)
@@ -894,7 +900,7 @@ func (n *node) GroupCallRemove(member string) error {
 	return DHRemoveRound2(n, member)
 }
 
-func DHAddRound2(n *node, member string, newKey *ecdh.PrivateKey) error {
+func DHAddRound2(n *node, member string, newKey *ecdh.PrivateKey, secret *ecdh.PublicKey) error {
 	//Member addition round 2
 	var waitGrp sync.WaitGroup
 	var lock sync.Mutex
@@ -937,6 +943,7 @@ func DHAddRound2(n *node, member string, newKey *ecdh.PrivateKey) error {
 			return xerrors.Errorf("error when removing unanswering peer: %v", err)
 		}
 	}
+	n.crypto.DHPartialSecrets[member] = secret
 	return err
 }
 
@@ -1105,10 +1112,7 @@ func (n *node) GroupCallAdd(member string) error {
 		return xerrors.Errorf("error when unicasting partial secret to additional member %v: %v", member, err)
 	}
 
-	err = DHAddRound2(n, member, newKey)
-
-	n.crypto.DHPartialSecrets[member] = secret
-	return err
+	return DHAddRound2(n, member, newKey, secret)
 }
 
 func (n *node) GroupCallEnd() {
