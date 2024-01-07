@@ -169,6 +169,7 @@ func (n *node) watchMulticastGroupNotSender(groupID string) {
 				n.logger.Error().Err(err).Msg("can't unicast leave multicast group request")
 			}
 
+			group.mtx.Unlock()
 			return
 		}
 		group.mtx.Unlock()
