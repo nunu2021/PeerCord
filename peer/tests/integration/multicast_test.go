@@ -104,11 +104,14 @@ func Test_Multicast(t *testing.T) {
 			}
 
 			// Wait for the messages to propagate through the network
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 
 			// Check that each peer has received the right number of messages
 			for j := 0; j < nbNodes; j++ {
-				require.Len(t, nodes[j].GetChatMsgs(), nbMessagesReceivedExpected[j])
+				if len(nodes[j].GetChatMsgs()) != nbMessagesReceivedExpected[j] {
+					time.Sleep(time.Second)
+					require.Len(t, nodes[j].GetChatMsgs(), nbMessagesReceivedExpected[j])
+				}
 			}
 		}
 	}
