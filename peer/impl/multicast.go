@@ -1,3 +1,23 @@
+// Multicasting allows a peer to send messages to a group of peers at once. The
+// system implements a variation of the PIM-SM protocol that is used in real
+// networks.
+//
+// To start multicasting, a peer must create a multicast group. Then, the other
+// peers have to join this group: they will then be able to receive the
+// messages. If several peers want to multicast messages, each one need to
+// create a multicast group.
+//
+// Multicasting is not reliable: messages can be lost on their way. This is
+// expected: for real-time communications, we do not want to lose resources
+// to resend outdated messages.
+//
+// The following functions can be used:
+// - NewMulticastGroup() string
+// - DeleteMulticastGroup(id string) error
+// - JoinMulticastGroup(peer string, id string) error
+// - LeaveMulticastGroup(groupSender string, groupID string) error
+// - Multicast(msg transport.Message, groupID string) error
+
 package impl
 
 import (
