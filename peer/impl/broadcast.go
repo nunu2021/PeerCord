@@ -1,10 +1,11 @@
 package impl
 
 import (
-	"go.dedis.ch/cs438/transport"
-	"go.dedis.ch/cs438/types"
 	"math/rand"
 	"time"
+
+	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 )
 
 // Send the heartbeat if needed

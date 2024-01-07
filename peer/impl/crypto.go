@@ -581,6 +581,9 @@ func DHRound2(n *node, receivers map[string]struct{}) error {
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
 				lock.Unlock()
+
+				// Its dead. Remove it from the list of members
+				n.peerCord.members.delete(peer)
 			}
 		}(n.crypto.DHchannels.Get(s), s)
 	}
@@ -716,6 +719,9 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
 				lock.Unlock()
+
+				// Its dead. Remove it from the list of members
+				n.peerCord.members.delete(peer)
 			}
 		}(n.crypto.DHchannels.Get(s), s)
 	}
@@ -755,6 +761,9 @@ func DHRemoveRound2(n *node, member string) error {
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
 				lock.Unlock()
+
+				// Its dead. Remove it from the list of members
+				n.peerCord.members.delete(peer)
 			}
 		}(n.crypto.DHchannels.Get(s), s)
 	}
@@ -910,6 +919,9 @@ func DHAddRound2(n *node, member string, newKey *ecdh.PrivateKey) error {
 				delete(n.crypto.DHInitSecrets, peer)
 				delete(n.crypto.DHPartialSecrets, peer)
 				lock.Unlock()
+
+				// Its dead. Remove it from the list of members
+				n.peerCord.members.delete(peer)
 			}
 		}(n.crypto.DHchannels.Get(s), s)
 	}
@@ -1381,6 +1393,12 @@ func (n *node) ExecDHEncryptedPkt(msg types.Message, packet transport.Packet) er
 	decryptedMsg := transport.Message{Type: message.Type, Payload: decryptedPayload}
 	header := packet.Header.Copy()
 	pkt := transport.Packet{Header: &header, Msg: &decryptedMsg}
-	n.processPacket(pkt)
+
+	// Process the message directly
+	err = n.conf.MessageRegistry.ProcessPacket(pkt)
+	if err != nil {
+		n.logger.Warn().Err(err).Msg("failed to process packet")
+	}
+
 	return nil
 }

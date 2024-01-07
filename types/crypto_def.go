@@ -23,3 +23,7 @@ type O2OEncryptedPkt struct {
 	RemoteKey []byte
 	Signature []byte
 }
+
+var EncryptedMsgTypes = map[string]struct{}{
+	"GroupCallVotePkt": {},
+}

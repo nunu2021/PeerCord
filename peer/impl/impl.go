@@ -58,6 +58,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		paxos:             NewPaxos(),
 		crypto:            Crypto{KnownPKs: StrStrMap{Map: make(map[string]StrBytesPair)}},
 		multicast:         NewMulticast(),
+		peerCord:          newPeerCord(),
 	}
 
 	// Register the different kinds of messages
@@ -83,6 +84,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHSharedSecret{}, n.ExecGroupCallDHSharedSecret)
 	conf.MessageRegistry.RegisterMessageCallback(types.DHEncryptedPkt{}, n.ExecDHEncryptedPkt)
 	conf.MessageRegistry.RegisterMessageCallback(types.O2OEncryptedPkt{}, n.ExecO2OEncryptedPkt)
+	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallVotePkt{}, n.ReceiveGroupCallVotePktMsg)
+	conf.MessageRegistry.RegisterMessageCallback(types.DialMsg{}, n.ReceiveDial)
 
 	return n
 }
@@ -142,6 +145,9 @@ type node struct {
 
 	//Cryptography for peer-cord
 	crypto Crypto
+
+	// Implements the PeerCord interface
+	peerCord PeerCord
 }
 
 // GetAddress returns the address of the node
@@ -238,6 +244,7 @@ func (n *node) Start() error {
 	}
 
 	n.isRunning = true
+	n.GenerateKeyPair()
 	go loop(n)
 	return nil
 }
@@ -290,6 +297,12 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 
 // Called when the peer has received a new packet.
 func (n *node) processPacket(pkt transport.Packet) {
+	msgType := pkt.Msg.Type
+	if _, requiresEncryption := types.EncryptedMsgTypes[msgType]; requiresEncryption {
+		n.logger.Warn().Msgf("Received unencrypted msg of type %v. Ignoring", msgType)
+		return
+	}
+
 	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
 		n.logger.Warn().Err(err).Msg("failed to process packet")

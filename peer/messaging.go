@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 )
 
 // Messaging defines the functions for the basic functionalities to exchange
@@ -130,6 +131,14 @@ type Messaging interface {
 
 	// End the group call
 	GroupCallEnd()
+
+	// Get a list of members in the group call
+	GetGroupCallMembers() map[string]struct{}
+
+	// Peer Dialing Commands
+	DialPeer(peer string) (string, error)
+	EndCall()
+	CallLineState() types.DialState
 
 	// AddPeer adds new known addresses to the node. It must update the
 	// routing table of the node. Adding ourself should have no effect.

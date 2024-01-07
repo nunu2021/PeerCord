@@ -51,6 +51,14 @@ func (sm *safeMap[T, U]) set(key T, val U) {
 	sm.data[key] = val
 }
 
+// Safely returns the length of the map
+func (sm *safeMap[T, U]) len() int {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	return len(sm.data)
+}
+
 func (sm *safeMap[T, U]) delete(key T) {
 	sm.mutex.Lock()
 	delete(sm.data, key)
