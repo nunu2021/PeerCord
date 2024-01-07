@@ -108,7 +108,7 @@ func Test_Multicast(t *testing.T) {
 
 			// Check that each peer has received the right number of messages
 			for j := 0; j < nbNodes; j++ {
-				require.Equal(t, nbMessagesReceivedExpected[j], len(nodes[j].GetChatMsgs()))
+				require.Len(t, nodes[j].GetChatMsgs(), nbMessagesReceivedExpected[j])
 			}
 		}
 	}
