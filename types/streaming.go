@@ -1,7 +1,5 @@
 package types
 
-import "fmt"
-
 // --------------------------
 
 func (j JoinCallRequestMessage) NewEmpty() Message {
@@ -13,7 +11,7 @@ func (j JoinCallRequestMessage) Name() string {
 }
 
 func (j JoinCallRequestMessage) String() string {
-	return fmt.Sprintf("joincallrequest{}")
+	return "joincallrequest{}"
 }
 
 func (j JoinCallRequestMessage) HTML() string {
@@ -31,7 +29,7 @@ func (j JoinCallReplyMessage) Name() string {
 }
 
 func (j JoinCallReplyMessage) String() string {
-	return fmt.Sprintf("joincallreply{}")
+	return "joincallreply{}"
 }
 
 func (j JoinCallReplyMessage) HTML() string {
@@ -49,7 +47,7 @@ func (l LeaveCallMessage) Name() string {
 }
 
 func (l LeaveCallMessage) String() string {
-	return fmt.Sprintf("leavecall{}")
+	return "leavecall{}"
 }
 
 func (l LeaveCallMessage) HTML() string {
@@ -67,7 +65,7 @@ func (c CallDataMessage) Name() string {
 }
 
 func (c CallDataMessage) String() string {
-	return fmt.Sprintf("calldata{}")
+	return "calldata{}"
 }
 
 func (c CallDataMessage) HTML() string {
