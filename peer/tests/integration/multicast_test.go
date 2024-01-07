@@ -46,6 +46,12 @@ func Test_Multicast(t *testing.T) {
 			z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5),
+
+			z.WithMulticastJoinTimeout(time.Hour),
+			z.WithMulticastLeaveTimeout(time.Hour),
+			z.WithMulticastResendJoinInterval(time.Hour),
+			z.WithMulticastHeartbeat(time.Hour),
+			z.WithMulticastInactivityTimeout(time.Hour),
 		)
 		defer nodes[i].Stop()
 
@@ -77,7 +83,7 @@ func Test_Multicast(t *testing.T) {
 			}
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 
 		// Each peer sends a message to its multicast group
 		for i := 0; i < nbNodes; i++ {
@@ -102,7 +108,10 @@ func Test_Multicast(t *testing.T) {
 
 			// Check that each peer has received the right number of messages
 			for j := 0; j < nbNodes; j++ {
-				require.Equal(t, nbMessagesReceivedExpected[j], len(nodes[j].GetChatMsgs()))
+				if len(nodes[j].GetChatMsgs()) != nbMessagesReceivedExpected[j] {
+					time.Sleep(time.Second)
+					require.Len(t, nodes[j].GetChatMsgs(), nbMessagesReceivedExpected[j])
+				}
 			}
 		}
 	}

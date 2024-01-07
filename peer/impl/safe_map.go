@@ -25,6 +25,12 @@ func (sm *safeMap[T, U]) get(key T) (U, bool) {
 	return val, exists
 }
 
+// Get a value of the map
+func (sm *safeMap[T, U]) unsafeGet(key T) (U, bool) {
+	val, exists := sm.data[key]
+	return val, exists
+}
+
 // Safely get a value of the map. If the value exists, the safe map's mutex is
 // kept locked until release is called.
 func (sm *safeMap[T, U]) getReference(key T) (U, bool) {
@@ -37,6 +43,10 @@ func (sm *safeMap[T, U]) getReference(key T) (U, bool) {
 	}
 
 	return val, exists
+}
+
+func (sm *safeMap[T, U]) lock() {
+	sm.mutex.Lock()
 }
 
 func (sm *safeMap[T, U]) unlock() {
@@ -57,6 +67,11 @@ func (sm *safeMap[T, U]) len() int {
 	defer sm.mutex.Unlock()
 
 	return len(sm.data)
+}
+
+// Set a value of the map
+func (sm *safeMap[T, U]) unsafeSet(key T, val U) {
+	sm.data[key] = val
 }
 
 func (sm *safeMap[T, U]) delete(key T) {
