@@ -1,7 +1,7 @@
 name: HW2_performance
 
-on:
-  push
+#on:
+#  push
 
 jobs:
   test:
