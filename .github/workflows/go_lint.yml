@@ -16,6 +16,11 @@ jobs:
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
 
+      - name: Install Portaudio
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev
+
       - name: Tidy
         run: go mod tidy && [ -z "$(git status -s)" ]
 
