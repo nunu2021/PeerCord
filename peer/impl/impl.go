@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"golang.org/x/xerrors"
 	"math"
 	"math/rand"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
-	"golang.org/x/xerrors"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -251,10 +251,10 @@ func (n *node) Start() error {
 		return AlreadyRunningError{}
 	}
 
-	if err := n.initializeStreaming(); err != nil {
+	/*if err := n.initializeStreaming(); err != nil {
 		n.logger.Error().Err(err).Msg("failed to initialize streaming")
 		return err
-	}
+	}*/
 
 	err := n.GenerateKeyPair()
 	if err != nil {
@@ -273,10 +273,10 @@ func (n *node) Stop() error {
 		return NotRunningError{}
 	}
 
-	if err := n.destroyStreaming(); err != nil {
+	/*if err := n.destroyStreaming(); err != nil {
 		n.logger.Error().Err(err).Msg("failed to stop streaming")
 		return err
-	}
+	}*/
 
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
