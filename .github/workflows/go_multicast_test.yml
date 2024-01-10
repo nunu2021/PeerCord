@@ -1,7 +1,7 @@
 name: Multicast_tests
 
-on:
-  push
+#on:
+#  push
 
 jobs:
   tests:

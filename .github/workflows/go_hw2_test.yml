@@ -1,7 +1,7 @@
 name: HW2_tests
 
-on:
-  push
+#on:
+#  push
 
 jobs:
   tests:
