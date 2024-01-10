@@ -90,12 +90,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.O2OEncryptedPkt{}, n.ExecO2OEncryptedPkt)
 	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallVotePkt{}, n.ReceiveGroupCallVotePktMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.DialMsg{}, n.ReceiveDial)
-
-	// streaming
-	conf.MessageRegistry.RegisterMessageCallback(types.JoinCallReplyMessage{}, n.receiveJoinCallRequest)
-	conf.MessageRegistry.RegisterMessageCallback(types.JoinCallReplyMessage{}, n.receiveJoinCallReply)
-	conf.MessageRegistry.RegisterMessageCallback(types.LeaveCallMessage{}, n.receiveLeaveCall)
-	conf.MessageRegistry.RegisterMessageCallback(types.CallDataMessage{}, n.receiveCallData)
+	conf.MessageRegistry.RegisterMessageCallback(types.CallDataMessage{}, n.receiveCallDataMsg)
 
 	return n
 }
@@ -256,7 +251,7 @@ func (n *node) Start() error {
 		return AlreadyRunningError{}
 	}
 
-	if err := n.InitializeStreaming(); err != nil {
+	if err := n.initializeStreaming(); err != nil {
 		n.logger.Error().Err(err).Msg("failed to initialize streaming")
 		return err
 	}
@@ -278,7 +273,7 @@ func (n *node) Stop() error {
 		return NotRunningError{}
 	}
 
-	if err := n.StopStreaming(); err != nil {
+	if err := n.destroyStreaming(); err != nil {
 		n.logger.Error().Err(err).Msg("failed to stop streaming")
 		return err
 	}
