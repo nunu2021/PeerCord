@@ -35,6 +35,10 @@ jobs:
           # Pass GITHUB_TOKEN to avoid rate limiting.
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install Portaudio
+        run: |
+          apt-get install portaudio19-dev
+
       - name: Create temp directory
         run: |
           mkdir -p ./${{ github.run_attempt }}
