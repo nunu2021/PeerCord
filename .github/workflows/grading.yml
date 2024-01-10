@@ -1,7 +1,7 @@
 name: Grading
 
-#on:
-#  push
+on:
+  push
   
 jobs:
   linter:
