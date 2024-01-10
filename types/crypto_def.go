@@ -5,7 +5,8 @@ type GroupCallDHIndividual struct {
 }
 
 type GroupCallDHSharedSecret struct {
-	RemoteKey []byte
+	RemoteKey   []byte
+	MembersList map[string]struct{}
 }
 
 type DHEncryptedPkt struct {

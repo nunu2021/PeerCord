@@ -257,6 +257,15 @@ type Crypto struct {
 	DHPartialSecrets       map[string](*ecdh.PublicKey)
 }
 
+func (n *node) CreateCallMembers() map[string]struct{} {
+	callMembers := make(map[string]struct{})
+	for s := range n.crypto.DHPartialSecrets {
+		callMembers[s] = struct{}{}
+	}
+	callMembers[n.GetAddress()] = struct{}{}
+	return callMembers
+}
+
 func (n *node) GenerateKeyPair() error {
 	//Generate a pair of RSA keys
 	keyPair, err := rsa.GenerateKey(rand.Reader, 4096)
@@ -611,6 +620,7 @@ func DHRound2(n *node, receivers map[string]struct{}) error {
 func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
 	// Auxiliary function for StartDHKeyExchange sending the partial secrets to all other call members
 	first := true
+	callMembers := n.CreateCallMembers()
 	for dest := range receivers {
 		//For each member, we build the partial shared secret
 		keyToSend, err := ConstructKeyToSend(n, dest)
@@ -637,7 +647,7 @@ func SendPartialSecrets(n *node, receivers map[string]struct{}) error {
 		if err != nil {
 			return xerrors.Errorf("error in DH key exchange when marshaling partial shared secret for %v: %v", dest, err)
 		}
-		ssMsg := types.GroupCallDHSharedSecret{RemoteKey: localKey}
+		ssMsg := types.GroupCallDHSharedSecret{RemoteKey: localKey, MembersList: callMembers}
 		data, err := json.Marshal(&ssMsg)
 
 		if err != nil {
@@ -792,6 +802,7 @@ func DHRemoveRound2(n *node, member string) error {
 func SendPartialSecretsRemove(n *node, member string) error {
 	//Send partial secrets to all receivers after removing member
 	newSharedSecretSet := false
+	callMembers := n.CreateCallMembers()
 	for dest := range n.crypto.DHPartialSecrets {
 		//We build the partial shared secrets for all receivers
 		if dest == n.GetAddress() {
@@ -809,7 +820,7 @@ func SendPartialSecretsRemove(n *node, member string) error {
 		if err != nil {
 			return xerrors.Errorf("error in DH key exchange when marshaling partial shared secret for %v: %v", dest, err)
 		}
-		ssMsg := types.GroupCallDHSharedSecret{RemoteKey: localKey}
+		ssMsg := types.GroupCallDHSharedSecret{RemoteKey: localKey, MembersList: callMembers}
 		data, err := json.Marshal(&ssMsg)
 
 		if err != nil {
@@ -963,6 +974,8 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 	}
 	n.crypto.DHSharedSecret.Set(secret)
 
+	callMembers := n.CreateCallMembers()
+	callMembers[member] = struct{}{}
 	for s, key := range n.crypto.DHPartialSecrets {
 		//For all member we update the shared secret and send it
 		if s == n.GetAddress() {
@@ -992,7 +1005,7 @@ func SendPartialSecretsInAddition(n *node, member string, newKey *ecdh.PrivateKe
 			return xerrors.Errorf("error when marshaling partial key for %v to add %v: %v", s, member, err)
 		}
 		//Create and send a message with the partial secret
-		msg := types.GroupCallDHSharedSecret{RemoteKey: newPartialSecretKeyMarshaled}
+		msg := types.GroupCallDHSharedSecret{RemoteKey: newPartialSecretKeyMarshaled, MembersList: callMembers}
 		data, err := json.Marshal(&msg)
 		if err != nil {
 			return xerrors.Errorf("error when marshaling DH addition msg of %v for %v: %v", member, s, err)
@@ -1096,8 +1109,11 @@ func (n *node) GroupCallAdd(member string) error {
 	if err != nil {
 		return xerrors.Errorf("error when marshaling partial key for %v to add %v: %v", member, member, err)
 	}
+
+	callMembers := n.CreateCallMembers()
+	callMembers[member] = struct{}{}
 	//Send to the new member its partial secret
-	msg := types.GroupCallDHSharedSecret{RemoteKey: newPartialSecretKeyMarshaled}
+	msg := types.GroupCallDHSharedSecret{RemoteKey: newPartialSecretKeyMarshaled, MembersList: callMembers}
 	data, err = json.Marshal(&msg)
 	if err != nil {
 		return xerrors.Errorf("error when marshaling DH addition msg of %v for %v: %v", member, member, err)
@@ -1270,6 +1286,10 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	if err != nil {
 		return xerrors.Errorf("error when unicasting SS ACK: %v", err)
 	}
+
+	n.peerCord.members.mutex.Lock()
+	n.peerCord.members.data = message.MembersList
+	n.peerCord.members.mutex.Unlock()
 
 	return nil
 }
