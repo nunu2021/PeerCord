@@ -5,8 +5,7 @@ on:
 
 jobs:
   lint:
-    runs-on:
-      group: runners_v1
+    runs-on: ubuntu-22.04
     steps:
       - name: Use Go = 1.21
         uses: actions/setup-go@v3

@@ -5,8 +5,6 @@ on:
 
 jobs:
   tests:
-    #runs-on:
-      #group: runners_v1
     runs-on: ubuntu-22.04
     env:
       LLVL: trace
