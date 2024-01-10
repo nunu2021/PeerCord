@@ -2,10 +2,8 @@ package testing
 
 import (
 	"bytes"
-
 	"crypto/sha256"
 	"encoding/hex"
-
 	"encoding/json"
 	"fmt"
 
@@ -150,6 +148,12 @@ type configTemplate struct {
 	paxosThreshold     func(uint) int
 	paxosID            uint
 	paxosProposerRetry time.Duration
+
+	MulticastJoinTimeout        time.Duration
+	MulticastLeaveTimeout       time.Duration
+	MulticastResendJoinInterval time.Duration
+	MulticastHeartbeat          time.Duration
+	MulticastInactivityTimeout  time.Duration
 }
 
 func newConfigTemplate() configTemplate {
@@ -184,6 +188,17 @@ func newConfigTemplate() configTemplate {
 		},
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
+
+		// These values are smaller than what they would be in a real system.
+		// It is to test the correctness of the implementation in a reasonable
+		// time. The values should verify the following constraints:
+		// - Before effectively leaving, the neighbor should have the time to
+		//   send several join messages.
+		MulticastJoinTimeout:        10 * time.Second,
+		MulticastLeaveTimeout:       10 * time.Second,
+		MulticastResendJoinInterval: 3 * time.Second,
+		MulticastHeartbeat:          10 * time.Second,
+		MulticastInactivityTimeout:  35 * time.Second,
 	}
 }
 
@@ -293,6 +308,36 @@ func WithPaxosProposerRetry(d time.Duration) Option {
 	}
 }
 
+func WithMulticastJoinTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastJoinTimeout = d
+	}
+}
+
+func WithMulticastLeaveTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastLeaveTimeout = d
+	}
+}
+
+func WithMulticastResendJoinInterval(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastResendJoinInterval = d
+	}
+}
+
+func WithMulticastHeartbeat(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastHeartbeat = d
+	}
+}
+
+func WithMulticastInactivityTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastInactivityTimeout = d
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -320,6 +365,11 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.PaxosThreshold = template.paxosThreshold
 	config.PaxosID = template.paxosID
 	config.PaxosProposerRetry = template.paxosProposerRetry
+	config.MulticastJoinTimeout = template.MulticastJoinTimeout
+	config.MulticastLeaveTimeout = template.MulticastLeaveTimeout
+	config.MulticastResendJoinInterval = template.MulticastResendJoinInterval
+	config.MulticastHeartbeat = template.MulticastHeartbeat
+	config.MulticastInactivityTimeout = template.MulticastInactivityTimeout
 
 	node := f(config)
 

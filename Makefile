@@ -8,12 +8,13 @@ export BENCHTIME = "10x"
 
 all: lint vet test
 
-test: test_hw0 test_hw1 test_hw2 test_hw3
+test: test_hw0 test_hw1 test_hw2 test_hw3 test_multicast
 
 test_hw0: test_unit_hw0 test_int_hw0
 test_hw1: test_unit_hw1 test_int_hw1
 test_hw2: test_unit_hw2 test_int_hw2
 test_hw3: test_unit_hw3 test_int_hw3
+test_multicast: test_unit_multicast test_int_multicast
 
 test_unit_hw0:
 	go test -timeout 2m -v -race -run Test_HW0 ./peer/tests/unit
@@ -27,6 +28,9 @@ test_unit_hw2:
 test_unit_hw3:
 	go test -timeout 2m -v -race -run Test_HW3 ./peer/tests/unit
 
+test_unit_multicast:
+	go test -timeout 2m -v -race -run Test_Multicast ./peer/tests/unit
+
 test_int_hw0:
 	go test -timeout 5m -v -race -run Test_HW0 ./peer/tests/integration
 
@@ -38,6 +42,9 @@ test_int_hw2:
 
 test_int_hw3:
 	go test -timeout 5m -v -race -run Test_HW3 ./peer/tests/integration
+
+test_int_multicast:
+	go test -timeout 5m -v -race -run Test_Multicast ./peer/tests/integration
 
 # JSONIFY is set to "-json" in CI to format for GitHub, empty for displaying locally
 # || true allows to ignore error code and allow for smoother output logging

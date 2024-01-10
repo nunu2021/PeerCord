@@ -3,47 +3,93 @@ package types
 import "fmt"
 
 // -----------------------------------------------------------------------------
-// GroupCallDHUpward
+// GroupCallDHIndividual
 
 // NewEmpty implements types.Message.
-func (m GroupCallDHUpward) NewEmpty() Message {
-	return &GroupCallDHUpward{}
+func (m GroupCallDHIndividual) NewEmpty() Message {
+	return &GroupCallDHIndividual{}
 }
 
 // Name implements types.Message.
-func (m GroupCallDHUpward) Name() string {
-	return "GroupCallDHUpward"
+func (m GroupCallDHIndividual) Name() string {
+	return "GroupCallDHIndividual"
 }
 
 // String implements types.Message.
-func (m GroupCallDHUpward) String() string {
-	return fmt.Sprintf("{GroupCallDHUpward %v - %v}", m.PreviousKeys, m.RemainingReceivers)
+func (m GroupCallDHIndividual) String() string {
+	return fmt.Sprintf("{GroupCallDHIndividual %v}", m.RemoteKey)
 }
 
 // HTML implements types.Message.
-func (m GroupCallDHUpward) HTML() string {
+func (m GroupCallDHIndividual) HTML() string {
 	return m.String()
 }
 
 // -----------------------------------------------------------------------------
-// PaxosPrepareMessage
+// GroupCallDHSharedSecret
 
 // NewEmpty implements types.Message.
-func (m GroupCallDHDownward) NewEmpty() Message {
-	return &GroupCallDHDownward{}
+func (m GroupCallDHSharedSecret) NewEmpty() Message {
+	return &GroupCallDHSharedSecret{}
 }
 
 // Name implements types.Message.
-func (m GroupCallDHDownward) Name() string {
-	return "GroupCallDHDownward"
+func (m GroupCallDHSharedSecret) Name() string {
+	return "GroupCallDHSharedSecret"
 }
 
 // String implements types.Message.
-func (m GroupCallDHDownward) String() string {
-	return fmt.Sprintf("{GroupCallDHDownward %v}", m.PreviousKeys)
+func (m GroupCallDHSharedSecret) String() string {
+	return fmt.Sprintf("{GroupCallDHSharedSecret %v}", m.RemoteKey)
 }
 
 // HTML implements types.Message.
-func (m GroupCallDHDownward) HTML() string {
+func (m GroupCallDHSharedSecret) HTML() string {
+	return m.String()
+}
+
+// -----------------------------------------------------------------------------
+// DHEncryptedPkt
+
+// NewEmpty implements types.Message.
+func (m DHEncryptedPkt) NewEmpty() Message {
+	return &DHEncryptedPkt{}
+}
+
+// Name implements types.Message.
+func (m DHEncryptedPkt) Name() string {
+	return "DHEncryptedPkt"
+}
+
+// String implements types.Message.
+func (m DHEncryptedPkt) String() string {
+	return fmt.Sprintf("{DHEncryptedPkt %v - %v - %v - %v}", m.Type, m.Payload, m.RemoteKey, m.Signature)
+}
+
+// HTML implements types.Message.
+func (m DHEncryptedPkt) HTML() string {
+	return m.String()
+}
+
+// -----------------------------------------------------------------------------
+// O2OEncryptedPkt
+
+// NewEmpty implements types.Message.
+func (m O2OEncryptedPkt) NewEmpty() Message {
+	return &O2OEncryptedPkt{}
+}
+
+// Name implements types.Message.
+func (m O2OEncryptedPkt) Name() string {
+	return "O2OEncryptedPkt"
+}
+
+// String implements types.Message.
+func (m O2OEncryptedPkt) String() string {
+	return fmt.Sprintf("{O2OEncryptedPkt %v - %v - %v - %v - %v}", m.Key, m.Type, m.Payload, m.RemoteKey, m.Signature)
+}
+
+// HTML implements types.Message.
+func (m O2OEncryptedPkt) HTML() string {
 	return m.String()
 }

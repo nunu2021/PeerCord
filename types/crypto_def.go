@@ -1,10 +1,29 @@
 package types
 
-type GroupCallDHUpward struct {
-	PreviousKeys       []([]byte)
-	RemainingReceivers []string
+type GroupCallDHIndividual struct {
+	RemoteKey []byte
 }
 
-type GroupCallDHDownward struct {
-	PreviousKeys []([]byte)
+type GroupCallDHSharedSecret struct {
+	RemoteKey []byte
+}
+
+type DHEncryptedPkt struct {
+	Type      string
+	Payload   []byte
+	RemoteKey []byte
+	Signature []byte
+}
+
+type O2OEncryptedPkt struct {
+	Key       []byte
+	Type      string
+	Payload   []byte
+	RemoteID  string
+	RemoteKey []byte
+	Signature []byte
+}
+
+var EncryptedMsgTypes = map[string]struct{}{
+	"GroupCallVotePkt": {},
 }

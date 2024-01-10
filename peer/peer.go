@@ -12,6 +12,7 @@ import (
 type Peer interface {
 	Service
 	Messaging
+	Multicast
 	DataSharing
 }
 
@@ -79,6 +80,27 @@ type Configuration struct {
 	// retries to send a prepare when it doesn't get enough promises or accepts.
 	// Default: 5s.
 	PaxosProposerRetry time.Duration
+
+	// Time until a peer removes one of its neighbor from the forwarding table
+	// of a multicast group if no join message is received.
+	MulticastJoinTimeout time.Duration
+
+	// Time until a peer removes one of its neighbor from the forwarding table
+	// of a multicast group if no join message is received after a leave message
+	// has been received.
+	MulticastLeaveTimeout time.Duration
+
+	// A peer needs to resend join requests to stay in the multicast group.
+	MulticastResendJoinInterval time.Duration
+
+	// The sender of a multicast group must multicast a message at least one
+	// time during this interval. Otherwise, the group may be automatically
+	// deleted by other peers.
+	MulticastHeartbeat time.Duration
+
+	// If no message is sent on the group during this interval, the group is
+	// deleted.
+	MulticastInactivityTimeout time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

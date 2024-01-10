@@ -12,6 +12,7 @@ import (
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"golang.org/x/xerrors"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -56,6 +57,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		rumorsReceived:    make(map[string][]types.Rumor),
 		fileSharing:       NewFileSharing(),
 		paxos:             NewPaxos(),
+		crypto:            Crypto{KnownPKs: StrStrMap{Map: make(map[string]StrBytesPair)}},
+		multicast:         NewMulticast(),
+		peerCord:          newPeerCord(),
 		streaming:         NewStreaming(),
 	}
 
@@ -70,13 +74,22 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.receiveDataReply)
 	conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, n.receiveSearchRequest)
 	conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.receiveSearchReply)
+	conf.MessageRegistry.RegisterMessageCallback(
+		types.JoinMulticastGroupRequestMessage{}, n.receiveJoinMulticastGroupMessage)
+	conf.MessageRegistry.RegisterMessageCallback(
+		types.LeaveMulticastGroupRequestMessage{}, n.receiveLeaveMulticastGroupMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.MulticastMessage{}, n.receiveMulticastMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosPrepareMessage{}, n.receivePaxosPrepareMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosProposeMessage{}, n.receivePaxosProposeMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, n.receivePaxosAcceptMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosPromiseMessage{}, n.receivePaxosPromiseMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.TLCMessage{}, n.receiveTLCMessage)
-	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHDownward{}, n.ExecGroupCallDHDownward)
-	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHUpward{}, n.ExecGroupCallDHUpward)
+	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHIndividual{}, n.ExecGroupCallDHIndividual)
+	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHSharedSecret{}, n.ExecGroupCallDHSharedSecret)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHEncryptedPkt{}, n.ExecDHEncryptedPkt)
+	conf.MessageRegistry.RegisterMessageCallback(types.O2OEncryptedPkt{}, n.ExecO2OEncryptedPkt)
+	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallVotePkt{}, n.ReceiveGroupCallVotePktMsg)
+	conf.MessageRegistry.RegisterMessageCallback(types.DialMsg{}, n.ReceiveDial)
 
 	// streaming
 	conf.MessageRegistry.RegisterMessageCallback(types.JoinCallReplyMessage{}, n.receiveJoinCallRequest)
@@ -137,11 +150,17 @@ type node struct {
 	// Information needed to reach consensus with multi-paxos
 	paxos Paxos
 
+	// Information needed for multicasting
+	multicast Multicast
+
 	//Cryptography for peer-cord
 	crypto Crypto
 
 	// Video and audio streaming
 	streaming Streaming
+
+	// Implements the PeerCord interface
+	peerCord PeerCord
 }
 
 // GetAddress returns the address of the node
@@ -242,6 +261,10 @@ func (n *node) Start() error {
 		return err
 	}
 
+	err := n.GenerateKeyPair()
+	if err != nil {
+		return xerrors.Errorf("error when generating key pair: %v", err)
+	}
 	n.isRunning = true
 	go loop(n)
 	return nil
@@ -300,6 +323,12 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 
 // Called when the peer has received a new packet.
 func (n *node) processPacket(pkt transport.Packet) {
+	msgType := pkt.Msg.Type
+	if _, requiresEncryption := types.EncryptedMsgTypes[msgType]; requiresEncryption {
+		n.logger.Warn().Msgf("Received unencrypted msg of type %v. Ignoring", msgType)
+		return
+	}
+
 	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
 		n.logger.Warn().Err(err).Msg("failed to process packet")

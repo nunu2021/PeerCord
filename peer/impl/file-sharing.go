@@ -3,15 +3,16 @@ package impl
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/rs/xid"
-	"go.dedis.ch/cs438/peer"
-	"go.dedis.ch/cs438/transport"
-	"go.dedis.ch/cs438/types"
 	"io"
 	"math/rand"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/rs/xid"
+	"go.dedis.ch/cs438/peer"
+	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 )
 
 // FileSharing contains all the objects used by the file-sharing system.
