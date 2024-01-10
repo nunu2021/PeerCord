@@ -5,8 +5,9 @@ on:
 
 jobs:
   tests:
-    runs-on:
-      group: runners_v1
+    #runs-on:
+      #group: runners_v1
+    runs-on: ubuntu-22.04
     env:
       LLVL: trace
     steps:
@@ -37,6 +38,7 @@ jobs:
 
       - name: Install Portaudio
         run: |
+          sudo apt-get update
           sudo apt-get install -y portaudio19-dev
 
       - name: Create temp directory
