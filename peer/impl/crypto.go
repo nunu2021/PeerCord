@@ -1287,9 +1287,7 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 		return xerrors.Errorf("error when unicasting SS ACK: %v", err)
 	}
 
-	if _, ok := message.MembersList[n.GetAddress()]; ok {
-		delete(message.MembersList, n.GetAddress())
-	}
+	delete(message.MembersList, n.GetAddress())
 	n.peerCord.members.mutex.Lock()
 	n.peerCord.members.data = message.MembersList
 	n.peerCord.members.mutex.Unlock()
