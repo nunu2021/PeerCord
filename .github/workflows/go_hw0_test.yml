@@ -1,12 +1,11 @@
 name: HW0_tests
 
-#on:
-#  push
+on:
+  push
 
 jobs:
   tests:
-    runs-on:
-      group: runners_v1
+    runs-on: ubuntu-22.04
     env:
       LLVL: trace
     steps:
@@ -34,6 +33,11 @@ jobs:
         with:
           # Pass GITHUB_TOKEN to avoid rate limiting.
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Portaudio
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev
 
       - name: Create temp directory
         run: |
