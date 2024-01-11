@@ -175,10 +175,13 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 }
 
 // all peers will compute a new global trust value every 2 minutes
-func (n *node) InitiateEigenTrust() {
+func (n *node) InitiateEigenTrust() error {
 	for {
 		if time.Now().Unix()%n.conf.EigenPulseWait == 0 {
-			n.ComputeGlobalTrustValue()
+			_, err := n.ComputeGlobalTrustValue()
+			if err != nil {
+				return err
+			}
 		}
 
 	}
@@ -197,7 +200,7 @@ func loop(n *node) {
 	// Receive packets (this goroutine is not stopped at the end)
 	go n.receivePackets(receivedPackets)
 
-	// TODO: comment this back in for periodic eigentrust updates
+	// TOD: comment this back in for periodic eigentrust updates
 	// go n.InitiateEigenTrust()
 
 	for {

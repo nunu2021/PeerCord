@@ -55,7 +55,7 @@ type Messaging interface {
 
 	ComputeGlobalTrustValue() (float64, error)
 
-	EigenRatePeer(peerIp string, ratingPerCall int)
+	EigenRatePeer(peerIP string, ratingPerCall int)
 }
 
 // RoutingTable defines a simple next-hop routing table. The key is the origin

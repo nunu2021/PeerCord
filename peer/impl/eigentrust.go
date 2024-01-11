@@ -1,17 +1,16 @@
 package impl
 
-// TODO DONE: remove syntax errors from eigen code
-// TODO DONE: figure out a way to have a map of maps
-// TODO DONE: Implement exec message functions
-// TODO DONE: implement waiting for all trust values
-// TODO DONE: implement the rest of the algorithm
-// TODO DONE: Check if I implemented the t1c1i calculations correctly
-// TODO: figure out a way to get total number of peers in a system
-// TODO: Fix Linting Errors
-// TODO: Add tests
+// TOD DONE: remove syntax errors from eigen code
+// TOD DONE: figure out a way to have a map of maps
+// TOD DONE: Implement exec message functions
+// TOD DONE: implement waiting for all trust values
+// TOD DONE: implement the rest of the algorithm
+// TOD DONE: Check if I implemented the t1c1i calculations correctly
+// TOD DONE: figure out a way to get total number of peers in a system
+// TOD DONE: Fix Linting Errors
+// TOD DONE Partially: Add tests
 
 import (
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -71,12 +70,12 @@ func NewEigenTrust(totalPeers uint) EigenTrust {
 }
 
 // function invoked after call ends to update peer rating in eigentrust table
-func (n *node) EigenRatePeer(peerIp string, ratingPerCall int) {
-	c, ok := n.eigenTrust.IncomingCallRatingSum.get(peerIp)
+func (n *node) EigenRatePeer(peerIP string, ratingPerCall int) {
+	c, ok := n.eigenTrust.IncomingCallRatingSum.get(peerIP)
 	if ok {
-		n.eigenTrust.IncomingCallRatingSum.set(peerIp, c+ratingPerCall)
+		n.eigenTrust.IncomingCallRatingSum.set(peerIP, c+ratingPerCall)
 	} else {
-		n.eigenTrust.IncomingCallRatingSum.set(peerIp, ratingPerCall)
+		n.eigenTrust.IncomingCallRatingSum.set(peerIP, ratingPerCall)
 	}
 
 }
@@ -88,7 +87,7 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 	n.eigenTrust.ComputingTrustValueMutex.Unlock()
 
 	// request t0 from all CallsOutgoingTo peers
-	for peer, _ := range n.eigenTrust.CallsOutgoingTo.data {
+	for peer := range n.eigenTrust.CallsOutgoingTo.data {
 		err := n.SendTrustValueRequest(true, peer)
 		if err != nil {
 			return 0, err
@@ -105,33 +104,39 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		}
 
 		// wait till we get all trust responses
-		n.WaitForEigenTrusts()
-
-		// calculate t+1 and store
-		t_1 := float64(0)
-
-		for _, trust := range n.eigenTrust.CallsOutgoingTo.data {
-			t_1 += float64(trust)
+		err := n.WaitForEigenTrusts()
+		if err != nil {
+			return 0, err
 		}
 
-		t_1 *= (1 - n.conf.EigenAValue)
-		t_1 += n.conf.EigenAValue * (n.eigenTrust.p)
+		// calculate t+1 and store
+		tPlus := float64(0)
+
+		for _, trust := range n.eigenTrust.CallsOutgoingTo.data {
+			tPlus += float64(trust)
+		}
+
+		tPlus *= (1 - n.conf.EigenAValue)
+		tPlus += n.conf.EigenAValue * (n.eigenTrust.p)
 
 		// send its local trust value to all CallsIncomingFrom
 		internalMap := n.eigenTrust.CallsIncomingFrom.internalMap()
 
-		for peer, _ := range internalMap {
-			n.SendTrustValueResponse(peer, true)
+		for peer := range internalMap {
+			err := n.SendTrustValueResponse(peer, true)
+			if err != nil {
+				return 0, err
+			}
 		}
 
 		n.eigenTrust.CallsIncomingFrom.unlock()
 
 		// update delta
-		delta = math.Abs(n.eigenTrust.GlobalTrustValue - t_1)
+		delta = math.Abs(n.eigenTrust.GlobalTrustValue - tPlus)
 
 		// update Global trust value
 		n.eigenTrust.k++
-		n.eigenTrust.GlobalTrustValue = t_1
+		n.eigenTrust.GlobalTrustValue = tPlus
 
 		counter++
 
@@ -148,7 +153,6 @@ func (n *node) SetTimer(dur time.Duration, timerChan chan bool) {
 	timerChan <- true
 }
 
-// TODO
 // wait some time and then check if we got all the responses
 // if by the end of the timer, we haven't, send requests to the peer that haven't sent
 func (n *node) WaitForEigenTrusts() error {
@@ -164,7 +168,7 @@ func (n *node) WaitForEigenTrusts() error {
 
 			// if not full, request the missing ones
 			if len(missing) > 0 {
-				for peer, _ := range missing {
+				for peer := range missing {
 					err := n.SendTrustValueRequest(true, peer)
 					if err != nil {
 						return err
@@ -180,7 +184,6 @@ func (n *node) WaitForEigenTrusts() error {
 			missing := n.CheckReceivedTrustValueCount()
 			// if finished, then
 			if len(missing) == 0 {
-				fmt.Println("good")
 				go n.finishTimer(timerChan)
 				return nil
 
@@ -192,13 +195,8 @@ func (n *node) WaitForEigenTrusts() error {
 
 func (n *node) finishTimer(timerChan chan bool) {
 	for {
-		select {
-		case <-timerChan:
-			return
-		default:
-
-		}
-
+		<-timerChan
+		return
 	}
 }
 
