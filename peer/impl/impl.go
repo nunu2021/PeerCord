@@ -56,7 +56,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		rumorsReceived:    make(map[string][]types.Rumor),
 		fileSharing:       NewFileSharing(),
 		paxos:             NewPaxos(),
-		eigenTrust:        NewEigenTrust(),
+		eigenTrust:        NewEigenTrust(conf.TotalPeers),
 	}
 
 	// Register the different kinds of messages

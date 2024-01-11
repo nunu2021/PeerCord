@@ -1,13 +1,13 @@
 package types
 
 type EigenTrustRequestMessage struct {
-	kStep        uint
+	KStep        uint
 	Source       string
 	IncludeLocal bool
 }
 
 type EigenTrustResponseMessage struct {
-	kStep  uint
+	KStep  uint
 	Source string
-	Value  float32
+	Value  float64
 }

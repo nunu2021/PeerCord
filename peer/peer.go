@@ -85,7 +85,7 @@ type Configuration struct {
 	// Should be less than 1.
 	// A lower value means less trusting on a priori value (will value the peers opinion more than the a priori trust)
 	// Default: 0.5
-	EigenAValue float32
+	EigenAValue float64
 
 	// How much time to wait before calculating next eigen trust value (in seconds)
 	// Default: 120
@@ -93,7 +93,13 @@ type Configuration struct {
 
 	// threshold of delta to end eigen trust computation iterations
 	// Default: 0.002
-	EigenEpsilon float32
+	EigenEpsilon float64
+
+	// Max number of Iterations to play out before calculation stops
+	// this is necasssary in the case the system gets conjusted.
+	// Bigger Number == More secutity, but possibly slower and prone to conjestion
+	// Default: 50
+	EigenCalcIterations uint
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must
