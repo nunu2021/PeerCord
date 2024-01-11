@@ -6,11 +6,14 @@ package impl
 // TODO DONE: implement waiting for all trust values
 // TODO DONE: implement the rest of the algorithm
 // TODO DONE: Check if I implemented the t1c1i calculations correctly
+// TODO: figure out a way to get total number of peers in a system
 // TODO: Fix Linting Errors
 // TODO: Add tests
 
 import (
+	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"go.dedis.ch/cs438/transport"
@@ -39,7 +42,8 @@ type EigenTrust struct {
 	p float64
 
 	// tells whether the peer is currenly in the middle of computing its trust value
-	ComputingTrustValue bool
+	ComputingTrustValue      bool
+	ComputingTrustValueMutex sync.Mutex
 
 	// a map of the received trust values from CallsOutgoingTo peers
 	// the map is mapped with the corresponding k-value
@@ -52,13 +56,14 @@ type EigenTrust struct {
 }
 
 func NewEigenTrust(totalPeers uint) EigenTrust {
+	tempP := 1 / float64(totalPeers)
 	return EigenTrust{
 		IncomingCallRatingSum: newSafeMap[string, int](),
 		CallsOutgoingTo:       newSafeMap[string, int](),
 		CallsIncomingFrom:     newSafeMap[string, int](),
 		GlobalTrustValue:      0.0,
 		k:                     0,
-		p:                     1 / float64(totalPeers),
+		p:                     tempP,
 		ComputingTrustValue:   false,
 		ReceivedTrustValues:   newSafeMap[string, float64](),
 		TrustReceivedFrom:     newSafeMap[string, int](),
@@ -77,14 +82,16 @@ func (n *node) EigenRatePeer(peerIp string, ratingPerCall int) {
 }
 
 // Computes the Global Trust Value for peer
-func (n *node) ComputeGlobalTrustValue() error {
+func (n *node) ComputeGlobalTrustValue() (float64, error) {
+	n.eigenTrust.ComputingTrustValueMutex.Lock()
 	n.eigenTrust.ComputingTrustValue = true
+	n.eigenTrust.ComputingTrustValueMutex.Unlock()
 
 	// request t0 from all CallsOutgoingTo peers
 	for peer, _ := range n.eigenTrust.CallsOutgoingTo.data {
 		err := n.SendTrustValueRequest(true, peer)
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
 
@@ -93,8 +100,8 @@ func (n *node) ComputeGlobalTrustValue() error {
 	for {
 		if delta < n.conf.EigenEpsilon || counter > n.conf.EigenCalcIterations {
 			// trust computation complete
-			n.eigenTrust.ComputingTrustValue = false
-			return nil
+
+			break
 		}
 
 		// wait till we get all trust responses
@@ -108,14 +115,16 @@ func (n *node) ComputeGlobalTrustValue() error {
 		}
 
 		t_1 *= (1 - n.conf.EigenAValue)
-		t_1 += n.conf.EigenAValue * (1 / n.eigenTrust.p)
+		t_1 += n.conf.EigenAValue * (n.eigenTrust.p)
 
 		// send its local trust value to all CallsIncomingFrom
 		internalMap := n.eigenTrust.CallsIncomingFrom.internalMap()
-		defer n.eigenTrust.CallsIncomingFrom.unlock()
+
 		for peer, _ := range internalMap {
 			n.SendTrustValueResponse(peer, true)
 		}
+
+		n.eigenTrust.CallsIncomingFrom.unlock()
 
 		// update delta
 		delta = math.Abs(n.eigenTrust.GlobalTrustValue - t_1)
@@ -124,7 +133,13 @@ func (n *node) ComputeGlobalTrustValue() error {
 		n.eigenTrust.k++
 		n.eigenTrust.GlobalTrustValue = t_1
 
+		counter++
+
 	}
+	n.eigenTrust.ComputingTrustValueMutex.Lock()
+	n.eigenTrust.ComputingTrustValue = false
+	n.eigenTrust.ComputingTrustValueMutex.Unlock()
+	return n.eigenTrust.GlobalTrustValue, nil
 
 }
 
@@ -139,10 +154,11 @@ func (n *node) SetTimer(dur time.Duration, timerChan chan bool) {
 func (n *node) WaitForEigenTrusts() error {
 	// set first timer
 	timerChan := make(chan bool)
-	go n.SetTimer(time.Duration(n.conf.EigenPulseWait/4), timerChan)
+	go n.SetTimer(time.Duration(n.conf.EigenPulseWait/6), timerChan)
 	for {
 		select {
 		case <-timerChan:
+
 			// check dict
 			missing := n.CheckReceivedTrustValueCount()
 
@@ -154,7 +170,7 @@ func (n *node) WaitForEigenTrusts() error {
 						return err
 					}
 				}
-				go n.SetTimer(time.Duration(n.conf.EigenPulseWait/4), timerChan)
+				go n.SetTimer(time.Duration(n.conf.EigenPulseWait/6), timerChan)
 			} else {
 				return nil
 			}
@@ -164,8 +180,23 @@ func (n *node) WaitForEigenTrusts() error {
 			missing := n.CheckReceivedTrustValueCount()
 			// if finished, then
 			if len(missing) == 0 {
+				fmt.Println("good")
+				go n.finishTimer(timerChan)
 				return nil
+
 			}
+		}
+
+	}
+}
+
+func (n *node) finishTimer(timerChan chan bool) {
+	for {
+		select {
+		case <-timerChan:
+			return
+		default:
+
 		}
 
 	}

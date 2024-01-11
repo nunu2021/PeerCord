@@ -49,7 +49,13 @@ type Messaging interface {
 	// potentially lost a neighbor).
 	//
 	// - implemented in HW0
+
+	// Eigentrust
 	SetRoutingEntry(origin, relayAddr string)
+
+	ComputeGlobalTrustValue() (float64, error)
+
+	EigenRatePeer(peerIp string, ratingPerCall int)
 }
 
 // RoutingTable defines a simple next-hop routing table. The key is the origin

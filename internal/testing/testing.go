@@ -146,10 +146,14 @@ type configTemplate struct {
 
 	dataRequestBackoff peer.Backoff
 
-	totalPeers         uint
-	paxosThreshold     func(uint) int
-	paxosID            uint
-	paxosProposerRetry time.Duration
+	totalPeers          uint
+	paxosThreshold      func(uint) int
+	paxosID             uint
+	paxosProposerRetry  time.Duration
+	EigenAValue         float64
+	EigenCalcIterations uint
+	EigenEpsilon        float64
+	EigenPulseWait      int64
 }
 
 func newConfigTemplate() configTemplate {
@@ -184,6 +188,11 @@ func newConfigTemplate() configTemplate {
 		},
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
+
+		EigenAValue:         0.5,
+		EigenCalcIterations: 120,
+		EigenEpsilon:        0.002,
+		EigenPulseWait:      50,
 	}
 }
 
@@ -320,6 +329,10 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.PaxosThreshold = template.paxosThreshold
 	config.PaxosID = template.paxosID
 	config.PaxosProposerRetry = template.paxosProposerRetry
+	config.EigenAValue = template.EigenAValue
+	config.EigenCalcIterations = template.EigenCalcIterations
+	config.EigenEpsilon = template.EigenEpsilon
+	config.EigenPulseWait = template.EigenPulseWait
 
 	node := f(config)
 
