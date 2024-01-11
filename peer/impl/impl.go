@@ -58,6 +58,12 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		paxos:             NewPaxos(),
 	}
 
+	if conf.IsBootstrap{
+	    n.bootstrap = NewBootstrap()
+    } else {
+        n.dht = NewDHT(conf.BootstrapAddrs)
+    }
+
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.receiveRumors)
@@ -78,6 +84,14 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallDHSharedSecret{}, n.ExecGroupCallDHSharedSecret)
 	conf.MessageRegistry.RegisterMessageCallback(types.DHEncryptedPkt{}, n.ExecDHEncryptedPkt)
 	conf.MessageRegistry.RegisterMessageCallback(types.O2OEncryptedPkt{}, n.ExecO2OEncryptedPkt)
+	conf.MessageRegistry.RegisterMessageCallback(types.BootstrapRequestMessage{}, n.ExecBootstrapRequestMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.BootstrapResponseMessage{}, n.ExecBootstrapResponseMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.UpdateBootstrapMessage{}, n.ExecUpdateBootstrapMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTJoinRequestMessage{}, n.ExecDHTJoinRequestMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTJoinAcceptMessage{}, n.ExecDHTJoinAcceptMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTUpdateNeighborsMessage{}, n.ExecDHTUpdateNeighborsMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTSetTrustMessage{}, n.ExecDHTSetTrustMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTQueryMessage{}, n.ExecDHTQueryMessage)
 
 	return n
 }
@@ -134,6 +148,12 @@ type node struct {
 
 	//Cryptography for peer-cord
 	crypto Crypto
+
+    // Information for DHT
+    dht DHT
+
+    // Information for bootstrap node
+	bootstrap BootstrapNode
 }
 
 // GetAddress returns the address of the node

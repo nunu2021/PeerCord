@@ -150,6 +150,12 @@ type configTemplate struct {
 	paxosThreshold     func(uint) int
 	paxosID            uint
 	paxosProposerRetry time.Duration
+
+	IsBootstrap        bool
+	BootstrapReplace   float64
+	BootstrapNodeLimit int
+	BootstrapTimeout   time.Duration
+	BootstrapAddrs     []string
 }
 
 func newConfigTemplate() configTemplate {
@@ -184,6 +190,12 @@ func newConfigTemplate() configTemplate {
 		},
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
+
+        IsBootstrap:        false,
+        BootstrapReplace:   0.75,
+        BootstrapNodeLimit: 10,
+        BootstrapTimeout: time.Second * 3,
+        BootstrapAddrs: []string{"127.0.0.1:1000"},
 	}
 }
 
@@ -293,6 +305,41 @@ func WithPaxosProposerRetry(d time.Duration) Option {
 	}
 }
 
+// WithBootstrap sets a bootstrap to True.
+func WithBootstrap() Option {
+	return func(ct *configTemplate) {
+		ct.IsBootstrap = true
+	}
+}
+
+// WithBootstrapReplace sets a specific probability for refreshing bootstrap nodes.
+func WithBootstrapReplace(p float64) Option {
+	return func(ct *configTemplate) {
+		ct.BootstrapReplace = p
+	}
+}
+
+// WithBootstrapNodeLimit sets a specific node limit for bootstrap nodes.
+func WithBootstrapNodeLimit(n int) Option {
+	return func(ct *configTemplate) {
+		ct.BootstrapNodeLimit = n
+	}
+}
+
+// WithBootstrapTimeout sets a specific timeout for querying bootstrap nodes.
+func WithBootstrapTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.BootstrapTimeout = d
+	}
+}
+
+// WithBootstrapAddrs sets a specific list of bootstrap node addresses.
+func WithBootstrapAddrs(addrs []string) Option {
+	return func(ct *configTemplate) {
+		ct.BootstrapAddrs = addrs
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -320,6 +367,11 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.PaxosThreshold = template.paxosThreshold
 	config.PaxosID = template.paxosID
 	config.PaxosProposerRetry = template.paxosProposerRetry
+    config.IsBootstrap = template.IsBootstrap
+    config.BootstrapReplace = template.BootstrapReplace
+    config.BootstrapNodeLimit = template.BootstrapNodeLimit
+    config.BootstrapTimeout = template.BootstrapTimeout
+    config.BootstrapAddrs = template.BootstrapAddrs
 
 	node := f(config)
 
@@ -411,6 +463,16 @@ func (t TestNode) GetChatMsgs() []*types.ChatMessage {
 // GetStorage returns the storage provided to the node.
 func (t TestNode) GetStorage() storage.Storage {
 	return t.config.Storage
+}
+
+// GetNodeLimit returns the NodeLimit of the bootstrap node.
+func (t TestNode) GetNodeLimit() int {
+	return t.config.BootstrapNodeLimit
+}
+
+// GetBootstrap returns true if the node is a bootstrap node, false otherwise.
+func (t TestNode) GetBootstrap() bool {
+	return t.config.IsBootstrap
 }
 
 // Status allows to check if something has been called or not.
