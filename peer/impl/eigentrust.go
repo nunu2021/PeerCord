@@ -8,9 +8,10 @@ package impl
 // TOD DONE: Check if I implemented the t1c1i calculations correctly
 // TOD DONE: figure out a way to get total number of peers in a system
 // TOD DONE: Fix Linting Errors
-// TOD DONE Partially: Add tests
+// TOD PARTIAL: Add tests
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -78,6 +79,8 @@ func (n *node) EigenRatePeer(peerIP string, ratingPerCall int) {
 		n.eigenTrust.IncomingCallRatingSum.set(peerIP, ratingPerCall)
 	}
 
+	n.eigenTrust.CallsIncomingFrom.set(peerIP, 1)
+
 }
 
 // Computes the Global Trust Value for peer
@@ -108,6 +111,8 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		if err != nil {
 			return 0, err
 		}
+
+		fmt.Println("here?")
 
 		// calculate t+1 and store
 		tPlus := float64(0)
@@ -223,13 +228,8 @@ func (n *node) SendTrustValueRequest(includeLocalTrust bool, dest string) error 
 		Source:       n.conf.Socket.GetAddress(),
 		IncludeLocal: includeLocalTrust,
 	}
-
-	msg, err := n.conf.MessageRegistry.MarshalMessage(eigenReqMsg)
-	if err != nil {
-		return err
-	}
-
-	err = n.Unicast(dest, msg)
+	fmt.Println(n.GetRoutingTable())
+	err := n.marshalAndUnicast(dest, eigenReqMsg)
 	return err
 }
 
@@ -238,13 +238,13 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 	if includeLocal {
 
 		internalMap := n.eigenTrust.IncomingCallRatingSum.internalMap()
-		defer n.eigenTrust.CallsIncomingFrom.unlock()
 
 		count := 0
 
 		for _, val := range internalMap {
 			count += max(val, 0)
 		}
+		n.eigenTrust.CallsIncomingFrom.unlock()
 
 		rating, ok := n.eigenTrust.IncomingCallRatingSum.get(source)
 		if !ok || rating < 0 {
@@ -258,26 +258,31 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 
 		trust *= localTrustValue
 	}
+	fmt.Println("should be sending ", trust)
 	eigenResponseMsg := types.EigenTrustResponseMessage{
 		KStep:  n.eigenTrust.k,
 		Source: n.conf.Socket.GetAddress(),
 		Value:  trust,
 	}
-	return n.marshalAndUnicast(source, eigenResponseMsg)
+	err := n.marshalAndUnicast(source, eigenResponseMsg)
+	return err
 }
 
 func (n *node) ExecEigenTrustRequestMessage(Msg types.Message, pkt transport.Packet) error {
+	fmt.Println("received request message at ", n.conf.Socket.GetAddress())
 	eigenRqstMsg, ok := Msg.(*types.EigenTrustRequestMessage)
 	if !ok {
 		panic("not a data reply message")
 	}
 
-	return n.SendTrustValueResponse(eigenRqstMsg.Source, true)
+	err := n.SendTrustValueResponse(eigenRqstMsg.Source, true)
+
+	return err
 }
 
 // Upon receiving a reponse from peer with peer's trust value for itself
 func (n *node) ExecEigenTrustResponseMessage(Msg types.Message, pkt transport.Packet) error {
-
+	fmt.Println("received Response Message at", n.conf.Socket.GetAddress())
 	eigenRspnMsg, ok := Msg.(*types.EigenTrustResponseMessage)
 	if !ok {
 		panic("not a data reply message")
@@ -285,4 +290,17 @@ func (n *node) ExecEigenTrustResponseMessage(Msg types.Message, pkt transport.Pa
 	n.eigenTrust.ReceivedTrustValues.set(eigenRspnMsg.Source, eigenRspnMsg.Value)
 
 	return nil
+}
+
+/**
+Testing Functions
+Helper functions to use in testing
+**/
+
+func (n *node) AddToCallsOutgoingTo(peer string) {
+	n.eigenTrust.CallsOutgoingTo.set(peer, 1)
+}
+
+func (n *node) AddToCallsIncomingFrom(peer string) {
+	n.eigenTrust.CallsIncomingFrom.set(peer, 1)
 }

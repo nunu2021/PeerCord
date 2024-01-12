@@ -190,9 +190,9 @@ func newConfigTemplate() configTemplate {
 		paxosProposerRetry: time.Second * 5,
 
 		EigenAValue:         0.5,
-		EigenCalcIterations: 120,
+		EigenCalcIterations: 50,
 		EigenEpsilon:        0.002,
-		EigenPulseWait:      50,
+		EigenPulseWait:      int64(time.Second * 120),
 	}
 }
 

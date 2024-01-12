@@ -49,19 +49,53 @@ func Test_EigenTrust_No_Calls_3_Peers(t *testing.T) {
 
 }
 
-// 2 peers, 1 calls the other, th other rates good and compute the global trust values for both
+// 2 peers, node1 calls node2, the other rates good and compute the global trust values for both
 func Test_EigenTrust_With_Good_Calls_2_Peers(t *testing.T) {
 	transp := channel.NewTransport()
 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1))
-	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:1", z.WithTotalPeers(1))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:1", z.WithTotalPeers(2))
+
+	// Simulation of a call
+	node1.AddPeer("127.0.0.1:1")
+	node2.AddPeer("127.0.0.1:0")
+
+	node1.AddToCallsOutgoingTo("127.0.0.1:1")
+	node2.AddToCallsIncomingFrom("127.0.0.1:0")
 
 	// After a call, node1 gives node2 a good rating
-	node1.EigenRatePeer("127.0.0.1:1", 1)
+	node2.EigenRatePeer("127.0.0.1:0", 1)
 
-	node1.Stop()
-	node2.Stop()
+	val, err := node1.ComputeGlobalTrustValue()
+
+	require.NoError(t, err)
+	require.Equal(t, 1, val)
+
+	defer node1.Stop()
+	defer node2.Stop()
 }
 
 // 2 peers, 1 calls the other, the other rates bad and compute the global trust values for both
 
-//
+func Test_EigenTrust_With_Bad_Calls_2_Peers(t *testing.T) {
+	transp := channel.NewTransport()
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:1", z.WithTotalPeers(2))
+
+	// Simulation of a call
+	node1.AddPeer("127.0.0.1:1")
+	node2.AddPeer("127.0.0.1:0")
+
+	node1.AddToCallsOutgoingTo("127.0.0.1:1")
+	node2.AddToCallsIncomingFrom("127.0.0.1:0")
+
+	// After a call, node1 gives node2 a bad rating
+	node2.EigenRatePeer("127.0.0.1:0", -1)
+
+	val, err := node1.ComputeGlobalTrustValue()
+
+	require.NoError(t, err)
+	require.Equal(t, 0.5, val)
+
+	defer node1.Stop()
+	defer node2.Stop()
+}
