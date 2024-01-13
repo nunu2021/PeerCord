@@ -197,8 +197,8 @@ func newConfigTemplate() configTemplate {
         BootstrapReplace:   0.75,
         BootstrapNodeLimit: 10,
         BootstrapTimeout: time.Second * 3,
-        BootstrapAddrs: []string{"127.0.0.1:1000"},
-        SendNeighborsInterval: time.Second * 1,
+        BootstrapAddrs: []string{},
+        SendNeighborsInterval: time.Second * 2,
         NodeDiscardInterval: time.Second * 3,
 	}
 }

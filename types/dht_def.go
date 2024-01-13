@@ -22,6 +22,11 @@ type RefreshTime struct {
     Map   map[string]time.Time
 }
 
+type SafeTrustChans struct {
+    Mu    sync.Mutex
+    Map   map[string](chan float64)
+}
+
 type BootstrapRequestMessage struct {}
 
 type BootstrapResponseMessage struct {
@@ -61,7 +66,13 @@ type DHTSetTrustMessage struct {
 }
 
 type DHTQueryMessage struct {
-    Source  string
-    Point   Point
+    Sender     string
+    UniqueID   string
+    Source     string
+    Point      Point
 }
 
+type DHTQueryResponseMessage struct {
+    UniqueID    string
+    TrustValue  float64
+}

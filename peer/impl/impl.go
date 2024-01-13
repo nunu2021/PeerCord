@@ -92,6 +92,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.DHTUpdateNeighborsMessage{}, n.ExecDHTUpdateNeighborsMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.DHTSetTrustMessage{}, n.ExecDHTSetTrustMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.DHTQueryMessage{}, n.ExecDHTQueryMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTQueryResponseMessage{}, n.ExecDHTQueryResponseMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.DHTNeighborsStatusMessage{}, n.ExecDHTNeighborsStatusMessage)
 
 	return n
@@ -252,6 +253,13 @@ func (n *node) Start() error {
 
 	n.isRunning = true
 	go loop(n)
+	if !n.conf.IsBootstrap {
+        n.AddPeer(n.conf.BootstrapAddrs...)
+        err := n.JoinDHT()
+        if err != nil {
+            return err
+        }
+    }
 	return nil
 }
 

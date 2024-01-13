@@ -201,7 +201,7 @@ func (m DHTQueryMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTQueryMessage) String() string {
-    return fmt.Sprintf("{DHTQueryMessage}: Node %s is querying for %v", m.Source, m.Point.String())
+    return fmt.Sprintf("{DHTQueryMessage}: Node %s is querying for %v with UniqueID %s", m.Source, m.Point.String(), m.UniqueID)
 }
 
 // HTML implements types.Message.
@@ -213,25 +213,25 @@ func (m DHTQueryMessage) HTML() string {
 // DHTQueryResponseMessage
 // ----------------------------
 
-// // NewEmpty implements types.Message.
-// func (m DHTQueryResponseMessage) NewEmpty() Message {
-// 	return &DHTQueryResponseMessage{}
-// }
+// NewEmpty implements types.Message.
+func (m DHTQueryResponseMessage) NewEmpty() Message {
+	return &DHTQueryResponseMessage{}
+}
 
-// // Name implements types.Message.
-// func (m DHTQueryResponseMessage) Name() string {
-// 	return "DHTQueryResponseMessage"
-// }
+// Name implements types.Message.
+func (m DHTQueryResponseMessage) Name() string {
+	return "DHTQueryResponseMessage"
+}
 
-// // String implements types.Message.
-// func (m DHTQueryResponseMessage) String() string {
-//     return fmt.Sprintf("{DHTQueryResponseMessage}: %v", m.TrustValue)
-// }
+// String implements types.Message.
+func (m DHTQueryResponseMessage) String() string {
+    return fmt.Sprintf("{DHTQueryResponseMessage}: ID %s with value %v", m.UniqueID, m.TrustValue)
+}
 
-// // HTML implements types.Message.
-// func (m DHTQueryResponseMessage) HTML() string {
-// 	return m.String()
-// }
+// HTML implements types.Message.
+func (m DHTQueryResponseMessage) HTML() string {
+	return m.String()
+}
 
 // ----------------------------
 // DHTSetTrustMessage

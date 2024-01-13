@@ -31,6 +31,8 @@ type CAN interface {
 
     NeighborsToStringLocked() string
 
+    PointsToString() string
+
     Overlap1D(l1x uint16, r1x uint16, l2x uint16, r2x uint16) bool
 
     BordersZone(z types.Zone, zNew types.Zone) bool

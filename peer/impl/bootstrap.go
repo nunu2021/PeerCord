@@ -1,7 +1,7 @@
 package impl
 
 import (
-    "fmt"
+    // "fmt"
     "math/rand"
     "sync"
     // "strings"
@@ -90,9 +90,7 @@ func (n *node) ExecUpdateBootstrapMessage(msg types.Message, pkt transport.Packe
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
 
-	fmt.Printf("Bootstrap node received update request from node %s\n", b.Source)
-
 	n.AddNodeBootstrap(b.Source)
-    fmt.Printf("Bootstrap node currently has this node list: %v\n", n.bootstrap.NodeList)
+
 	return nil
 }

@@ -240,44 +240,22 @@ func Test_DHT_Zone_Division_2_Nodes_With_Sleep(t *testing.T) {
 
     node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
 	defer node2.Stop()
+    time.Sleep(time.Second * 3)
+
     node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
 	defer node3.Stop()
+    time.Sleep(time.Second * 3)
+
     node4 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
 	defer node4.Stop()
+    time.Sleep(time.Second * 3)
+
     node5 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
 	defer node5.Stop()
+    time.Sleep(time.Second * 3)
+
     node6 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
 	defer node6.Stop()
-
-	node2.AddPeer(node1.GetAddr())
-	node3.AddPeer(node1.GetAddr())
-	node4.AddPeer(node1.GetAddr())
-	node5.AddPeer(node1.GetAddr())
-	node6.AddPeer(node1.GetAddr())
-
-    err := node2.JoinDHT()
-    require.NoError(t, err)
-
-    time.Sleep(time.Second * 3)
-
-    err = node3.JoinDHT()
-    require.NoError(t, err)
-
-    time.Sleep(time.Second * 3)
-
-    err = node4.JoinDHT()
-    require.NoError(t, err)
-
-    time.Sleep(time.Second * 3)
-
-    err = node5.JoinDHT()
-    require.NoError(t, err)
-
-    time.Sleep(time.Second * 3)
-
-    err = node6.JoinDHT()
-    require.NoError(t, err)
-
     time.Sleep(time.Second * 3)
 
     node2Area := node2.ReturnDHTArea()
@@ -306,8 +284,6 @@ func Test_DHT_Zone_Division_12_Nodes(t *testing.T) {
 	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
 	defer nodeB.Stop()
 
-    fmt.Printf("Bootstrap node address: %s\n", nodeB.GetAddr())
-
     nodeBAddr := nodeB.GetAddr()
 
     node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
@@ -335,57 +311,7 @@ func Test_DHT_Zone_Division_12_Nodes(t *testing.T) {
     node12 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
 	defer node12.Stop()
 
-	node1.AddPeer(nodeB.GetAddr())
-	node2.AddPeer(nodeB.GetAddr())
-	node3.AddPeer(nodeB.GetAddr())
-	node4.AddPeer(nodeB.GetAddr())
-	node5.AddPeer(nodeB.GetAddr())
-	node6.AddPeer(nodeB.GetAddr())
-	node7.AddPeer(nodeB.GetAddr())
-	node8.AddPeer(nodeB.GetAddr())
-	node9.AddPeer(nodeB.GetAddr())
-	node10.AddPeer(nodeB.GetAddr())
-	node11.AddPeer(nodeB.GetAddr())
-	node12.AddPeer(nodeB.GetAddr())
-
-    err := node1.JoinDHT()
-    require.NoError(t, err)
-
-    err = node2.JoinDHT()
-    require.NoError(t, err)
-
-    err = node3.JoinDHT()
-    require.NoError(t, err)
-
-    err = node4.JoinDHT()
-    require.NoError(t, err)
-
-    err = node5.JoinDHT()
-    require.NoError(t, err)
-
-    err = node6.JoinDHT()
-    require.NoError(t, err)
-
-    err = node7.JoinDHT()
-    require.NoError(t, err)
-
-    err = node8.JoinDHT()
-    require.NoError(t, err)
-
-    err = node9.JoinDHT()
-    require.NoError(t, err)
-
-    err = node10.JoinDHT()
-    require.NoError(t, err)
-
-    err = node11.JoinDHT()
-    require.NoError(t, err)
-
-    err = node12.JoinDHT()
-    require.NoError(t, err)
-
     time.Sleep(time.Second * 6)
-
 
     node1Area := node1.ReturnDHTSequencedArea()
     node2Area := node2.ReturnDHTSequencedArea()
@@ -412,6 +338,180 @@ func Test_DHT_Zone_Division_12_Nodes(t *testing.T) {
     fmt.Printf("Node 11 --\nArea: %s\n%s\n", node10Area.String(), node8.NeighborsToStringLocked())
     fmt.Printf("Node 12 --\nArea: %s\n%s\n", node11Area.String(), node8.NeighborsToStringLocked())
     fmt.Printf("Node 13 --\nArea: %s\n%s\n", node12Area.String(), node8.NeighborsToStringLocked())
+}
 
+func Test_DHT_Multiple_Bootstrap(t *testing.T) {
+	transp := channel.NewTransport()
+
+	nodeB1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB1.Stop()
+	nodeB2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB2.Stop()
+	nodeB3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB3.Stop()
+	nodeB4 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB4.Stop()
+
+    nodeB1Addr := nodeB1.GetAddr()
+    nodeB2Addr := nodeB2.GetAddr()
+    nodeB3Addr := nodeB3.GetAddr()
+    nodeB4Addr := nodeB4.GetAddr()
+
+    node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeB1Addr, nodeB2Addr, nodeB3Addr, nodeB4Addr}))
+	defer node1.Stop()
+    node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeB1Addr, nodeB2Addr, nodeB3Addr, nodeB4Addr}))
+	defer node2.Stop()
+    node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeB1Addr, nodeB2Addr, nodeB3Addr, nodeB4Addr}))
+	defer node3.Stop()
+
+	time.Sleep(time.Second * 2)
+
+    node1Area := node1.ReturnDHTSequencedArea()
+    node2Area := node2.ReturnDHTSequencedArea()
+    node3Area := node3.ReturnDHTSequencedArea()
+
+    fmt.Printf("Node 5 --\nArea: %s\n%s\n", node1Area.String(), node1.NeighborsToStringLocked())
+    fmt.Printf("Node 6 --\nArea: %s\n%s\n", node2Area.String(), node2.NeighborsToStringLocked())
+    fmt.Printf("Node 7 --\nArea: %s\n%s\n", node3Area.String(), node3.NeighborsToStringLocked())
+}
+
+func Test_DHT_Set_Trust_Value(t *testing.T) {
+	transp := channel.NewTransport()
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB.Stop()
+
+    nodeBAddr := nodeB.GetAddr()
+
+    node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node1.Stop()
+    node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node2.Stop()
+    node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node3.Stop()
+
+	time.Sleep(time.Second * 2)
+
+    fmt.Printf("Hash of 643.764.23.75:44: %v\n", nodeB.Hash("643.764.23.75:44").String())
+    err := node1.SetTrust(node1.GetAddr(), 5.5)
+    require.NoError(t, err)
+    err = node1.SetTrust("643.764.23.75:44", 5.8)
+    require.NoError(t, err)
+    err = node1.SetTrust(node3.GetAddr(), 5134.0)
+    require.NoError(t, err)
+    err = node1.SetTrust(node1.GetAddr(), 67.3)
+    require.NoError(t, err)
+
+	time.Sleep(time.Second * 1)
+
+    node1Area := node1.ReturnDHTSequencedArea()
+    node2Area := node2.ReturnDHTSequencedArea()
+    node3Area := node3.ReturnDHTSequencedArea()
+
+    fmt.Printf("Node 2 --\nArea: %s\n%s\n%s\n", node1Area.String(), node1.NeighborsToStringLocked(), node1.PointsToString())
+    fmt.Printf("Node 3 --\nArea: %s\n%s\n%s\n", node2Area.String(), node2.NeighborsToStringLocked(), node2.PointsToString())
+    fmt.Printf("Node 4 --\nArea: %s\n%s\n%s\n", node3Area.String(), node3.NeighborsToStringLocked(), node3.PointsToString())
+}
+
+
+func Test_DHT_Get_Trust_Value(t *testing.T) {
+	transp := channel.NewTransport()
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB.Stop()
+
+    nodeBAddr := nodeB.GetAddr()
+
+    node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node1.Stop()
+    node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node2.Stop()
+    node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node3.Stop()
+
+	time.Sleep(time.Second * 2)
+
+	fmt.Println("SETTING TRUSTTTTT")
+
+    trust1 := 5.5
+    trust2 := 25.567
+    trust3 := 234.0
+
+    err := node2.SetTrust(node1.GetAddr(), trust1)
+    require.NoError(t, err)
+    err = node1.SetTrust(node3.GetAddr(), trust3)
+    require.NoError(t, err)
+    err = node3.SetTrust(node2.GetAddr(), trust2)
+    require.NoError(t, err)
+
+	time.Sleep(time.Second * 1)
+
+	fmt.Println("GETTING TRUSTTTTT")
+
+    trustResponse1, err := node1.GetTrust(node1.GetAddr())
+    require.NoError(t, err)
+    require.Equal(t, trust1, trustResponse1)
+
+    trustResponse2, err := node2.GetTrust(node2.GetAddr())
+    require.NoError(t, err)
+    require.Equal(t, trust2, trustResponse2)
+
+    trustResponse3, err := node3.GetTrust(node3.GetAddr())
+    require.NoError(t, err)
+    require.Equal(t, trust3, trustResponse3)
+}
+
+
+
+func Test_DHT_Split_Trusts(t *testing.T) {
+	transp := channel.NewTransport()
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB.Stop()
+
+    nodeBAddr := nodeB.GetAddr()
+
+    node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node1.Stop()
+
+	time.Sleep(time.Second * 1)
+
+    fmt.Printf("Hash of 643.764.23.75:44: %v\n", nodeB.Hash("643.764.23.75:44").String())
+    fmt.Printf("Hash of 17.47.242.59:3253: %v\n", nodeB.Hash("17.47.242.59:3253").String())
+    fmt.Printf("Hash of 206.97.54.49:43: %v\n", nodeB.Hash("206.97.54.49:43").String())
+    fmt.Printf("Hash of 785.197.193.203:3884: %v\n", nodeB.Hash("785.197.193.203:3884").String())
+    fmt.Printf("Hash of 232.132.61.226:4: %v\n", nodeB.Hash("232.132.61.226:4").String())
+    fmt.Printf("Hash of 5.38.10.20:23: %v\n", nodeB.Hash("5.38.10.20:23").String())
+
+    err := node1.SetTrust("643.764.23.75:44", 2546)
+    require.NoError(t, err)
+    err = node1.SetTrust("17.47.242.59:3253", 5.8)
+    require.NoError(t, err)
+    err = node1.SetTrust("206.97.54.49:43", 8.245)
+    require.NoError(t, err)
+    err = node1.SetTrust("785.197.193.203:3884", 72.2)
+    require.NoError(t, err)
+    err = node1.SetTrust("232.132.61.226:4", 2.887)
+    require.NoError(t, err)
+    err = node1.SetTrust("5.38.10.20:23", 644.3)
+    require.NoError(t, err)
+
+	time.Sleep(time.Second * 2)
+    fmt.Printf("Node 2 has points\n%s\n", node1.PointsToString())
+
+    node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node2.Stop()
+    node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node3.Stop()
+
+	time.Sleep(time.Second)
+
+    node1Area := node1.ReturnDHTSequencedArea()
+    node2Area := node2.ReturnDHTSequencedArea()
+    node3Area := node3.ReturnDHTSequencedArea()
+
+    fmt.Printf("Node 2 --\nArea: %s\n%s\n%s\n", node1Area.String(), node1.NeighborsToStringLocked(), node1.PointsToString())
+    fmt.Printf("Node 3 --\nArea: %s\n%s\n%s\n", node2Area.String(), node2.NeighborsToStringLocked(), node2.PointsToString())
+    fmt.Printf("Node 4 --\nArea: %s\n%s\n%s\n", node3Area.String(), node3.NeighborsToStringLocked(), node3.PointsToString())
 }
 

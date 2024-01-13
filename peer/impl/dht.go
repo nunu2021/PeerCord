@@ -12,6 +12,8 @@ import (
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
+
+	"github.com/rs/xid"
 )
 
 // *******************************************
@@ -26,6 +28,7 @@ type DHT struct {
     mu              *sync.Mutex
     Area            types.SequencedZone
     Neighbors       map[string]types.SequencedZone
+    ResponseChans   types.SafeTrustChans
     Points          map[string]float64
     BootstrapAddrs  []string
     BootstrapChan   chan struct{}
@@ -45,13 +48,19 @@ func NewDHT(bootstrapAddrs []string) DHT {
         Mu: sync.Mutex{},
         Map: make(map[string]time.Time),
     }
+    rc := types.SafeTrustChans{
+        Mu: sync.Mutex{},
+        Map: make(map[string](chan float64)),
+    }
     return DHT{
         mu: &sync.Mutex{},
         Area: sz,
         Neighbors: make(map[string]types.SequencedZone),
+        Points: make(map[string]float64),
         BootstrapAddrs: bootstrapAddrs,
         BootstrapChan: make(chan struct{}),
         RefreshTimes: rt,
+        ResponseChans: rc,
     }
 }
 
@@ -244,6 +253,16 @@ func (n *node) JoinDHT() error {
 // Sends message to set trust value
 func (n *node) SetTrust(node string, trustValue float64) error {
     point := n.Hash(node)
+    fmt.Printf("Node %s (%s) is setting trust for %s with value %v at point %s\n", n.GetAddress(), n.dht.Area.String(), node, trustValue, point.String())
+    n.dht.mu.Lock()
+    if Contains(n.dht.Area.Zone, point) {
+        fmt.Printf("Node %s contains the value\n", n.GetAddress())
+	    n.dht.Points[node] = trustValue
+        n.dht.mu.Unlock()
+        return nil
+    }
+    n.dht.mu.Unlock()
+    fmt.Printf("Node %s doesn't contain the value\n", n.GetAddress())
     msg := types.DHTSetTrustMessage{
         Source: node,
         TrustValue: trustValue,
@@ -253,14 +272,32 @@ func (n *node) SetTrust(node string, trustValue float64) error {
     if err != nil {
         return xerrors.Errorf("error marshalling message %v", msg)
     }
+    fmt.Printf("Node %s forwarding closer...\n", n.GetAddress())
     return n.ForwardCloser(point, &tMsg)
 }
 
-// sends message to get trust value
+
+// Sends message to get trust value
 func (n *node) GetTrust(node string) (float64, error) {
+    n.dht.mu.Lock()
+    val, ok := n.dht.Points[node]
+    if ok {
+        n.dht.mu.Unlock()
+        return val, nil
+    }
+    n.dht.mu.Unlock()
+
     point := n.Hash(node)
-    chanTrust := make(chan float64, 1)
+    id := xid.New().String()
+
+    n.dht.ResponseChans.Mu.Lock()
+    n.dht.ResponseChans.Map[id] = make(chan float64)
+    chanTrust := n.dht.ResponseChans.Map[id]
+    n.dht.ResponseChans.Mu.Unlock()
+
     msg := types.DHTQueryMessage{
+        Sender: n.GetAddress(),
+        UniqueID: id,
         Source: node,
         Point: point,
     }
@@ -275,6 +312,10 @@ func (n *node) GetTrust(node string) (float64, error) {
     }
 
     t := <- chanTrust
+    n.dht.ResponseChans.Mu.Lock()
+    close(n.dht.ResponseChans.Map[id])
+    delete(n.dht.ResponseChans.Map, id)
+    n.dht.ResponseChans.Mu.Unlock()
     return t, nil
 }
 
@@ -326,6 +367,16 @@ func (n *node) NeighborsToStringLocked() string {
     s := "Neighbors\n------------\n"
     for node, val := range n.dht.Neighbors {
         s = fmt.Sprintf("%s\"%s: %s\",\n", s, node, val.String())
+    }
+    return s
+}
+
+func (n *node) PointsToString() string {
+    n.dht.mu.Lock()
+    defer n.dht.mu.Unlock()
+    s := "Points\n------------\n"
+    for node, val := range n.dht.Points {
+        s = fmt.Sprintf("%s\"%s: %v\",\n", s, node, val)
     }
     return s
 }
@@ -425,6 +476,8 @@ func (n *node) ForwardCloser(p types.Point, msg *transport.Message) error {
         }
     }
 
+    fmt.Printf("Node %s forwarding request for point %s closer to destination -- sending to %s\n", n.GetAddress(), p.String(), closest)
+
     return n.Unicast(closest, *msg)
 }
 
@@ -438,6 +491,7 @@ func (n *node) StartSending() {
                 time.Sleep(n.conf.SendNeighborsInterval)
                 n.dht.mu.Lock()
                 if len(n.dht.Neighbors) == 0 {
+                    n.dht.mu.Unlock()
                     continue
                 }
 
@@ -704,8 +758,10 @@ func (n *node) ExecDHTSetTrustMessage(msg types.Message, pkt transport.Packet) e
 
     n.dht.mu.Lock()
 	if Contains(n.dht.Area.Zone, d.Point) {
+	    fmt.Printf("Node %s contains trust value %v\n", n.GetAddress(), d.TrustValue)
 	    n.dht.Points[d.Source] = d.TrustValue
     } else {
+        fmt.Printf("-----\nNode %s is forwarding trust msg\n--------\n", n.GetAddress())
         n.dht.mu.Unlock()
         return n.ForwardCloser(d.Point, pkt.Msg)
     }
@@ -719,18 +775,35 @@ func (n *node) ExecDHTQueryMessage(msg types.Message, pkt transport.Packet) erro
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
 
+	fmt.Printf("Node %s received query from %s with ID %s\n", n.GetAddress(), d.Source, d.UniqueID)
+
+    n.dht.mu.Lock()
 	if Contains(n.dht.Area.Zone, d.Point) {
-        // msg := types.DHTQueryResponseMessage{TrustValue: n.DHT.Points[d.Source]}
-        // tMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
-        // if err != nil {
-        //     return xerrors.Errorf("error marshalling message %v", msg)
-        // }
-	    // n.Unicast(d.Source, tMsg)
-	    fmt.Println("Sending...")
-	    // d.Channel <- n.dht.Points[d.Source]
-    } else {
-        return n.ForwardCloser(d.Point, pkt.Msg)
+        msg := types.DHTQueryResponseMessage{
+            UniqueID: d.UniqueID,
+            TrustValue: n.dht.Points[d.Source],
+        }
+        n.dht.mu.Unlock()
+        tMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
+        if err != nil {
+            return xerrors.Errorf("error marshalling message %v", msg)
+        }
+
+        return n.Unicast(d.Sender, tMsg)
     }
+    n.dht.mu.Unlock()
+    return n.ForwardCloser(d.Point, pkt.Msg)
+}
+
+func (n *node) ExecDHTQueryResponseMessage(msg types.Message, pkt transport.Packet) error {
+	d, ok := msg.(*types.DHTQueryResponseMessage)
+	if !ok {
+		return xerrors.Errorf("type mismatch: %T", msg)
+	}
+	fmt.Printf("Node %s received trust value %v from %s and is sending it to channel with ID %s\n", n.GetAddress(), d.TrustValue, pkt.Header.Source, d.UniqueID)
+    n.dht.ResponseChans.Mu.Lock()
+    n.dht.ResponseChans.Map[d.UniqueID] <- d.TrustValue
+    n.dht.ResponseChans.Mu.Unlock()
     return nil
 }
 
@@ -745,7 +818,6 @@ func (n *node) ExecBootstrapResponseMessage(msg types.Message, pkt transport.Pac
         for _, addr := range b.IPAddrs {
             n.routingTable.set(addr, addr)
         }
-        fmt.Printf("Node %s sending DHT join\n", n.GetAddress())
         n.SendDHTJoin(b.IPAddrs)
     } else {
         go n.StartSending()
