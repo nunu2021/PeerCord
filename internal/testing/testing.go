@@ -126,36 +126,38 @@ func (r FakeByContent) Less(i, j int) bool {
 }
 
 type configTemplate struct {
-	messages []types.Message
-	handlers []registry.Exec
+	messages               []types.Message
+	handlers               []registry.Exec
 
-	registry registry.Registry
+	registry               registry.Registry
 
-	withWatcher bool
-	autoStart   bool
+	withWatcher            bool
+	autoStart              bool
 
-	AntiEntropyInterval time.Duration
-	HeartbeatInterval   time.Duration
+	AntiEntropyInterval    time.Duration
+	HeartbeatInterval      time.Duration
 
-	AckTimeout        time.Duration
-	ContinueMongering float64
+	AckTimeout             time.Duration
+	ContinueMongering      float64
 
-	chunkSize uint
+	chunkSize              uint
 
-	storage storage.Storage
+	storage                storage.Storage
 
-	dataRequestBackoff peer.Backoff
+	dataRequestBackoff     peer.Backoff
 
-	totalPeers         uint
-	paxosThreshold     func(uint) int
-	paxosID            uint
-	paxosProposerRetry time.Duration
+	totalPeers             uint
+	paxosThreshold         func(uint) int
+	paxosID                uint
+	paxosProposerRetry     time.Duration
 
-	IsBootstrap        bool
-	BootstrapReplace   float64
-	BootstrapNodeLimit int
-	BootstrapTimeout   time.Duration
-	BootstrapAddrs     []string
+	IsBootstrap            bool
+	BootstrapReplace       float64
+	BootstrapNodeLimit     int
+	BootstrapTimeout       time.Duration
+	BootstrapAddrs         []string
+	SendNeighborsInterval  time.Duration
+	NodeDiscardInterval    time.Duration
 }
 
 func newConfigTemplate() configTemplate {
@@ -196,6 +198,8 @@ func newConfigTemplate() configTemplate {
         BootstrapNodeLimit: 10,
         BootstrapTimeout: time.Second * 3,
         BootstrapAddrs: []string{"127.0.0.1:1000"},
+        SendNeighborsInterval: time.Second * 1,
+        NodeDiscardInterval: time.Second * 3,
 	}
 }
 
@@ -340,6 +344,21 @@ func WithBootstrapAddrs(addrs []string) Option {
 	}
 }
 
+// WithSendNeighborsInterval sets the interval for which to send neighbors at.
+func WithSendNeighborsInterval(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.SendNeighborsInterval = d
+	}
+}
+
+// WithNodeDiscardInterval sets the interval of time in which a node does not
+// respond until it is deleted from the neighbors list.
+func WithNodeDiscardInterval(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.NodeDiscardInterval = d
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -372,6 +391,8 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
     config.BootstrapNodeLimit = template.BootstrapNodeLimit
     config.BootstrapTimeout = template.BootstrapTimeout
     config.BootstrapAddrs = template.BootstrapAddrs
+    config.SendNeighborsInterval = template.SendNeighborsInterval
+    config.NodeDiscardInterval = template.NodeDiscardInterval
 
 	node := f(config)
 

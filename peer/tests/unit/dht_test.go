@@ -228,7 +228,7 @@ func Test_DHT_Query_Bootstrap_Many(t *testing.T) {
 }
 
 
-func Test_DHT_Zone_Division_5_Nodes_With_Sleep(t *testing.T) {
+func Test_DHT_Zone_Division_2_Nodes_With_Sleep(t *testing.T) {
 	transp := channel.NewTransport()
 
 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
@@ -286,40 +286,21 @@ func Test_DHT_Zone_Division_5_Nodes_With_Sleep(t *testing.T) {
     node5Area := node5.ReturnDHTArea()
     node6Area := node6.ReturnDHTArea()
 
-    node2Neighbors := node2.NeighborsToString()
-    node3Neighbors := node3.NeighborsToString()
-    node4Neighbors := node4.NeighborsToString()
-    node5Neighbors := node5.NeighborsToString()
-    node6Neighbors := node6.NeighborsToString()
+    node2Neighbors := node2.NeighborsToStringLocked()
+    node3Neighbors := node3.NeighborsToStringLocked()
+    node4Neighbors := node4.NeighborsToStringLocked()
+    node5Neighbors := node5.NeighborsToStringLocked()
+    node6Neighbors := node6.NeighborsToStringLocked()
 
     fmt.Printf("Node 2 --\nArea: %s\n%s\n", node2Area.String(), node2Neighbors)
     fmt.Printf("Node 3 --\nArea: %s\n%s\n", node3Area.String(), node3Neighbors)
     fmt.Printf("Node 4 --\nArea: %s\n%s\n", node4Area.String(), node4Neighbors)
     fmt.Printf("Node 5 --\nArea: %s\n%s\n", node5Area.String(), node5Neighbors)
     fmt.Printf("Node 6 --\nArea: %s\n%s\n", node6Area.String(), node6Neighbors)
-
-    // zone2 := types.Zone{
-    //     LowerLeft: types.Point([]uint16{0, 0, 0}),
-    //     UpperRight: types.Point([]uint16{0x7FFF, 0xFFFF, 0xFFFF}),
-    // }
-    // zone3 := types.Zone{
-    //     LowerLeft: types.Point([]uint16{0x8000, 0, 0}),
-    //     UpperRight: types.Point([]uint16{0xFFFF, 0xFFFF, 0xFFFF}),
-    // }
-    // require.Equal(t, zone2, node2Area)
-    // require.Equal(t, zone3, node3Area)
-
-    // node2Neighbors := node2.ReturnDHTNeighbors()
-    // require.Len(t, node2Neighbors, 1)
-    // require.Equal(t, node3Area, node2Neighbors[node3.GetAddr()])
-
-    // node3Neighbors := node3.ReturnDHTNeighbors()
-    // require.Len(t, node3Neighbors, 1)
-    // require.Equal(t, node2Area, node3Neighbors[node2.GetAddr()])
 }
 
 
-func Test_DHT_Zone_Division_6_Nodes(t *testing.T) {
+func Test_DHT_Zone_Division_12_Nodes(t *testing.T) {
 	transp := channel.NewTransport()
 
 	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
@@ -341,6 +322,18 @@ func Test_DHT_Zone_Division_6_Nodes(t *testing.T) {
 	defer node5.Stop()
     node6 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
 	defer node6.Stop()
+    node7 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node7.Stop()
+    node8 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node8.Stop()
+    node9 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node9.Stop()
+    node10 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node10.Stop()
+    node11 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node11.Stop()
+    node12 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+	defer node12.Stop()
 
 	node1.AddPeer(nodeB.GetAddr())
 	node2.AddPeer(nodeB.GetAddr())
@@ -348,6 +341,12 @@ func Test_DHT_Zone_Division_6_Nodes(t *testing.T) {
 	node4.AddPeer(nodeB.GetAddr())
 	node5.AddPeer(nodeB.GetAddr())
 	node6.AddPeer(nodeB.GetAddr())
+	node7.AddPeer(nodeB.GetAddr())
+	node8.AddPeer(nodeB.GetAddr())
+	node9.AddPeer(nodeB.GetAddr())
+	node10.AddPeer(nodeB.GetAddr())
+	node11.AddPeer(nodeB.GetAddr())
+	node12.AddPeer(nodeB.GetAddr())
 
     err := node1.JoinDHT()
     require.NoError(t, err)
@@ -367,28 +366,52 @@ func Test_DHT_Zone_Division_6_Nodes(t *testing.T) {
     err = node6.JoinDHT()
     require.NoError(t, err)
 
-    time.Sleep(time.Second * 3)
+    err = node7.JoinDHT()
+    require.NoError(t, err)
 
-    node1Area := node1.ReturnDHTArea()
-    node2Area := node2.ReturnDHTArea()
-    node3Area := node3.ReturnDHTArea()
-    node4Area := node4.ReturnDHTArea()
-    node5Area := node5.ReturnDHTArea()
-    node6Area := node6.ReturnDHTArea()
+    err = node8.JoinDHT()
+    require.NoError(t, err)
 
-    node1Neighbors := node1.NeighborsToString()
-    node2Neighbors := node2.NeighborsToString()
-    node3Neighbors := node3.NeighborsToString()
-    node4Neighbors := node4.NeighborsToString()
-    node5Neighbors := node5.NeighborsToString()
-    node6Neighbors := node6.NeighborsToString()
+    err = node9.JoinDHT()
+    require.NoError(t, err)
 
-    fmt.Printf("Node 2 --\nArea: %s\n%s\n", node1Area.String(), node1Neighbors)
-    fmt.Printf("Node 3 --\nArea: %s\n%s\n", node2Area.String(), node2Neighbors)
-    fmt.Printf("Node 4 --\nArea: %s\n%s\n", node3Area.String(), node3Neighbors)
-    fmt.Printf("Node 5 --\nArea: %s\n%s\n", node4Area.String(), node4Neighbors)
-    fmt.Printf("Node 6 --\nArea: %s\n%s\n", node5Area.String(), node5Neighbors)
-    fmt.Printf("Node 7 --\nArea: %s\n%s\n", node6Area.String(), node6Neighbors)
+    err = node10.JoinDHT()
+    require.NoError(t, err)
+
+    err = node11.JoinDHT()
+    require.NoError(t, err)
+
+    err = node12.JoinDHT()
+    require.NoError(t, err)
+
+    time.Sleep(time.Second * 6)
+
+
+    node1Area := node1.ReturnDHTSequencedArea()
+    node2Area := node2.ReturnDHTSequencedArea()
+    node3Area := node3.ReturnDHTSequencedArea()
+    node4Area := node4.ReturnDHTSequencedArea()
+    node5Area := node5.ReturnDHTSequencedArea()
+    node6Area := node6.ReturnDHTSequencedArea()
+    node7Area := node7.ReturnDHTSequencedArea()
+    node8Area := node8.ReturnDHTSequencedArea()
+    node9Area := node9.ReturnDHTSequencedArea()
+    node10Area := node10.ReturnDHTSequencedArea()
+    node11Area := node11.ReturnDHTSequencedArea()
+    node12Area := node12.ReturnDHTSequencedArea()
+
+    fmt.Printf("Node 2 --\nArea: %s\n%s\n", node1Area.String(), node1.NeighborsToStringLocked())
+    fmt.Printf("Node 3 --\nArea: %s\n%s\n", node2Area.String(), node2.NeighborsToStringLocked())
+    fmt.Printf("Node 4 --\nArea: %s\n%s\n", node3Area.String(), node3.NeighborsToStringLocked())
+    fmt.Printf("Node 5 --\nArea: %s\n%s\n", node4Area.String(), node4.NeighborsToStringLocked())
+    fmt.Printf("Node 6 --\nArea: %s\n%s\n", node5Area.String(), node5.NeighborsToStringLocked())
+    fmt.Printf("Node 7 --\nArea: %s\n%s\n", node6Area.String(), node6.NeighborsToStringLocked())
+    fmt.Printf("Node 8 --\nArea: %s\n%s\n", node7Area.String(), node7.NeighborsToStringLocked())
+    fmt.Printf("Node 9 --\nArea: %s\n%s\n", node8Area.String(), node8.NeighborsToStringLocked())
+    fmt.Printf("Node 10 --\nArea: %s\n%s\n", node9Area.String(), node8.NeighborsToStringLocked())
+    fmt.Printf("Node 11 --\nArea: %s\n%s\n", node10Area.String(), node8.NeighborsToStringLocked())
+    fmt.Printf("Node 12 --\nArea: %s\n%s\n", node11Area.String(), node8.NeighborsToStringLocked())
+    fmt.Printf("Node 13 --\nArea: %s\n%s\n", node12Area.String(), node8.NeighborsToStringLocked())
 
 }
 

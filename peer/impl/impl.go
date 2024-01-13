@@ -92,6 +92,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.DHTUpdateNeighborsMessage{}, n.ExecDHTUpdateNeighborsMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.DHTSetTrustMessage{}, n.ExecDHTSetTrustMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.DHTQueryMessage{}, n.ExecDHTQueryMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTNeighborsStatusMessage{}, n.ExecDHTNeighborsStatusMessage)
 
 	return n
 }
@@ -262,6 +263,7 @@ func (n *node) Stop() error {
 		return NotRunningError{}
 	}
 
+	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
 	n.isRunning = false

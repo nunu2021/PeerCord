@@ -1,10 +1,25 @@
 package types
 
+import (
+    "sync"
+    "time"
+)
+
 type Point [3]uint16
 
 type Zone struct {
     LowerLeft   Point
     UpperRight  Point
+}
+
+type SequencedZone struct {
+    Zone   Zone
+    Number int
+}
+
+type RefreshTime struct {
+    Mu    sync.Mutex
+    Map   map[string]time.Time
 }
 
 type BootstrapRequestMessage struct {}
@@ -23,16 +38,20 @@ type DHTJoinRequestMessage struct {
 }
 
 type DHTJoinAcceptMessage struct {
-    Area       Zone
-    Neighbors  map[string]Zone
+    Area       SequencedZone
+    Neighbors  map[string]SequencedZone
     Points     map[string]float64
 }
 
 type DHTUpdateNeighborsMessage struct {
-    Node1       string
-    Node1Area   Zone
-    Node2       string
-    Node2Area   Zone
+    Node       string
+    NodeArea   SequencedZone
+}
+
+type DHTNeighborsStatusMessage struct {
+    Node        string
+    Area        SequencedZone
+    Neighbors   map[string]SequencedZone
 }
 
 type DHTSetTrustMessage struct {

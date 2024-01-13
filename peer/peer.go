@@ -90,6 +90,10 @@ type Configuration struct {
 	BootstrapTimeout time.Duration
 
 	BootstrapAddrs []string
+
+	SendNeighborsInterval time.Duration
+
+	NodeDiscardInterval time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

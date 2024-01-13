@@ -11,6 +11,10 @@ func (z Zone) String() string {
     return fmt.Sprintf("%v - %v", z.LowerLeft.String(), z.UpperRight.String())
 }
 
+func (sz SequencedZone) String() string {
+    return fmt.Sprintf("%v (%d)", sz.Zone.String(), sz.Number)
+}
+
 // ----------------------------
 // BootstrapRequestMessage
 // ----------------------------
@@ -125,7 +129,7 @@ func (m DHTJoinAcceptMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTJoinAcceptMessage) String() string {
-    return fmt.Sprintf("{DHTJoinAcceptMessage}: Lower Left: %v, Upper Right: %v, Neighbors: %v", m.Area.LowerLeft.String(), m.Area.UpperRight.String(), m.Neighbors)
+    return fmt.Sprintf("{DHTJoinAcceptMessage}: Lower Left: %v, Upper Right: %v, Neighbors: %v", m.Area.Zone.LowerLeft.String(), m.Area.Zone.UpperRight.String(), m.Neighbors)
 }
 
 // HTML implements types.Message.
@@ -149,11 +153,35 @@ func (m DHTUpdateNeighborsMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTUpdateNeighborsMessage) String() string {
-    return fmt.Sprintf("{DHTUpdateNeighborsMessage}: Node 1: %v -- %v, Node 2: %v -- %v", m.Node1, m.Node1Area.String(), m.Node2, m.Node2Area.String())
+    return fmt.Sprintf("{DHTUpdateNeighborsMessage}: Node: %v -- %v", m.Node, m.NodeArea.String())
 }
 
 // HTML implements types.Message.
 func (m DHTUpdateNeighborsMessage) HTML() string {
+	return m.String()
+}
+
+// ----------------------------
+// DHTNeighborsStatusMessage
+// ----------------------------
+
+// NewEmpty implements types.Message.
+func (m DHTNeighborsStatusMessage) NewEmpty() Message {
+	return &DHTNeighborsStatusMessage{}
+}
+
+// Name implements types.Message.
+func (m DHTNeighborsStatusMessage) Name() string {
+	return "DHTNeighborsStatusMessage"
+}
+
+// String implements types.Message.
+func (m DHTNeighborsStatusMessage) String() string {
+    return fmt.Sprintf("{DHTNeighborsStatusMessage}: Node: %v -- %v with neighbors %v", m.Node, m.Area.String(), m.Neighbors)
+}
+
+// HTML implements types.Message.
+func (m DHTNeighborsStatusMessage) HTML() string {
 	return m.String()
 }
 

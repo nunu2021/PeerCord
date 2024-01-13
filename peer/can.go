@@ -21,13 +21,15 @@ type CAN interface {
 
     ReturnDHTArea() types.Zone
 
-    ReturnDHTNeighbors() map[string]types.Zone
+    ReturnDHTSequencedArea() types.SequencedZone
+
+    ReturnDHTNeighbors() map[string]types.SequencedZone
 
     ReturnBootstrapNodes() []string
 
     ReturnDHTPoints() map[string]float64
 
-    NeighborsToString() string
+    NeighborsToStringLocked() string
 
     Overlap1D(l1x uint16, r1x uint16, l2x uint16, r2x uint16) bool
 
