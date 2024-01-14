@@ -31,13 +31,13 @@ func Test_EigenTrust_No_Calls_3_Peers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0.5, trustVal)
 
-	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:1", z.WithTotalPeers(2))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2))
 
 	trustVal2, err := node2.ComputeGlobalTrustValue()
 	require.NoError(t, err)
 	require.Equal(t, 0.25, trustVal2)
 
-	node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:2", z.WithTotalPeers(3))
+	node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(3))
 
 	trustVal3, err := node3.ComputeGlobalTrustValue()
 	require.NoError(t, err)
@@ -53,22 +53,22 @@ func Test_EigenTrust_No_Calls_3_Peers(t *testing.T) {
 func Test_EigenTrust_With_Good_Calls_2_Peers(t *testing.T) {
 	transp := channel.NewTransport()
 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1))
-	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:1", z.WithTotalPeers(2))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2))
 
 	// Simulation of a call
-	node1.AddPeer("127.0.0.1:1")
-	node2.AddPeer("127.0.0.1:0")
+	node1.AddPeer(node2.GetAddr())
+	node2.AddPeer(node1.GetAddr())
 
-	node1.AddToCallsOutgoingTo("127.0.0.1:1")
-	node2.AddToCallsIncomingFrom("127.0.0.1:0")
+	node1.AddToCallsOutgoingTo(node2.GetAddr())
+	node2.AddToCallsIncomingFrom(node1.GetAddr())
 
 	// After a call, node1 gives node2 a good rating
-	node2.EigenRatePeer("127.0.0.1:0", 1)
+	node2.EigenRatePeer(node1.GetAddr(), 1)
 
 	val, err := node1.ComputeGlobalTrustValue()
 
 	require.NoError(t, err)
-	require.Equal(t, 1, val)
+	require.Equal(t, 0.75, val)
 
 	defer node1.Stop()
 	defer node2.Stop()
@@ -79,17 +79,17 @@ func Test_EigenTrust_With_Good_Calls_2_Peers(t *testing.T) {
 func Test_EigenTrust_With_Bad_Calls_2_Peers(t *testing.T) {
 	transp := channel.NewTransport()
 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1))
-	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:1", z.WithTotalPeers(2))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2))
 
 	// Simulation of a call
-	node1.AddPeer("127.0.0.1:1")
-	node2.AddPeer("127.0.0.1:0")
+	node1.AddPeer(node2.GetAddr())
+	node2.AddPeer(node1.GetAddr())
 
-	node1.AddToCallsOutgoingTo("127.0.0.1:1")
-	node2.AddToCallsIncomingFrom("127.0.0.1:0")
+	node1.AddToCallsOutgoingTo(node2.GetAddr())
+	node2.AddToCallsIncomingFrom(node1.GetAddr())
 
 	// After a call, node1 gives node2 a bad rating
-	node2.EigenRatePeer("127.0.0.1:0", -1)
+	node2.EigenRatePeer(node1.GetAddr(), -1)
 
 	val, err := node1.ComputeGlobalTrustValue()
 
