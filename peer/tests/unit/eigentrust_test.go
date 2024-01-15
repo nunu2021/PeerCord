@@ -1,7 +1,9 @@
 package unit
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	z "go.dedis.ch/cs438/internal/testing"
@@ -49,13 +51,25 @@ func Test_EigenTrust_No_Calls_3_Peers(t *testing.T) {
 
 // 2 peers, node1 calls node2, the other rates good and compute the global trust values for both
 func Test_EigenTrust_With_Good_Calls_2_Peers(t *testing.T) {
+
 	transp := channel.NewTransport()
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1))
-	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2))
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB.Stop()
+
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
+	fmt.Println("node1:", node1.GetAddr())
+	fmt.Println("node2:", node2.GetAddr())
+	fmt.Println("nodeB:", nodeB.GetAddr())
+
+	time.Sleep(time.Second * 2)
 
 	// Simulation of a call
 	node1.AddPeer(node2.GetAddr())
 	node2.AddPeer(node1.GetAddr())
+	node2.AddPeer(nodeB.GetAddr())
+	node1.AddPeer(nodeB.GetAddr())
 
 	node1.AddToCallsOutgoingTo(node2.GetAddr())
 	node2.AddToCallsIncomingFrom(node1.GetAddr())

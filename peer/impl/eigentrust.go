@@ -30,10 +30,6 @@ type EigenTrust struct {
 	// peers that have called this peer
 	CallsIncomingFrom safeMap[string, int]
 
-	// global Trust value initial set to p.
-	// this maps from k -> trust value
-	GlobalTrustValue float64
-
 	// step of global trust value computation
 	// is reset to 0 once global trust value computation complete
 	k uint
@@ -61,7 +57,6 @@ func NewEigenTrust(totalPeers uint) EigenTrust {
 		IncomingCallRatingSum: newSafeMap[string, int](),
 		CallsOutgoingTo:       newSafeMap[string, int](),
 		CallsIncomingFrom:     newSafeMap[string, int](),
-		GlobalTrustValue:      tempP,
 		k:                     0,
 		p:                     tempP,
 		ComputingTrustValue:   false,
@@ -94,12 +89,16 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		fmt.Println("requestion val origin: ", n.conf.Socket.GetAddress(), " from: ", peer)
 		err := n.SendTrustValueRequest(true, peer)
 		if err != nil {
+			n.eigenTrust.ComputingTrustValueMutex.Lock()
+			n.eigenTrust.ComputingTrustValue = false
+			n.eigenTrust.ComputingTrustValueMutex.Unlock()
 			return 0, err
 		}
 	}
 
 	delta := float64(10000)
 	counter := uint(0)
+	tPlus := float64(0)
 	for {
 		if delta < n.conf.EigenEpsilon || counter > n.conf.EigenCalcIterations {
 			// trust computation complete
@@ -110,11 +109,14 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		// wait till we get all trust responses
 		err := n.WaitForEigenTrusts()
 		if err != nil {
+			n.eigenTrust.ComputingTrustValueMutex.Lock()
+			n.eigenTrust.ComputingTrustValue = false
+			n.eigenTrust.ComputingTrustValueMutex.Unlock()
 			return 0, err
 		}
 
 		// calculate t+1 and store
-		tPlus := float64(0)
+		tPlus = float64(0)
 
 		for _, trust := range n.eigenTrust.ReceivedTrustValues.data {
 			tPlus += float64(trust)
@@ -129,27 +131,44 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		for peer := range internalMap {
 			err := n.SendTrustValueResponse(peer, true)
 			if err != nil {
+				n.eigenTrust.ComputingTrustValueMutex.Lock()
+				n.eigenTrust.ComputingTrustValue = false
+				n.eigenTrust.ComputingTrustValueMutex.Unlock()
 				return 0, err
 			}
 		}
 
 		n.eigenTrust.CallsIncomingFrom.unlock()
 
+		globalTrustVal, err := n.GetTrust(n.GetAddress())
+		if err != nil {
+			n.eigenTrust.ComputingTrustValueMutex.Lock()
+			n.eigenTrust.ComputingTrustValue = false
+			n.eigenTrust.ComputingTrustValueMutex.Unlock()
+			return 0, err
+		}
+
 		// update delta
-		delta = math.Abs(n.eigenTrust.GlobalTrustValue - tPlus)
+		delta = math.Abs(globalTrustVal - tPlus)
 
 		// update Global trust value
 		n.eigenTrust.k++
-		n.eigenTrust.GlobalTrustValue = tPlus
 
+		err = n.SetTrust(n.GetAddress(), tPlus)
+		if err != nil {
+			n.eigenTrust.ComputingTrustValueMutex.Lock()
+			n.eigenTrust.ComputingTrustValue = false
+			n.eigenTrust.ComputingTrustValueMutex.Unlock()
+			return 0, err
+		}
 		counter++
 
 	}
-
 	n.eigenTrust.ComputingTrustValueMutex.Lock()
 	n.eigenTrust.ComputingTrustValue = false
 	n.eigenTrust.ComputingTrustValueMutex.Unlock()
-	return n.eigenTrust.GlobalTrustValue, nil
+
+	return tPlus, nil
 
 }
 
@@ -234,7 +253,10 @@ func (n *node) SendTrustValueRequest(includeLocalTrust bool, dest string) error 
 }
 
 func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
-	trust := n.eigenTrust.GlobalTrustValue
+	trust, err := n.GetTrust(n.GetAddress())
+	if err != nil {
+		return err
+	}
 	if includeLocal {
 
 		internalMap := n.eigenTrust.IncomingCallRatingSum.internalMap()
@@ -265,7 +287,7 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 		Source: n.conf.Socket.GetAddress(),
 		Value:  trust,
 	}
-	err := n.marshalAndUnicast(source, eigenResponseMsg)
+	err = n.marshalAndUnicast(source, eigenResponseMsg)
 	return err
 }
 
