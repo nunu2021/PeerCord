@@ -59,6 +59,12 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		eigenTrust:        NewEigenTrust(conf.TotalPeers),
 	}
 
+	if conf.IsBootstrap {
+		n.bootstrap = NewBootstrap()
+	} else {
+		n.dht = NewDHT(conf.BootstrapAddrs)
+	}
+
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.receiveRumors)
@@ -81,6 +87,16 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.O2OEncryptedPkt{}, n.ExecO2OEncryptedPkt)
 	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustRequestMessage{}, n.ExecEigenTrustRequestMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustResponseMessage{}, n.ExecEigenTrustResponseMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.BootstrapRequestMessage{}, n.ExecBootstrapRequestMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.BootstrapResponseMessage{}, n.ExecBootstrapResponseMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.UpdateBootstrapMessage{}, n.ExecUpdateBootstrapMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTJoinRequestMessage{}, n.ExecDHTJoinRequestMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTJoinAcceptMessage{}, n.ExecDHTJoinAcceptMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTUpdateNeighborsMessage{}, n.ExecDHTUpdateNeighborsMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTSetTrustMessage{}, n.ExecDHTSetTrustMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTQueryMessage{}, n.ExecDHTQueryMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTQueryResponseMessage{}, n.ExecDHTQueryResponseMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTNeighborsStatusMessage{}, n.ExecDHTNeighborsStatusMessage)
 
 	return n
 }
@@ -140,6 +156,11 @@ type node struct {
 
 	// EigenTrust Trust system fora: aValue,
 	eigenTrust EigenTrust
+	// Information for DHT
+	dht DHT
+
+	// Information for bootstrap node
+	bootstrap BootstrapNode
 }
 
 // GetAddress returns the address of the node
@@ -253,6 +274,13 @@ func (n *node) Start() error {
 
 	n.isRunning = true
 	go loop(n)
+	if !n.conf.IsBootstrap {
+		n.AddPeer(n.conf.BootstrapAddrs...)
+		err := n.JoinDHT()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -264,6 +292,7 @@ func (n *node) Stop() error {
 		return NotRunningError{}
 	}
 
+	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
 	n.isRunning = false

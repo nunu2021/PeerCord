@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"math/big"
+	mrand "math/rand"
 	"testing"
 	"time"
 
@@ -243,8 +244,6 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 5)
-
 	curve := nodeA.crypto.DHCurve
 	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
 	require.NoError(t, err)
@@ -315,8 +314,6 @@ func TestCrypto_DH_Key_Exchange_Ignoring_Peer(t *testing.T) {
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 5)
-
 	curve := nodeA.crypto.DHCurve
 	ac, err := nodeA.crypto.DHPrivateKey.ECDH(nodeC.crypto.DHPublicKey)
 	require.NoError(t, err)
@@ -384,8 +381,6 @@ func TestCrypto_DH_Addition(t *testing.T) {
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 2)
-
 	curve := nodeA.crypto.DHCurve
 	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
 	require.NoError(t, err)
@@ -406,8 +401,6 @@ func TestCrypto_DH_Addition(t *testing.T) {
 
 	err = nodeA.GroupCallAdd(nodeD.GetAddress())
 	require.NoError(t, err)
-
-	time.Sleep(time.Second * 2)
 
 	require.NotEqual(t, nil, nodeD.crypto.DHSharedSecret)
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
@@ -464,8 +457,6 @@ func TestCrypto_DH_Removal(t *testing.T) {
 	err = nodeA.StartDHKeyExchange(receivers)
 	require.NoError(t, err)
 
-	time.Sleep(time.Second * 2)
-
 	curve := nodeA.crypto.DHCurve
 	ab, err := nodeA.crypto.DHPrivateKey.ECDH(nodeB.crypto.DHPublicKey)
 	require.NoError(t, err)
@@ -495,9 +486,252 @@ func TestCrypto_DH_Removal(t *testing.T) {
 
 	nodeA.GroupCallRemove(nodeC.GetAddress())
 
-	time.Sleep(time.Second * 2)
-
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeB.crypto.DHSharedSecret))
 	require.Equal(t, true, nodeA.crypto.DHSharedSecret.Equal(nodeD.crypto.DHSharedSecret))
 	require.NotEqual(t, nil, nodeA.crypto.DHSharedSecret)
+}
+
+func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
+	udpTransport := udp.NewUDP()
+
+	peers := make([]*node, 0)
+
+	for i := 0; i < 30; i++ {
+		socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+		require.NoError(t, err)
+		confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry(), HeartbeatInterval: time.Millisecond * 50}
+		nodeA := NewPeer(confA).(*node)
+		defer nodeA.Stop()
+		peers = append(peers, nodeA)
+	}
+
+	GenerateRandomGraph(peers)
+
+	for _, peer := range peers {
+		peer.Start()
+	}
+
+	time.Sleep(time.Second * 3)
+	for _, peer := range peers {
+		peer.conf.HeartbeatInterval = 0
+	}
+
+	time.Sleep(time.Second * 2)
+
+	for i := 3; i <= 10; i++ {
+		times := make([]time.Duration, 0)
+		for try := 0; try < 50; try++ {
+			members := make([]int, 0)
+			for j := 0; j < i; j++ {
+				k := randInt(len(peers))
+				found := false
+				for !found {
+					contained := false
+					for _, v := range members {
+						if v == k {
+							contained = true
+							break
+						}
+					}
+					if !contained {
+						found = true
+						members = append(members, k)
+					} else {
+						k = randInt(len(peers))
+					}
+				}
+			}
+			receivers := make(map[string]struct{})
+			first := true
+			for _, v := range members {
+				if first {
+					first = false
+					continue
+				}
+				receivers[peers[v].GetAddress()] = struct{}{}
+			}
+			t := time.Now()
+			peers[members[0]].StartDHKeyExchange(receivers)
+			times = append(times, time.Since(t))
+			for _, v := range members {
+				peers[v].crypto.GroupCallEnd()
+			}
+		}
+		t.Logf("%v: %v,", i, times)
+	}
+}
+
+func TestCrypto_Perf_DH_Addition(t *testing.T) {
+	udpTransport := udp.NewUDP()
+
+	peers := make([]*node, 0)
+
+	for i := 0; i < 30; i++ {
+		socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+		require.NoError(t, err)
+		confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry(), HeartbeatInterval: time.Millisecond * 50}
+		nodeA := NewPeer(confA).(*node)
+		defer nodeA.Stop()
+		peers = append(peers, nodeA)
+	}
+
+	GenerateRandomGraph(peers)
+
+	for _, peer := range peers {
+		peer.Start()
+	}
+
+	time.Sleep(time.Second * 3)
+	for _, peer := range peers {
+		peer.conf.HeartbeatInterval = 0
+	}
+
+	time.Sleep(time.Second * 2)
+
+	for i := 4; i <= 11; i++ {
+		times := make([]time.Duration, 0)
+		for try := 0; try < 50; try++ {
+			members := make([]int, 0)
+			for j := 0; j < i; j++ {
+				k := randInt(len(peers))
+				found := false
+				for !found {
+					contained := false
+					for _, v := range members {
+						if v == k {
+							contained = true
+							break
+						}
+					}
+					if !contained {
+						found = true
+						members = append(members, k)
+					} else {
+						k = randInt(len(peers))
+					}
+				}
+			}
+			receivers := make(map[string]struct{})
+			first := true
+			for _, v := range members[:len(members)-1] {
+				if first {
+					first = false
+					continue
+				}
+				receivers[peers[v].GetAddress()] = struct{}{}
+			}
+			peers[members[0]].StartDHKeyExchange(receivers)
+			t := time.Now()
+			peers[members[0]].GroupCallAdd(peers[members[len(members)-1]].GetAddress())
+			times = append(times, time.Since(t))
+			for _, v := range members {
+				peers[v].crypto.GroupCallEnd()
+			}
+		}
+		t.Logf("%v: %v,", i-1, times)
+	}
+}
+
+func TestCrypto_Perf_DH_Removal(t *testing.T) {
+	udpTransport := udp.NewUDP()
+
+	peers := make([]*node, 0)
+
+	for i := 0; i < 30; i++ {
+		socketA, err := udpTransport.CreateSocket("127.0.0.1:0")
+		require.NoError(t, err)
+		confA := peer.Configuration{Socket: socketA, MessageRegistry: standard.NewRegistry(), HeartbeatInterval: time.Millisecond * 50}
+		nodeA := NewPeer(confA).(*node)
+		defer nodeA.Stop()
+		peers = append(peers, nodeA)
+	}
+
+	GenerateRandomGraph(peers)
+
+	for _, peer := range peers {
+		peer.Start()
+	}
+
+	time.Sleep(time.Second * 3)
+	for _, peer := range peers {
+		peer.conf.HeartbeatInterval = 0
+	}
+
+	time.Sleep(time.Second * 2)
+
+	for i := 3; i <= 10; i++ {
+		times := make([]time.Duration, 0)
+		for try := 0; try < 50; try++ {
+			members := make([]int, 0)
+			for j := 0; j < i; j++ {
+				k := randInt(len(peers))
+				found := false
+				for !found {
+					contained := false
+					for _, v := range members {
+						if v == k {
+							contained = true
+							break
+						}
+					}
+					if !contained {
+						found = true
+						members = append(members, k)
+					} else {
+						k = randInt(len(peers))
+					}
+				}
+			}
+			receivers := make(map[string]struct{})
+			first := true
+			for _, v := range members {
+				if first {
+					first = false
+					continue
+				}
+				receivers[peers[v].GetAddress()] = struct{}{}
+			}
+			peers[members[0]].StartDHKeyExchange(receivers)
+			t := time.Now()
+			peers[members[0]].GroupCallRemove(peers[members[len(members)-1]].GetAddress())
+			times = append(times, time.Since(t))
+			for _, v := range members {
+				peers[v].crypto.GroupCallEnd()
+			}
+		}
+		t.Logf("%v: %v,", i, times)
+	}
+}
+
+// Generate randomly adds peers to nodes. It makes sure the graph is connected
+// without orphans.
+func GenerateRandomGraph(peers []*node) {
+
+	addrToPeer := make(map[string]*node)
+	for _, peer := range peers {
+		addrToPeer[peer.GetAddress()] = peer
+	}
+
+	peersNeighboors := make(map[string][]string)
+
+	for i := 1; i < len(peers); i++ {
+
+		connected := false
+		for !connected {
+			for j := 0; j < i; j++ {
+				if mrand.Float64() >= 0.2 {
+					continue
+				}
+
+				connected = true
+
+				peersNeighboors[peers[j].GetAddress()] = append(peersNeighboors[peers[j].GetAddress()], peers[i].GetAddress())
+				peersNeighboors[peers[i].GetAddress()] = append(peersNeighboors[peers[i].GetAddress()], peers[j].GetAddress())
+			}
+		}
+	}
+
+	for k, v := range peersNeighboors {
+		addrToPeer[k].AddPeer(v...)
+	}
 }

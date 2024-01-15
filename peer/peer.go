@@ -14,6 +14,7 @@ type Peer interface {
 	Service
 	Messaging
 	DataSharing
+	CAN
 }
 
 // Factory is the type of function we are using to create new instances of
@@ -100,6 +101,19 @@ type Configuration struct {
 	// Bigger Number == More secutity, but possibly slower and prone to conjestion
 	// Default: 50
 	EigenCalcIterations uint
+	IsBootstrap         bool
+
+	BootstrapReplace float64
+
+	BootstrapNodeLimit int
+
+	BootstrapTimeout time.Duration
+
+	BootstrapAddrs []string
+
+	SendNeighborsInterval time.Duration
+
+	NodeDiscardInterval time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must
