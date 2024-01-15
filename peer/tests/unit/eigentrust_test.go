@@ -8,8 +8,6 @@ import (
 	"go.dedis.ch/cs438/transport/channel"
 )
 
-// Tests I need :
-
 // 1 peer, no calls, calculate global trust value
 func Test_EigenTrust_No_Calls_1_Peer(t *testing.T) {
 	transp := channel.NewTransport()
@@ -98,4 +96,28 @@ func Test_EigenTrust_With_Bad_Calls_2_Peers(t *testing.T) {
 
 	defer node1.Stop()
 	defer node2.Stop()
+}
+
+// Calls are made in this order:
+
+// 1 --> 2, 3, 4
+//
+
+// Ratings are made in this order:
+// 2 --> 1 : good
+// 3 --> 1 : good
+// 4 --> 1 : bad
+
+func Test_EigenTrust_Multiple_Peers_Good_Calls(t *testing.T) {
+	transp := channel.NewTransport()
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2))
+	node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(3))
+	node4 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(4))
+
+	defer node1.Stop()
+	defer node2.Stop()
+	defer node3.Stop()
+	defer node4.Stop()
+
 }
