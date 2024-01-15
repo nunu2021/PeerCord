@@ -1,18 +1,13 @@
 package impl
 
 import (
-    // "fmt"
     "math/rand"
     "sync"
-    // "strings"
 
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
 )
-
-// var BootstrapReplace float64 = 0.75
-// var NodeLimit int = 10
 
 type BootstrapNode struct {
     mu       *sync.Mutex
@@ -63,7 +58,6 @@ func (n *node) ExecBootstrapRequestMessage(msg types.Message, pkt transport.Pack
 
     n.routingTable.set(pkt.Header.Source, pkt.Header.Source)
 
-    // header := transport.NewHeader(n.GetAddress(), n.GetAddress(), pkt.Header.Source, 0)
     responseMsg := types.BootstrapResponseMessage{
         IPAddrs: n.bootstrap.NodeList,
     }

@@ -31,7 +31,7 @@ func (m BootstrapRequestMessage) Name() string {
 
 // String implements types.Message.
 func (m BootstrapRequestMessage) String() string {
-	return fmt.Sprintf("{BootstrapRequestMessage}")
+	return "{BootstrapRequestMessage}"
 }
 
 // HTML implements types.Message.
@@ -80,7 +80,7 @@ func (m UpdateBootstrapMessage) Name() string {
 
 // String implements types.Message.
 func (m UpdateBootstrapMessage) String() string {
-	return fmt.Sprintf("{UpdateBootstrapMessage}")
+	return "{UpdateBootstrapMessage}"
 }
 
 // HTML implements types.Message.
@@ -104,7 +104,7 @@ func (m DHTJoinRequestMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTJoinRequestMessage) String() string {
-    return fmt.Sprintf("{DHTJoinRequestMessage}: %v", m.Destination.String())
+    return fmt.Sprintf("{DHTJoinRequestMessage}: For %v on reality %d", m.Destination.String(), m.Reality)
 }
 
 // HTML implements types.Message.
@@ -129,7 +129,11 @@ func (m DHTJoinAcceptMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTJoinAcceptMessage) String() string {
-    return fmt.Sprintf("{DHTJoinAcceptMessage}: Lower Left: %v, Upper Right: %v, Neighbors: %v", m.Area.Zone.LowerLeft.String(), m.Area.Zone.UpperRight.String(), m.Neighbors)
+    return fmt.Sprintf("{DHTJoinAcceptMessage}: Lower Left: %v, " +
+                       "Upper Right: %v, Neighbors: %v, Reality: %d",
+                       m.Area.Zone.LowerLeft.String(),
+                       m.Area.Zone.UpperRight.String(),
+                       m.Neighbors, m.Reality)
 }
 
 // HTML implements types.Message.
@@ -153,7 +157,8 @@ func (m DHTUpdateNeighborsMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTUpdateNeighborsMessage) String() string {
-    return fmt.Sprintf("{DHTUpdateNeighborsMessage}: Node: %v -- %v", m.Node, m.NodeArea.String())
+    return fmt.Sprintf("{DHTUpdateNeighborsMessage}: Node: %v -- %v " +
+                       "for reality %d", m.Node, m.NodeArea.String(), m.Reality)
 }
 
 // HTML implements types.Message.
@@ -177,7 +182,9 @@ func (m DHTNeighborsStatusMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTNeighborsStatusMessage) String() string {
-    return fmt.Sprintf("{DHTNeighborsStatusMessage}: Node: %v -- %v with neighbors %v", m.Node, m.Area.String(), m.Neighbors)
+    return fmt.Sprintf("{DHTNeighborsStatusMessage}: Node: %v -- %v " +
+                       "with neighbors %v on reality %d",
+                       m.Node, m.Area.String(), m.Neighbors, m.Reality)
 }
 
 // HTML implements types.Message.
@@ -201,7 +208,9 @@ func (m DHTQueryMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTQueryMessage) String() string {
-    return fmt.Sprintf("{DHTQueryMessage}: Node %s is querying for %v with UniqueID %s", m.Source, m.Point.String(), m.UniqueID)
+    return fmt.Sprintf("{DHTQueryMessage}: Node %s is querying for %v " +
+                       "with UniqueID %s on reality %d", m.Source,
+                       m.Point.String(), m.UniqueID, m.Reality)
 }
 
 // HTML implements types.Message.
@@ -225,7 +234,8 @@ func (m DHTQueryResponseMessage) Name() string {
 
 // String implements types.Message.
 func (m DHTQueryResponseMessage) String() string {
-    return fmt.Sprintf("{DHTQueryResponseMessage}: ID %s with value %v", m.UniqueID, m.TrustValue)
+    return fmt.Sprintf("{DHTQueryResponseMessage}: ID %s with value %v " +
+                       "and reality %d", m.UniqueID, m.TrustValue, m.Reality)
 }
 
 // HTML implements types.Message.
