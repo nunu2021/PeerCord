@@ -1,8 +1,6 @@
 name: Go lint
-
 on:
-  push:
-
+  workflow_dispatch:
 jobs:
   lint:
     runs-on: ubuntu-22.04
