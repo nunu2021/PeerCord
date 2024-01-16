@@ -40,7 +40,7 @@ func main() {
 	callIdLabel := widget.NewLabel("")
 	callStatusLabel := widget.NewLabel("None")
 	go func() {
-		for range time.Tick(time.Millisecond * 500) {
+		for range time.Tick(time.Millisecond * 100) {
 			callStatusLabel.SetText(getDialStateString(node))
 		}
 	}()
@@ -51,9 +51,8 @@ func main() {
 	})
 
 	// - list of group call members
-	// groupCallData := binding.BindStringList(getMapKeys(node.GetGroupCallMembers()))
-	// temporary data for demo purposes
-	groupCallData := binding.BindStringList(&[]string{"127.0.0.1:12345", "127.0.0.1:12346"})
+	groupCallData := binding.BindStringList(getMapKeys(node.GetGroupCallMembers()))
+	//groupCallData := binding.BindStringList(&[]string{"127.0.0.1:12345", "127.0.0.1:12346"})
 	remotesList := widget.NewListWithData(
 		groupCallData,
 		func() fyne.CanvasObject {
@@ -63,6 +62,16 @@ func main() {
 			obj.(*widget.Label).Bind(item.(binding.String))
 		},
 	)
+	// reload list of call members
+	go func() {
+		for range time.Tick(time.Millisecond * 100) {
+			err := groupCallData.Reload()
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to refresh group call data")
+				return
+			}
+		}
+	}()
 
 	// - peer operations
 	selectedRemote := ""
