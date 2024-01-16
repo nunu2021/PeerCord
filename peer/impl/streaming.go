@@ -66,7 +66,7 @@ func (n *node) initializeStreaming() error {
 	// Camtron likes to override global log output to a file, set this
 	// to stdout here again
 	n.logger.Output(os.Stdout)
-	camtron.StartCam()
+	go camtron.StartCam()
 
 	return nil
 }

@@ -109,7 +109,7 @@ type Messaging interface {
 	// End the group call
 	GroupCallEnd()
 
-	// Get a list of members in the group call
+	// Get a map of members in the group call
 	GetGroupCallMembers() map[string]struct{}
 
 	// Peer Dialing Commands
