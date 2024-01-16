@@ -311,7 +311,6 @@ func (n *node) ExecEigenTrustResponseMessage(Msg types.Message, pkt transport.Pa
 	}
 
 	n.eigenTrust.ReceivedTrustValues.set(eigenRspnMsg.Source, eigenRspnMsg.Value)
-
 	return nil
 }
 

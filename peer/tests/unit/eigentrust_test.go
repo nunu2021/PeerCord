@@ -13,7 +13,11 @@ import (
 // 1 peer, no calls, calculate global trust value
 func Test_EigenTrust_No_Calls_1_Peer(t *testing.T) {
 	transp := channel.NewTransport()
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB.Stop()
+
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
 
 	trustVal, err := node1.ComputeGlobalTrustValue()
 	require.NoError(t, err)
@@ -25,19 +29,23 @@ func Test_EigenTrust_No_Calls_1_Peer(t *testing.T) {
 // 2 peers, no rating done, trust value computed based on a priori only
 func Test_EigenTrust_No_Calls_3_Peers(t *testing.T) {
 	transp := channel.NewTransport()
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1))
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB.Stop()
+
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
 
 	trustVal, err := node1.ComputeGlobalTrustValue()
 	require.NoError(t, err)
 	require.Equal(t, 0.5, trustVal)
 
-	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
 
 	trustVal2, err := node2.ComputeGlobalTrustValue()
 	require.NoError(t, err)
 	require.Equal(t, 0.25, trustVal2)
 
-	node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(3))
+	node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(3), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
 
 	trustVal3, err := node3.ComputeGlobalTrustValue()
 	require.NoError(t, err)
@@ -90,8 +98,12 @@ func Test_EigenTrust_With_Good_Calls_2_Peers(t *testing.T) {
 
 func Test_EigenTrust_With_Bad_Calls_2_Peers(t *testing.T) {
 	transp := channel.NewTransport()
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1))
-	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2))
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB.Stop()
+
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
 
 	// Simulation of a call
 	node1.AddPeer(node2.GetAddr())
