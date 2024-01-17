@@ -32,10 +32,9 @@ func TestPeercord_DialAccept(t *testing.T) {
 	require.Equal(t, node.CallLineState(), types.Dialing)
 
 	dialMsg := types.DialMsg{
-		CallId:         callId,
-		Caller:         sock.GetAddress(),
-		PubId:          impl.RandomPubId(),
-		PublicKeyBytes: z.GetRandBytes(t),
+		CallId: callId,
+		Caller: sock.GetAddress(),
+		PubId:  impl.RandomPubId(),
 	}
 
 	transpMsg, err := node.GetRegistry().MarshalMessage(dialMsg)

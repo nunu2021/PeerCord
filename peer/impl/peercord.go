@@ -235,17 +235,10 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 			return nil
 		}
 
-		pk := n.GetPK()
-		publicKeyBytes, err := x509.MarshalPKIXPublicKey(&pk)
-		if err != nil {
-			return err
-		}
-
 		response := types.DialMsg{
-			CallId:         dialMsg.CallId,
-			Caller:         n.GetAddress(),
-			PubId:          n.peerCord.PubId,
-			PublicKeyBytes: publicKeyBytes,
+			CallId: dialMsg.CallId,
+			Caller: n.GetAddress(),
+			PubId:  n.peerCord.PubId,
 		}
 
 		transpMsg, err := n.conf.MessageRegistry.MarshalMessage(response)
@@ -277,8 +270,6 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	}
 
 	// If we made it here, we have entered a call. Process the dial msg data
-	n.AddPublicKey(dialMsg.Caller, dialMsg.PubId, dialMsg.PublicKeyBytes)
-
 	n.peerCord.currentDial.ResponseChannel <- true
 
 	n.peerCord.currentDial.dialState = types.InCall
