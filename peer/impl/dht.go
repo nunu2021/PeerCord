@@ -343,9 +343,15 @@ func (n *node) GetTrustPerReality(node string, reality int) (float64, error) {
         n.dht.Realities[reality].mu.Unlock()
         return val, nil
     }
-    n.dht.Realities[reality].mu.Unlock()
 
     point := n.Hash(node)
+    if Contains(n.dht.Realities[reality].Area.Zone, point) {
+        trust_val := n.dht.Realities[reality].Points[node]
+        n.dht.Realities[reality].mu.Unlock()
+        return trust_val, nil
+    }
+
+    n.dht.Realities[reality].mu.Unlock()
     id := xid.New().String()
 
     n.dht.Realities[reality].ResponseChans.Mu.Lock()
