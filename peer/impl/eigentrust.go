@@ -8,7 +8,7 @@ package impl
 // TOD DONE: Check if I implemented the t1c1i calculations correctly
 // TOD DONE: figure out a way to get total number of peers in a system
 // TOD DONE: Fix Linting Errors
-// TOD PARTIAL: Add tests
+// TOD DONE: Add tests
 
 import (
 	"fmt"
@@ -80,13 +80,18 @@ func (n *node) EigenRatePeer(peerIP string, ratingPerCall int) {
 
 // Computes the Global Trust Value for peer
 func (n *node) ComputeGlobalTrustValue() (float64, error) {
+
+	globalTrustVal, err := n.GetTrust(n.GetAddress())
+	if err != nil {
+		return 0, err
+	}
+
 	n.eigenTrust.ComputingTrustValueMutex.Lock()
 	n.eigenTrust.ComputingTrustValue = true
 	n.eigenTrust.ComputingTrustValueMutex.Unlock()
 
 	// request t0 from all CallsOutgoingTo peers
 	for peer := range n.eigenTrust.CallsOutgoingTo.data {
-		fmt.Println("requestion val origin: ", n.conf.Socket.GetAddress(), " from: ", peer)
 		err := n.SendTrustValueRequest(true, peer)
 		if err != nil {
 			n.eigenTrust.ComputingTrustValueMutex.Lock()
@@ -129,6 +134,7 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		internalMap := n.eigenTrust.CallsIncomingFrom.internalMap()
 
 		for peer := range internalMap {
+
 			err := n.SendTrustValueResponse(peer, true)
 			if err != nil {
 				n.eigenTrust.ComputingTrustValueMutex.Lock()
@@ -139,14 +145,6 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		}
 
 		n.eigenTrust.CallsIncomingFrom.unlock()
-
-		globalTrustVal, err := n.GetTrust(n.GetAddress())
-		if err != nil {
-			n.eigenTrust.ComputingTrustValueMutex.Lock()
-			n.eigenTrust.ComputingTrustValue = false
-			n.eigenTrust.ComputingTrustValueMutex.Unlock()
-			return 0, err
-		}
 
 		// update delta
 		delta = math.Abs(globalTrustVal - tPlus)
@@ -161,6 +159,7 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 			n.eigenTrust.ComputingTrustValueMutex.Unlock()
 			return 0, err
 		}
+		globalTrustVal = tPlus
 		counter++
 
 	}
@@ -293,6 +292,8 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 
 func (n *node) ExecEigenTrustRequestMessage(Msg types.Message, pkt transport.Packet) error {
 	fmt.Println("received request message at ", n.conf.Socket.GetAddress())
+
+	// if this node is not already calculating its trust value, then start calculating trust values
 	eigenRqstMsg, ok := Msg.(*types.EigenTrustRequestMessage)
 	if !ok {
 		panic("not a data reply message")
