@@ -101,7 +101,11 @@ type Configuration struct {
 	// Bigger Number == More secutity, but possibly slower and prone to conjestion
 	// Default: 50
 	EigenCalcIterations uint
-	IsBootstrap         bool
+
+	// The threshhold at which the trust value should be at to make the call
+	// Default: 0.5
+	EigenCallTrustThreshold float64
+	IsBootstrap             bool
 
 	BootstrapReplace float64
 

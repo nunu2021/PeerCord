@@ -146,14 +146,15 @@ type configTemplate struct {
 
 	dataRequestBackoff peer.Backoff
 
-	EigenAValue         float64
-	EigenCalcIterations uint
-	EigenEpsilon        float64
-	EigenPulseWait      int64
-	totalPeers          uint
-	paxosThreshold      func(uint) int
-	paxosID             uint
-	paxosProposerRetry  time.Duration
+	EigenAValue             float64
+	EigenCalcIterations     uint
+	EigenEpsilon            float64
+	EigenPulseWait          int64
+	EigenCallTrustThreshold float64
+	totalPeers              uint
+	paxosThreshold          func(uint) int
+	paxosID                 uint
+	paxosProposerRetry      time.Duration
 
 	IsBootstrap           bool
 	BootstrapReplace      float64
@@ -197,17 +198,18 @@ func newConfigTemplate() configTemplate {
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
 
-		EigenAValue:           0.5,
-		EigenCalcIterations:   50,
-		EigenEpsilon:          0.002,
-		EigenPulseWait:        int64(time.Second * 60),
-		IsBootstrap:           false,
-		BootstrapReplace:      0.75,
-		BootstrapNodeLimit:    10,
-		BootstrapTimeout:      time.Second * 3,
-		BootstrapAddrs:        []string{},
-		SendNeighborsInterval: time.Second * 1,
-		NodeDiscardInterval:   time.Second * 3,
+		EigenAValue:             0.5,
+		EigenCalcIterations:     50,
+		EigenEpsilon:            0.002,
+		EigenPulseWait:          int64(time.Second * 60),
+		EigenCallTrustThreshold: 0.5,
+		IsBootstrap:             false,
+		BootstrapReplace:        0.75,
+		BootstrapNodeLimit:      10,
+		BootstrapTimeout:        time.Second * 3,
+		BootstrapAddrs:          []string{},
+		SendNeighborsInterval:   time.Second * 1,
+		NodeDiscardInterval:     time.Second * 3,
 	}
 }
 
@@ -396,6 +398,7 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.PaxosProposerRetry = template.paxosProposerRetry
 	config.EigenAValue = template.EigenAValue
 	config.EigenCalcIterations = template.EigenCalcIterations
+	config.EigenCallTrustThreshold = template.EigenCallTrustThreshold
 	config.EigenEpsilon = template.EigenEpsilon
 	config.EigenPulseWait = template.EigenPulseWait
 	config.IsBootstrap = template.IsBootstrap
