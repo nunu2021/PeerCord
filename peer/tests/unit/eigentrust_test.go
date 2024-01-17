@@ -1,7 +1,6 @@
 package unit
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -67,9 +66,6 @@ func Test_EigenTrust_With_Good_Calls_2_Peers(t *testing.T) {
 
 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
 	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
-	fmt.Println("node1:", node1.GetAddr())
-	fmt.Println("node2:", node2.GetAddr())
-	fmt.Println("nodeB:", nodeB.GetAddr())
 
 	time.Sleep(time.Second * 2)
 

@@ -312,6 +312,7 @@ func (n *node) GetTrust(node string) (float64, error) {
 	trustVals := make(map[float64]int)
 	maxCount := 0
 	retVal := 0.0
+
 	for i := 0; i < 5; i++ {
 		num, err := n.GetTrustPerReality(node, i)
 		if err != nil {
@@ -324,6 +325,7 @@ func (n *node) GetTrust(node string) (float64, error) {
 			trustVals[num]++
 		}
 	}
+
 	for trust, count := range trustVals {
 		if count > maxCount {
 			retVal = trust
@@ -347,9 +349,9 @@ func (n *node) GetTrustPerReality(node string, reality int) (float64, error) {
 
 	point := n.Hash(node)
 	if Contains(n.dht.Realities[reality].Area.Zone, point) {
-		trust_val := n.dht.Realities[reality].Points[node]
+		trustVal := n.dht.Realities[reality].Points[node]
 		n.dht.Realities[reality].mu.Unlock()
-		return trust_val, nil
+		return trustVal, nil
 	}
 
 	n.dht.Realities[reality].mu.Unlock()
@@ -378,10 +380,13 @@ func (n *node) GetTrustPerReality(node string, reality int) (float64, error) {
 	}
 
 	t := <-chanTrust
+
 	n.dht.Realities[reality].ResponseChans.Mu.Lock()
+
 	close(n.dht.Realities[reality].ResponseChans.Map[id])
 	delete(n.dht.Realities[reality].ResponseChans.Map, id)
 	n.dht.Realities[reality].ResponseChans.Mu.Unlock()
+
 	return t, nil
 }
 

@@ -273,7 +273,7 @@ func (n *node) Start() error {
 	}
 
 	n.isRunning = true
-	if n.conf.IsBootstrap == false {
+	if !n.conf.IsBootstrap {
 		err := n.SetTrust(n.GetAddress(), n.eigenTrust.p)
 		if err != nil {
 			return err

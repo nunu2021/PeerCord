@@ -11,7 +11,6 @@ package impl
 // TOD DONE: Add tests
 
 import (
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -78,6 +77,12 @@ func (n *node) EigenRatePeer(peerIP string, ratingPerCall int) {
 
 }
 
+func (n *node) SetEigenState(value bool) {
+	n.eigenTrust.ComputingTrustValueMutex.Lock()
+	n.eigenTrust.ComputingTrustValue = true
+	n.eigenTrust.ComputingTrustValueMutex.Unlock()
+}
+
 // Computes the Global Trust Value for peer
 func (n *node) ComputeGlobalTrustValue() (float64, error) {
 
@@ -86,19 +91,13 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		return 0, err
 	}
 
-	fmt.Println(globalTrustVal, " is the trust val")
-
-	n.eigenTrust.ComputingTrustValueMutex.Lock()
-	n.eigenTrust.ComputingTrustValue = true
-	n.eigenTrust.ComputingTrustValueMutex.Unlock()
+	n.SetEigenState(true)
 
 	// request t0 from all CallsOutgoingTo peers
 	for peer := range n.eigenTrust.CallsOutgoingTo.data {
 		err := n.SendTrustValueRequest(true, peer)
 		if err != nil {
-			n.eigenTrust.ComputingTrustValueMutex.Lock()
-			n.eigenTrust.ComputingTrustValue = false
-			n.eigenTrust.ComputingTrustValueMutex.Unlock()
+			n.SetEigenState(false)
 			return 0, err
 		}
 	}
@@ -116,9 +115,7 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		// wait till we get all trust responses
 		err := n.WaitForEigenTrusts()
 		if err != nil {
-			n.eigenTrust.ComputingTrustValueMutex.Lock()
-			n.eigenTrust.ComputingTrustValue = false
-			n.eigenTrust.ComputingTrustValueMutex.Unlock()
+			n.SetEigenState(false)
 			return 0, err
 		}
 
@@ -139,9 +136,7 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 
 			err := n.SendTrustValueResponse(peer, true)
 			if err != nil {
-				n.eigenTrust.ComputingTrustValueMutex.Lock()
-				n.eigenTrust.ComputingTrustValue = false
-				n.eigenTrust.ComputingTrustValueMutex.Unlock()
+				n.SetEigenState(false)
 				return 0, err
 			}
 		}
@@ -156,18 +151,14 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 
 		err = n.SetTrust(n.GetAddress(), tPlus)
 		if err != nil {
-			n.eigenTrust.ComputingTrustValueMutex.Lock()
-			n.eigenTrust.ComputingTrustValue = false
-			n.eigenTrust.ComputingTrustValueMutex.Unlock()
+			n.SetEigenState(false)
 			return 0, err
 		}
 		globalTrustVal = tPlus
 		counter++
 
 	}
-	n.eigenTrust.ComputingTrustValueMutex.Lock()
-	n.eigenTrust.ComputingTrustValue = false
-	n.eigenTrust.ComputingTrustValueMutex.Unlock()
+	n.SetEigenState(false)
 
 	return tPlus, nil
 
@@ -254,12 +245,11 @@ func (n *node) SendTrustValueRequest(includeLocalTrust bool, dest string) error 
 }
 
 func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
-	fmt.Println("coming here")
+
 	trust, err := n.GetTrust(n.GetAddress())
 	if err != nil {
 		return err
 	}
-	fmt.Println("NOT coming here")
 
 	if includeLocal {
 
@@ -284,7 +274,7 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 		}
 
 		trust *= localTrustValue
-		fmt.Println(trust)
+
 	}
 	eigenResponseMsg := types.EigenTrustResponseMessage{
 		KStep:  n.eigenTrust.k,
@@ -296,7 +286,6 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 }
 
 func (n *node) ExecEigenTrustRequestMessage(Msg types.Message, pkt transport.Packet) error {
-	fmt.Println("received request message at ", n.conf.Socket.GetAddress())
 
 	// if this node is not already calculating its trust value, then start calculating trust values
 	eigenRqstMsg, ok := Msg.(*types.EigenTrustRequestMessage)
@@ -327,7 +316,6 @@ Helper functions to use in testing
 
 func (n *node) AddToCallsOutgoingTo(peer string) {
 	n.eigenTrust.CallsOutgoingTo.set(peer, 1)
-	fmt.Println("updates CallsOutgoing to in", n.conf.Socket.GetAddress(), ":", n.eigenTrust.CallsOutgoingTo.data)
 }
 
 func (n *node) AddToCallsIncomingFrom(peer string) {
