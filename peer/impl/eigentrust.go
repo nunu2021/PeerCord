@@ -293,6 +293,15 @@ func (n *node) ExecEigenTrustRequestMessage(Msg types.Message, pkt transport.Pac
 		panic("not a data reply message")
 	}
 
+	// if not already in an eigen computing state, switch over (this will enable a system wide pulse!)
+	n.eigenTrust.ComputingTrustValueMutex.Lock()
+	if !n.eigenTrust.ComputingTrustValue {
+		n.eigenTrust.ComputingTrustValue = true
+		go n.ComputeGlobalTrustValue()
+
+	}
+	n.eigenTrust.ComputingTrustValueMutex.Unlock()
+
 	err := n.SendTrustValueResponse(eigenRqstMsg.Source, true)
 
 	return err
