@@ -273,6 +273,13 @@ func (n *node) Start() error {
 	}
 
 	n.isRunning = true
+	if n.conf.IsBootstrap == false {
+		err := n.SetTrust(n.GetAddress(), n.eigenTrust.p)
+		if err != nil {
+			return err
+		}
+	}
+
 	go loop(n)
 	if !n.conf.IsBootstrap {
 		n.AddPeer(n.conf.BootstrapAddrs...)

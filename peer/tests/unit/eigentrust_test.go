@@ -19,8 +19,6 @@ func Test_EigenTrust_No_Calls_1_Peer(t *testing.T) {
 
 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
 
-	time.Sleep(time.Second * 5)
-
 	trustVal, err := node1.ComputeGlobalTrustValue()
 	require.NoError(t, err)
 	require.Equal(t, trustVal, 0.5)

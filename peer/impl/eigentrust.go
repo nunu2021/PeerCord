@@ -86,6 +86,8 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		return 0, err
 	}
 
+	fmt.Println(globalTrustVal, " is the trust val")
+
 	n.eigenTrust.ComputingTrustValueMutex.Lock()
 	n.eigenTrust.ComputingTrustValue = true
 	n.eigenTrust.ComputingTrustValueMutex.Unlock()
@@ -252,10 +254,13 @@ func (n *node) SendTrustValueRequest(includeLocalTrust bool, dest string) error 
 }
 
 func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
+	fmt.Println("coming here")
 	trust, err := n.GetTrust(n.GetAddress())
 	if err != nil {
 		return err
 	}
+	fmt.Println("NOT coming here")
+
 	if includeLocal {
 
 		internalMap := n.eigenTrust.IncomingCallRatingSum.internalMap()
