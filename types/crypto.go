@@ -40,7 +40,7 @@ func (m GroupCallDHSharedSecret) Name() string {
 
 // String implements types.Message.
 func (m GroupCallDHSharedSecret) String() string {
-	return fmt.Sprintf("{GroupCallDHSharedSecret %v}", m.RemoteKey)
+	return fmt.Sprintf("{GroupCallDHSharedSecret %v - %v}", m.RemoteKey, m.MembersList)
 }
 
 // HTML implements types.Message.

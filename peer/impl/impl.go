@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"golang.org/x/xerrors"
 	"math"
 	"math/rand"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
-	"golang.org/x/xerrors"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -60,6 +60,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		crypto:            Crypto{KnownPKs: StrStrMap{Map: make(map[string]StrBytesPair)}},
 		multicast:         NewMulticast(),
 		peerCord:          newPeerCord(),
+		streaming:         NewStreaming(),
 	}
 
 	// Register the different kinds of messages
@@ -90,6 +91,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.O2OEncryptedPkt{}, n.ExecO2OEncryptedPkt)
 	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallVotePkt{}, n.ReceiveGroupCallVotePktMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.DialMsg{}, n.ReceiveDial)
+	conf.MessageRegistry.RegisterMessageCallback(types.CallDataMessage{}, n.receiveCallDataMsg)
 
 	return n
 }
@@ -149,6 +151,9 @@ type node struct {
 
 	//Cryptography for peer-cord
 	crypto Crypto
+
+	// Video and audio streaming
+	streaming Streaming
 
 	// Implements the PeerCord interface
 	peerCord PeerCord
@@ -247,11 +252,16 @@ func (n *node) Start() error {
 		return AlreadyRunningError{}
 	}
 
-	n.isRunning = true
+	/*if err := n.initializeStreaming(); err != nil {
+		n.logger.Error().Err(err).Msg("failed to initialize streaming")
+		return err
+	}*/
+
 	err := n.GenerateKeyPair()
 	if err != nil {
 		return xerrors.Errorf("error when generating key pair: %v", err)
 	}
+	n.isRunning = true
 	go loop(n)
 	return nil
 }
@@ -263,6 +273,11 @@ func (n *node) Stop() error {
 		n.logger.Error().Msg("can't stop peer: not running")
 		return NotRunningError{}
 	}
+
+	/*if err := n.destroyStreaming(); err != nil {
+		n.logger.Error().Err(err).Msg("failed to stop streaming")
+		return err
+	}*/
 
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
