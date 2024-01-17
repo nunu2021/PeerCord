@@ -1,12 +1,13 @@
 package impl
 
 import (
-	"golang.org/x/xerrors"
 	"math"
 	"math/rand"
 	"os"
 	"sync"
 	"time"
+
+	"golang.org/x/xerrors"
 
 	"github.com/rs/zerolog"
 	"go.dedis.ch/cs438/peer"
@@ -90,6 +91,8 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.DHEncryptedPkt{}, n.ExecDHEncryptedPkt)
 	conf.MessageRegistry.RegisterMessageCallback(types.O2OEncryptedPkt{}, n.ExecO2OEncryptedPkt)
 	conf.MessageRegistry.RegisterMessageCallback(types.GroupCallVotePkt{}, n.ReceiveGroupCallVotePktMsg)
+	conf.MessageRegistry.RegisterMessageCallback(types.PKRequestMessage{}, n.receivePKRequest)
+	conf.MessageRegistry.RegisterMessageCallback(types.PKResponseMessage{}, n.receivePKResponse)
 	conf.MessageRegistry.RegisterMessageCallback(types.DialMsg{}, n.ReceiveDial)
 	conf.MessageRegistry.RegisterMessageCallback(types.CallDataMessage{}, n.receiveCallDataMsg)
 
@@ -321,6 +324,7 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 func (n *node) processPacket(pkt transport.Packet) {
 	msgType := pkt.Msg.Type
 	if _, requiresEncryption := types.EncryptedMsgTypes[msgType]; requiresEncryption {
+		// TODO: Run a test to check this works
 		n.logger.Warn().Msgf("Received unencrypted msg of type %v. Ignoring", msgType)
 		return
 	}

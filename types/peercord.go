@@ -3,6 +3,52 @@ package types
 import "fmt"
 
 // -----------------------------------------------------------------------------
+// PKRequestMessage
+
+// NewEmpty implements types.Message.
+func (m PKRequestMessage) NewEmpty() Message {
+	return &PKRequestMessage{}
+}
+
+// Name implements types.Message.
+func (m PKRequestMessage) Name() string {
+	return "PKRequestMessage"
+}
+
+// String implements types.Message.
+func (m PKRequestMessage) String() string {
+	return fmt.Sprintf("{PKRequestMessage %v - %v - %v}", m.PeerId, m.PubId, m.PubKeyBytes)
+}
+
+// HTML implements types.Message.
+func (m PKRequestMessage) HTML() string {
+	return m.String()
+}
+
+// -----------------------------------------------------------------------------
+// PKResponseMessage
+
+// NewEmpty implements types.Message.
+func (m PKResponseMessage) NewEmpty() Message {
+	return &PKResponseMessage{}
+}
+
+// Name implements types.Message.
+func (m PKResponseMessage) Name() string {
+	return "PKResponseMessage"
+}
+
+// String implements types.Message.
+func (m PKResponseMessage) String() string {
+	return fmt.Sprintf("{PKResponseMessage %v - %v - %v}", m.PeerId, m.PubId, m.PubKeyBytes)
+}
+
+// HTML implements types.Message.
+func (m PKResponseMessage) HTML() string {
+	return m.String()
+}
+
+// -----------------------------------------------------------------------------
 // DialMsg
 
 // NewEmpty implements types.Message.
@@ -17,7 +63,7 @@ func (m DialMsg) Name() string {
 
 // String implements types.Message.
 func (m DialMsg) String() string {
-	return fmt.Sprintf("{DialMsg %v - %v - %v - %v}", m.CallId, m.Caller, m.PubId, string(m.PublicKeyBytes))
+	return fmt.Sprintf("{DialMsg %v - %v - %v - %v}", m.CallId, m.Caller, m.PubId, m.Members)
 }
 
 // HTML implements types.Message.

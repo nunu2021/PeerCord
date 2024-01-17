@@ -25,6 +25,8 @@ type O2OEncryptedPkt struct {
 	Signature []byte
 }
 
+// TODO: Does this work?
 var EncryptedMsgTypes = map[string]struct{}{
 	"GroupCallVotePkt": {},
+	"DialMsg":          {},
 }

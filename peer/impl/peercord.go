@@ -62,6 +62,70 @@ func newPeerCord() PeerCord {
 	}
 }
 
+func (n *node) RequestPK(peer string) error {
+
+	pk := n.GetPK()
+
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&pk)
+	if err != nil {
+		return err
+	}
+
+	requestMessage := types.PKRequestMessage{
+		PeerId:      n.GetAddress(),
+		PubId:       n.GetPubId(),
+		PubKeyBytes: publicKeyBytes,
+	}
+
+	marshalledRequestMessage, err := n.conf.MessageRegistry.MarshalMessage(requestMessage)
+	if err != nil {
+		return err
+	}
+
+	return n.Unicast(peer, marshalledRequestMessage)
+}
+
+func (n *node) receivePKRequest(msg types.Message, pkt transport.Packet) error {
+	pkRequestMessage, ok := msg.(*types.PKRequestMessage)
+	if !ok {
+		panic("not a pk request message")
+	}
+
+	n.AddPublicKey(pkRequestMessage.PeerId, pkRequestMessage.PubId, pkRequestMessage.PubKeyBytes)
+
+	// Send a response to the peer
+	pk := n.GetPK()
+
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&pk)
+	if err != nil {
+		return err
+	}
+
+	responseMessage := types.PKResponseMessage{
+		PeerId:      n.GetAddress(),
+		PubId:       n.GetPubId(),
+		PubKeyBytes: publicKeyBytes,
+	}
+
+	marshalledResponseMessage, err := n.conf.MessageRegistry.MarshalMessage(responseMessage)
+	if err != nil {
+		return err
+	}
+
+	return n.Unicast(pkRequestMessage.PeerId, marshalledResponseMessage)
+}
+
+func (n *node) receivePKResponse(msg types.Message, pkt transport.Packet) error {
+	pkResponseMessage, ok := msg.(*types.PKResponseMessage)
+	if !ok {
+		panic("not a pk response message")
+	}
+
+	n.AddPublicKey(pkResponseMessage.PeerId, pkResponseMessage.PubId, pkResponseMessage.PubKeyBytes)
+
+	return nil
+}
+
 func (n *node) DialPeer(peer string) (string, error) {
 	n.peerCord.currentDial.Lock()
 	defer n.peerCord.currentDial.Unlock()
@@ -70,17 +134,22 @@ func (n *node) DialPeer(peer string) (string, error) {
 		return "", fmt.Errorf("Peercord is already busy in state %v. Cannot initiate call", n.peerCord.currentDial.dialState)
 	}
 
-	pk := n.GetPK()
-	publicKeyBytes, err := x509.MarshalPKIXPublicKey(&pk)
-	if err != nil {
-		return "", err
+	// Check that we have a PK for the peer. If not, request it
+	_, exists := n.GetPeerKey(peer)
+
+	memberList := make([]string, 0, n.peerCord.members.len())
+	i := 0
+	for member, _ := range n.peerCord.members.internalMap() {
+		memberList[i] = member
+		i++
 	}
+	n.peerCord.members.unlock()
 
 	dialMsg := types.DialMsg{
-		CallId:         xid.New().String(),
-		Caller:         n.GetAddress(),
-		PubId:          n.peerCord.PubId,
-		PublicKeyBytes: publicKeyBytes,
+		CallId:  xid.New().String(),
+		Caller:  n.GetAddress(),
+		PubId:   n.peerCord.PubId,
+		Members: memberList,
 	}
 
 	transpMsg, err := n.conf.MessageRegistry.MarshalMessage(dialMsg)
@@ -88,25 +157,43 @@ func (n *node) DialPeer(peer string) (string, error) {
 		return "", err
 	}
 
-	err = n.Unicast(peer, transpMsg)
-	if err != nil {
-		return "", err
-	}
+	msgSent := make(chan bool)
 
-	// We have sucessfully dialed another user
-	n.peerCord.currentDial.dialState = types.Dialing
-	n.peerCord.currentDial.ID = dialMsg.CallId
-	n.peerCord.currentDial.Peer = peer
+	go func() {
+
+		if !exists {
+			// We had to send a PK request to the node. Wait for a response first.
+			time.Sleep(time.Second)
+		}
+
+		encryptedMsg, err := n.EncryptOneToOneMsg(&transpMsg, peer)
+
+		if err != nil {
+			msgSent <- false
+			panic(err)
+		}
+
+		err = n.Unicast(peer, *encryptedMsg)
+		if err != nil {
+			msgSent <- false
+			panic(err)
+		}
+
+		msgSent <- true
+
+	}()
 
 	// Set up the async handler for the dial message
 	go func() {
-		to := time.After(2 * time.Second)
+		accepted := false
 
-		var accepted bool
+		if <-msgSent {
+			to := time.After(2 * time.Second)
 
-		select {
-		case accepted = <-n.peerCord.currentDial.ResponseChannel:
-		case <-to:
+			select {
+			case accepted = <-n.peerCord.currentDial.ResponseChannel:
+			case <-to:
+			}
 		}
 
 		n.peerCord.currentDial.Lock()
@@ -119,7 +206,13 @@ func (n *node) DialPeer(peer string) (string, error) {
 		n.peerCord.currentDial.ResponseChannel = newResponseChannel()
 	}()
 
+	// We have sucessfully dialed another user
+	n.peerCord.currentDial.dialState = types.Dialing
+	n.peerCord.currentDial.ID = dialMsg.CallId
+	n.peerCord.currentDial.Peer = peer
+
 	return dialMsg.CallId, nil
+
 }
 
 func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {

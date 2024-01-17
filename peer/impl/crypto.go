@@ -286,6 +286,7 @@ func (n *node) GetPK() rsa.PublicKey {
 
 func (n *node) AddPublicKey(peer, pubID string, key []byte) {
 	//Add a public key + id to the known IDs
+	// TODO: We should put the check here for if we already have received this key
 	n.crypto.KnownPKs.Mutex.Lock()
 	n.crypto.KnownPKs.Map[peer] = StrBytesPair{Str: pubID, Bytes: key}
 	n.crypto.KnownPKs.Mutex.Unlock()

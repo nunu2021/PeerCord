@@ -9,12 +9,24 @@ const (
 	InCall
 )
 
+type PKRequestMessage struct {
+	PeerId      string
+	PubId       string
+	PubKeyBytes []byte
+}
+
+type PKResponseMessage struct {
+	PeerId      string
+	PubId       string
+	PubKeyBytes []byte
+}
+
 // TODO: Need to send a dial message at the end of a vote with a list of existing members
 type DialMsg struct {
-	CallId         string
-	Caller         string
-	PubId          string
-	PublicKeyBytes []byte
+	CallId  string
+	Caller  string
+	PubId   string
+	Members []string
 }
 
 /** Voting **/
