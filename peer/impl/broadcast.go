@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"crypto/x509"
 	"math/rand"
 	"time"
 
@@ -14,16 +15,39 @@ func (n *node) sendHeartbeat() error {
 		//n.logger.Info().Msg("sending heartbeat")
 		n.lastHeartbeat = time.Now()
 
-		emptyMsg := types.EmptyMessage{}
-		marshaledEmptyMsg, err := n.conf.MessageRegistry.MarshalMessage(emptyMsg)
+		pk := n.GetPK()
+		publicKeyBytes, err := x509.MarshalPKIXPublicKey(&pk)
+
 		if err != nil {
 			return err
 		}
 
-		err = n.Broadcast(marshaledEmptyMsg)
+		heartbeatMsg := types.HeartbeatMessage{
+			PeerId:      n.GetAddress(),
+			PubId:       n.peerCord.PubId,
+			PubKeyBytes: publicKeyBytes,
+		}
+
+		marshaledHeartbeatMsg, err := n.conf.MessageRegistry.MarshalMessage(heartbeatMsg)
 		if err != nil {
 			return err
 		}
+
+		err = n.Broadcast(marshaledHeartbeatMsg)
+		if err != nil {
+			return err
+		}
+
+		// emptyMsg := types.EmptyMessage{}
+		// marshalledEmptyMsg, err := n.conf.MessageRegistry.MarshalMessage(emptyMsg)
+		// if err != nil {
+		// 	return err
+		// }
+
+		// err = n.Broadcast(marshalledEmptyMsg)
+		// if err != nil {
+		// 	return err
+		// }
 	}
 
 	return nil
@@ -263,6 +287,20 @@ func (n *node) receiveStatus(msg types.Message, pkt transport.Packet) error {
 }
 
 func (n *node) receiveEmptyMsg(msg types.Message, pkt transport.Packet) error {
+	return nil
+}
+
+// TODO: Test the new heartbeat
+func (n *node) receiveHeartbeatMsg(msg types.Message, pkt transport.Packet) error {
+	heartbeatMsg, ok := msg.(*types.HeartbeatMessage)
+	if !ok {
+		panic("not a heartbeat message")
+	}
+
+	// Even if we have seen this peer before, we will just write the key
+	// TODO: If the peer key has changed, maybe reduce trust?
+	n.AddPublicKey(heartbeatMsg.PeerId, heartbeatMsg.PubId, heartbeatMsg.PubKeyBytes)
+
 	return nil
 }
 

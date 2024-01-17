@@ -166,7 +166,10 @@ func (n *node) CompleteVoteAction(voteType types.VoteType, voteMeta string) {
 				}
 			} else {
 				// We are already in a call, run the group call add
-				n.GroupCallAdd(voteMeta)
+				err := n.GroupCallAdd(voteMeta)
+				if err != nil {
+					// TODO: What if the key exchange failed?
+				}
 			}
 		}
 	case types.GroupKick:
@@ -177,7 +180,10 @@ func (n *node) CompleteVoteAction(voteType types.VoteType, voteMeta string) {
 			if n.peerCord.members.len() == 2 {
 				// We are entering individual calls again. TODO: Make sure we the other users PK
 			} else {
-				n.GroupCallRemove(voteMeta)
+				err := n.GroupCallRemove(voteMeta)
+				if err != nil {
+					// TODO: What if the key exchange failed?
+				}
 			}
 		}
 	}

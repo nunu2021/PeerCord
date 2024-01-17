@@ -163,6 +163,29 @@ func (e EmptyMessage) HTML() string {
 }
 
 // -----------------------------------------------------------------------------
+// HeartbeatMessage
+
+// NewEmpty implements types.HeartbeatMessage.
+func (HeartbeatMessage) NewEmpty() Message {
+	return &HeartbeatMessage{}
+}
+
+// Name implements types.Message.
+func (m HeartbeatMessage) Name() string {
+	return "HeartbeatMessage"
+}
+
+// String implements types.Message.
+func (m HeartbeatMessage) String() string {
+	return fmt.Sprintf("Heartbeat Message - { %v }", m.PubId)
+}
+
+// HTML implements types.Message.
+func (m HeartbeatMessage) HTML() string {
+	return fmt.Sprintf("Heartbeat Message - { %v }", m.PubId)
+}
+
+// -----------------------------------------------------------------------------
 // PrivateMessage
 
 // NewEmpty implements types.Message.

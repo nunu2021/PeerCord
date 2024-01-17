@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"crypto/x509"
 	"testing"
 	"time"
 
@@ -92,5 +93,52 @@ func TestPeercord_DialTimeout(t *testing.T) {
 
 	// Check the node is idle
 	require.Equal(t, node.CallLineState(), types.Idle)
+
+}
+
+func TestPeercord_PKHeartbeat(t *testing.T) {
+	transp := channel.NewTransport()
+
+	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithAutostart(true), z.WithHeartbeat(time.Second))
+	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithAutostart(true), z.WithHeartbeat(time.Second))
+
+	node1.AddPeer(node2.GetAddr())
+
+	time.Sleep(700 * time.Millisecond)
+
+	// Check the nodes received heartbeats
+	node1Ins := node1.GetIns()
+	node2Ins := node2.GetIns()
+
+	require.NotEqual(t, len(node1Ins), 0) // We have messages
+	require.NotEqual(t, len(node2Ins), 0) // We have messages
+
+	// Check node 1 received node 2 data sucesfully
+
+	node2PK := node2.GetPK()
+	node2PKBytes, err := x509.MarshalPKIXPublicKey(&node2PK)
+
+	require.NoError(t, err)
+
+	node2PubID := node2.GetPubId()
+
+	node1Verified, node1Received := node1.VerifyPID(node2.GetAddr(), node2PubID, node2PKBytes)
+
+	require.True(t, node1Received)
+	require.True(t, node1Verified)
+
+	// Check node 2 received node 1 data sucesfully
+
+	node1PK := node1.GetPK()
+	node1PKBytes, err := x509.MarshalPKIXPublicKey(&node1PK)
+
+	require.NoError(t, err)
+
+	node1PubID := node1.GetPubId()
+
+	node2Verified, node2Received := node2.VerifyPID(node1.GetAddr(), node1PubID, node1PKBytes)
+
+	require.True(t, node2Received)
+	require.True(t, node2Verified)
 
 }

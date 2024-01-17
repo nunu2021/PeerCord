@@ -59,6 +59,17 @@ type StatusMessage map[string]uint
 // - implemented in HW1
 type EmptyMessage struct{}
 
+// EmptyMessage describes an empty message. It is used for the heartbeat
+// mechanism.
+//
+// - implements types.Message
+// - implemented in HW1
+type HeartbeatMessage struct {
+	PeerId      string
+	PubId       string
+	PubKeyBytes []byte
+}
+
 // PrivateMessage describes a message intended to some specific recipients.
 //
 // - implements types.Message

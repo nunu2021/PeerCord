@@ -68,6 +68,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, n.receiveAck)
 	conf.MessageRegistry.RegisterMessageCallback(types.StatusMessage{}, n.receiveStatus)
 	conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, n.receiveEmptyMsg)
+	conf.MessageRegistry.RegisterMessageCallback(types.HeartbeatMessage{}, n.receiveHeartbeatMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, n.receivePrivateMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.DataRequestMessage{}, n.receiveDataRequest)
 	conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.receiveDataReply)

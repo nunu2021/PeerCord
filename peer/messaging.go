@@ -43,6 +43,9 @@ type Messaging interface {
 	// Get the Public ID key
 	GetPK() rsa.PublicKey
 
+	// Get the unique id of the node
+	GetPubId() string
+
 	// Add a public ID to the known ones
 	AddPublicKey(peer, pubID string, key []byte)
 

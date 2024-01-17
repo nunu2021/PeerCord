@@ -289,6 +289,15 @@ func (n *node) RemovePublicKey(peer string) {
 	n.crypto.KnownPKs.Mutex.Unlock()
 }
 
+func (n *node) GetPeerKey(peer string) (StrBytesPair, bool) {
+	//Add a public key + id to the known IDs
+	n.crypto.KnownPKs.Mutex.Lock()
+	defer n.crypto.KnownPKs.Mutex.Unlock()
+
+	pair, exists := n.crypto.KnownPKs.Map[peer]
+	return pair, exists
+}
+
 func (n *node) VerifyPID(peer, pubID string, key []byte) (bool, bool) {
 	//Verify that a public ID matches the one stored (if any)
 	n.crypto.KnownPKs.Mutex.Lock()

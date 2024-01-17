@@ -47,6 +47,10 @@ func RandomPubId() string {
 	return fmt.Sprintf("+41%010d", rand.Int()%int(10e9))
 }
 
+func (n *node) GetPubId() string {
+	return n.peerCord.PubId
+}
+
 func newPeerCord() PeerCord {
 	return PeerCord{
 		PubId:   RandomPubId(),
