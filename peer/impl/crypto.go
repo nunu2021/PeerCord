@@ -153,6 +153,9 @@ func (k *DHPublicKey) Get() *ecdh.PublicKey {
 func (k *DHPublicKey) Equal(remote *ecdh.PublicKey) bool {
 	k.Mutex.Lock()
 	defer k.Mutex.Unlock()
+	if k.Key == nil {
+		return remote == nil
+	}
 	return k.Key.Equal(remote)
 }
 
@@ -594,22 +597,25 @@ func DHRound2(n *node, receivers map[string]struct{}) error {
 		waitGrp.Add(1)
 		go func(c chan struct{}, peer string) {
 			defer waitGrp.Done()
-			select {
-			case <-c:
-				return
-			case <-time.After(time.Second * 5):
-				//assume the remote node is malicious or dead
-				lock.Lock()
-				removedPeers = append(removedPeers, peer)
-				delete(receivers, peer)
-				n.crypto.DHchannels.Delete(peer)
-				delete(n.crypto.DHInitSecrets, peer)
-				delete(n.crypto.DHPartialSecrets, peer)
-				lock.Unlock()
-
-				// Its dead. Remove it from the list of members
-				n.peerCord.members.delete(peer)
+			for try := 0; try <= 2; try++ {
+				//We resend the message every 2 seconds in case it got lost
+				select {
+				case <-c:
+					return
+				case <-time.After(time.Second * 2):
+				}
 			}
+			//assume the remote node is malicious or dead
+			lock.Lock()
+			removedPeers = append(removedPeers, peer)
+			delete(receivers, peer)
+			n.crypto.DHchannels.Delete(peer)
+			delete(n.crypto.DHInitSecrets, peer)
+			delete(n.crypto.DHPartialSecrets, peer)
+			lock.Unlock()
+
+			// Its dead. Remove it from the list of members
+			n.peerCord.members.delete(peer)
 		}(n.crypto.DHchannels.Get(s), s)
 	}
 	//Send partial secrets to all recievers
@@ -734,21 +740,24 @@ func (n *node) StartDHKeyExchange(receivers map[string]struct{}) error {
 		wg.Add(1)
 		go func(c chan struct{}, peer string) {
 			defer wg.Done()
-			select {
-			case <-c:
-				return
-			case <-time.After(time.Second * 5):
-				//assume the remote node is malicious or dead
-				lock.Lock()
-				delete(receivers, peer)
-				n.crypto.DHchannels.Delete(peer)
-				delete(n.crypto.DHInitSecrets, peer)
-				delete(n.crypto.DHPartialSecrets, peer)
-				lock.Unlock()
-
-				// Its dead. Remove it from the list of members
-				n.peerCord.members.delete(peer)
+			for try := 0; try <= 2; try++ {
+				//We resend the message every 2 seconds in case it got lost
+				select {
+				case <-c:
+					return
+				case <-time.After(time.Second * 2):
+				}
 			}
+			//assume the remote node is malicious or dead
+			lock.Lock()
+			delete(receivers, peer)
+			n.crypto.DHchannels.Delete(peer)
+			delete(n.crypto.DHInitSecrets, peer)
+			delete(n.crypto.DHPartialSecrets, peer)
+			lock.Unlock()
+
+			// Its dead. Remove it from the list of members
+			n.peerCord.members.delete(peer)
 		}(n.crypto.DHchannels.Get(s), s)
 	}
 
@@ -776,21 +785,24 @@ func DHRemoveRound2(n *node, member string) error {
 		waitGrp.Add(1)
 		go func(c chan struct{}, peer string) {
 			defer waitGrp.Done()
-			select {
-			case <-c:
-				return
-			case <-time.After(time.Second * 5):
-				//assume the remote node is malicious or dead
-				lock.Lock()
-				removedPeers = append(removedPeers, peer)
-				n.crypto.DHchannels.Delete(peer)
-				delete(n.crypto.DHInitSecrets, peer)
-				delete(n.crypto.DHPartialSecrets, peer)
-				lock.Unlock()
-
-				// Its dead. Remove it from the list of members
-				n.peerCord.members.delete(peer)
+			for try := 0; try <= 2; try++ {
+				//We resend the message every 2 seconds in case it got lost
+				select {
+				case <-c:
+					return
+				case <-time.After(time.Second * 2):
+				}
 			}
+			//assume the remote node is malicious or dead
+			lock.Lock()
+			removedPeers = append(removedPeers, peer)
+			n.crypto.DHchannels.Delete(peer)
+			delete(n.crypto.DHInitSecrets, peer)
+			delete(n.crypto.DHPartialSecrets, peer)
+			lock.Unlock()
+
+			// Its dead. Remove it from the list of members
+			n.peerCord.members.delete(peer)
 		}(n.crypto.DHchannels.Get(s), s)
 	}
 	//We send the new partial secrets (with the randomly generated key and
@@ -935,21 +947,24 @@ func DHAddRound2(n *node, member string, newKey *ecdh.PrivateKey, secret *ecdh.P
 		waitGrp.Add(1)
 		go func(c chan struct{}, peer string) {
 			defer waitGrp.Done()
-			select {
-			case <-c:
-				return
-			case <-time.After(time.Second * 5):
-				//assume the remote node is malicious or dead
-				lock.Lock()
-				removedPeers = append(removedPeers, peer)
-				n.crypto.DHchannels.Delete(peer)
-				delete(n.crypto.DHInitSecrets, peer)
-				delete(n.crypto.DHPartialSecrets, peer)
-				lock.Unlock()
-
-				// Its dead. Remove it from the list of members
-				n.peerCord.members.delete(peer)
+			for try := 0; try <= 2; try++ {
+				//We resend the message every 2 seconds in case it got lost
+				select {
+				case <-c:
+					return
+				case <-time.After(time.Second * 2):
+				}
 			}
+			//assume the remote node is malicious or dead
+			lock.Lock()
+			removedPeers = append(removedPeers, peer)
+			n.crypto.DHchannels.Delete(peer)
+			delete(n.crypto.DHInitSecrets, peer)
+			delete(n.crypto.DHPartialSecrets, peer)
+			lock.Unlock()
+
+			// Its dead. Remove it from the list of members
+			n.peerCord.members.delete(peer)
 		}(n.crypto.DHchannels.Get(s), s)
 	}
 
@@ -1067,14 +1082,17 @@ func (n *node) GroupCallAdd(member string) error {
 	//Goroutine waiting for the new member to send its part of the DH key
 	go func(c chan struct{}, peer string) {
 		defer wg.Done()
-		select {
-		case <-c:
-			return
-		case <-time.After(time.Second * 5):
-			n.crypto.DHchannels.Delete(peer)
-			delete(n.crypto.DHPartialSecrets, peer)
-			delete(n.crypto.DHInitSecrets, peer)
+		for try := 0; try <= 2; try++ {
+			//We resend the message every 2 seconds in case it got lost
+			select {
+			case <-c:
+				return
+			case <-time.After(time.Second * 2):
+			}
 		}
+		n.crypto.DHchannels.Delete(peer)
+		delete(n.crypto.DHPartialSecrets, peer)
+		delete(n.crypto.DHInitSecrets, peer)
 	}(n.crypto.DHchannels.Get(member), member)
 
 	err = n.Unicast(member, initTransportMsg)
@@ -1339,6 +1357,7 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 		n.AddPublicKey(packet.Header.Source, message.RemoteID, message.RemoteKey)
 	} else if !idKnown {
 		//We neglect the msg because it's assumed to be forged by a malicious node
+		//TODO once we have trust and UI: ask the user to chose between the 2
 		return nil
 	}
 

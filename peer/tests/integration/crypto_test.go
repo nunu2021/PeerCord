@@ -95,7 +95,7 @@ func TestCrypto_Int_DH_Key_Exchange(t *testing.T) {
 	}
 
 	//Wait a bit for every peer to know about every other peer
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 7)
 
 	members := make([]int, 0)
 	//Initial group
