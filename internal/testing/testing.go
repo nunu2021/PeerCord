@@ -201,7 +201,7 @@ func newConfigTemplate() configTemplate {
 		EigenAValue:             0.5,
 		EigenCalcIterations:     50,
 		EigenEpsilon:            0.002,
-		EigenPulseWait:          int64(time.Second * 60),
+		EigenPulseWait:          30,
 		EigenCallTrustThreshold: 0.5,
 		IsBootstrap:             false,
 		BootstrapReplace:        0.75,

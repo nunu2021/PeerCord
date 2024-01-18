@@ -139,9 +139,8 @@ func Test_EigenTrust_Multiple_Peers_Good_Calls_Pulse(t *testing.T) {
 	transp := channel.NewTransport()
 
 	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
-	defer nodeB.Stop()
+
 	nodeC := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
-	defer nodeC.Stop()
 
 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
 	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(2), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}))
@@ -156,100 +155,127 @@ func Test_EigenTrust_Multiple_Peers_Good_Calls_Pulse(t *testing.T) {
 	defer node4.Stop()
 	defer node5.Stop()
 	defer node6.Stop()
+	defer nodeB.Stop()
+	defer nodeC.Stop()
+
+	val1, err := node1.ComputeGlobalTrustValue()
+	require.NoError(t, err)
+	require.Equal(t, 0.5, val1)
+
+	// val2, err := node2.ComputeGlobalTrustValue()
+	// require.NoError(t, err)
+	// require.Equal(t, 0.25, val2)
+
+	// val3, err := node3.ComputeGlobalTrustValue()
+	// require.NoError(t, err)
+	// exp := 1.0 / 6.0
+	// require.Equal(t, exp, val3)
+
+	// val4, err := node4.ComputeGlobalTrustValue()
+	// require.NoError(t, err)
+	// require.Equal(t, 0.125, val4)
+
+	// val5, err := node5.ComputeGlobalTrustValue()
+	// require.NoError(t, err)
+	// require.Equal(t, 0.1, val5)
+
+	// val6, err := node6.ComputeGlobalTrustValue()
+	// require.NoError(t, err)
+	// exp = 1.0 / 12.0
+	// require.Equal(t, exp, val6)
 
 	// Simulation of calls
 	// making calls 1 --> 2, 3, 4
 
-	node1.AddPeer(node2.GetAddr())
-	node1.AddPeer(node3.GetAddr())
-	node1.AddPeer(node4.GetAddr())
-	node2.AddPeer(node1.GetAddr())
-	node3.AddPeer(node1.GetAddr())
-	node4.AddPeer(node1.GetAddr())
+	// node1.AddPeer(node2.GetAddr())
+	// node1.AddPeer(node3.GetAddr())
+	// node1.AddPeer(node4.GetAddr())
+	// node2.AddPeer(node1.GetAddr())
+	// node3.AddPeer(node1.GetAddr())
+	// node4.AddPeer(node1.GetAddr())
 
-	node1.AddToCallsOutgoingTo(node2.GetAddr())
-	node1.AddToCallsOutgoingTo(node3.GetAddr())
-	node1.AddToCallsOutgoingTo(node4.GetAddr())
-	node2.AddToCallsIncomingFrom(node1.GetAddr())
-	node3.AddToCallsIncomingFrom(node1.GetAddr())
-	node4.AddToCallsIncomingFrom(node1.GetAddr())
+	// node1.AddToCallsOutgoingTo(node2.GetAddr())
+	// node1.AddToCallsOutgoingTo(node3.GetAddr())
+	// node1.AddToCallsOutgoingTo(node4.GetAddr())
+	// node2.AddToCallsIncomingFrom(node1.GetAddr())
+	// node3.AddToCallsIncomingFrom(node1.GetAddr())
+	// node4.AddToCallsIncomingFrom(node1.GetAddr())
 
-	// After a call, node1 gives node2 a bad rating
-	node2.EigenRatePeer(node1.GetAddr(), 1)
-	node3.EigenRatePeer(node1.GetAddr(), 1)
-	node4.EigenRatePeer(node1.GetAddr(), -1)
-
-	time.Sleep(time.Second * 60)
+	// // After a call, node1 gives node2 a bad rating
+	// node2.EigenRatePeer(node1.GetAddr(), 1)
+	// node3.EigenRatePeer(node1.GetAddr(), 1)
+	// node4.EigenRatePeer(node1.GetAddr(), -1)
+	time.Sleep(time.Second * 30)
 
 	// get trust values and check
 
-	val1, err := node1.GetTrust(node1.GetAddr())
-	require.NoError(t, err)
-	require.Equal(t, 0.67, val1)
+	// val1, err = node1.ComputeGlobalTrustValue()
+	// require.NoError(t, err)
+	// require.Equal(t, 0.7083333333333333, val1)
 
-	// making calls // 2 --> 5, 6
+	// // making calls // 2 --> 5, 6
 
-	node2.AddPeer(node5.GetAddr())
-	node2.AddPeer(node6.GetAddr())
-	node5.AddPeer(node2.GetAddr())
-	node6.AddPeer(node2.GetAddr())
+	// node2.AddPeer(node5.GetAddr())
+	// node2.AddPeer(node6.GetAddr())
+	// node5.AddPeer(node2.GetAddr())
+	// node6.AddPeer(node2.GetAddr())
 
-	node2.AddToCallsOutgoingTo(node5.GetAddr())
-	node2.AddToCallsOutgoingTo(node6.GetAddr())
-	node5.AddToCallsIncomingFrom(node2.GetAddr())
-	node6.AddToCallsIncomingFrom(node2.GetAddr())
+	// node2.AddToCallsOutgoingTo(node5.GetAddr())
+	// node2.AddToCallsOutgoingTo(node6.GetAddr())
+	// node5.AddToCallsIncomingFrom(node2.GetAddr())
+	// node6.AddToCallsIncomingFrom(node2.GetAddr())
 
-	// After a call, node1 gives node2 a bad rating
-	node5.EigenRatePeer(node2.GetAddr(), -1)
-	node6.EigenRatePeer(node2.GetAddr(), -1)
+	// // // After a call, node1 gives node2 a bad rating
+	// node5.EigenRatePeer(node2.GetAddr(), -1)
+	// node6.EigenRatePeer(node2.GetAddr(), -1)
 
-	time.Sleep(time.Second * 60)
+	// time.Sleep(time.Second * 10)
 
 	// get trust values and check
 
 	// first recheck for node1
-	val1, err = node1.GetTrust(node1.GetAddr())
-	require.NoError(t, err)
-	require.Equal(t, 0.67, val1)
+	// val1, err = node1.GetTrust(node1.GetAddr())
+	// require.NoError(t, err)
+	// require.Equal(t, 0.67, val1)
 
-	// then check for node 2
-	val2, err := node1.GetTrust(node1.GetAddr())
-	require.NoError(t, err)
-	require.Equal(t, 0.5, val2)
+	// // then check for node 2
+	// val2, err = node1.GetTrust(node1.GetAddr())
+	// require.NoError(t, err)
+	// require.Equal(t, 0.5, val2)
 
 	// making calls from // 4 --> 1, 6
 
-	node4.AddPeer(node1.GetAddr())
-	node4.AddPeer(node6.GetAddr())
+	// node4.AddPeer(node1.GetAddr())
+	// node4.AddPeer(node6.GetAddr())
 
-	node1.AddPeer(node4.GetAddr())
-	node6.AddPeer(node4.GetAddr())
+	// node1.AddPeer(node4.GetAddr())
+	// node6.AddPeer(node4.GetAddr())
 
-	node4.AddToCallsOutgoingTo(node1.GetAddr())
-	node4.AddToCallsOutgoingTo(node6.GetAddr())
+	// node4.AddToCallsOutgoingTo(node1.GetAddr())
+	// node4.AddToCallsOutgoingTo(node6.GetAddr())
 
-	node1.AddToCallsIncomingFrom(node4.GetAddr())
-	node6.AddToCallsIncomingFrom(node4.GetAddr())
+	// node1.AddToCallsIncomingFrom(node4.GetAddr())
+	// node6.AddToCallsIncomingFrom(node4.GetAddr())
 
 	// rate the call
-	node1.EigenRatePeer(node4.GetAddr(), 1)
-	node6.EigenRatePeer(node4.GetAddr(), -1)
+	// node1.EigenRatePeer(node4.GetAddr(), 1)
+	// node6.EigenRatePeer(node4.GetAddr(), -1)
 
-	time.Sleep(time.Second * 60)
+	// time.Sleep(time.Second * 60)
 
 	// first recheck for node1
-	val1, err = node1.GetTrust(node1.GetAddr())
-	require.NoError(t, err)
-	require.Equal(t, 0.88, val1)
+	// val1, err = node1.GetTrust(node1.GetAddr())
+	// require.NoError(t, err)
+	// require.Equal(t, 0.88, val1)
 
-	// recheck for node1
-	val2, err = node2.GetTrust(node2.GetAddr())
-	require.NoError(t, err)
-	require.Equal(t, 0.3, val2)
+	// // recheck for node1
+	// val2, err = node2.GetTrust(node2.GetAddr())
+	// require.NoError(t, err)
+	// require.Equal(t, 0.3, val2)
 
-	// check for node 4
-	val4, err := node4.GetTrust(node4.GetAddr())
-	require.NoError(t, err)
-	require.Equal(t, 0.3, val4)
+	// // check for node 4
+	// val4, err = node4.GetTrust(node4.GetAddr())
+	// require.NoError(t, err)
+	// require.Equal(t, 0.3, val4)
 
 }

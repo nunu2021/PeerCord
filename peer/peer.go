@@ -89,7 +89,7 @@ type Configuration struct {
 	EigenAValue float64
 
 	// How much time to wait before calculating next eigen trust value (in seconds)
-	// Default: 120
+	// Default: 30
 	EigenPulseWait int64
 
 	// threshold of delta to end eigen trust computation iterations

@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -187,6 +188,7 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 		// Check if we must exit the function
 		select {
 		case <-n.mustStop:
+			fmt.Println("not happenign in receive")
 			return
 		default:
 		}
@@ -196,12 +198,20 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 }
 
 // all peers will compute a new global trust value every 2 minutes
-func (n *node) InitiateEigenTrust() error {
+func (n *node) InitiateEigenTrust() {
+
 	for {
-		if time.Now().Unix()%n.conf.EigenPulseWait == 0 {
-			_, err := n.ComputeGlobalTrustValue()
-			if err != nil {
-				return err
+		select {
+		case <-n.mustStop:
+			fmt.Println("happenign in eigen")
+			return
+		default:
+			if time.Now().UnixMilli()%(n.conf.EigenPulseWait*1000) == 0 {
+				fmt.Println("happening right now!")
+				_, err := n.ComputeGlobalTrustValue()
+				if err != nil {
+					return
+				}
 			}
 		}
 
@@ -222,7 +232,11 @@ func loop(n *node) {
 	go n.receivePackets(receivedPackets)
 
 	// TOD: comment this back in for periodic eigentrust updates
-	// go n.InitiateEigenTrust()
+	if !n.conf.IsBootstrap {
+
+		go n.InitiateEigenTrust()
+		// fmt.Println("happening in ", n.GetAddress())
+	}
 
 	for {
 		// Things to do first to avoid blocking
@@ -294,6 +308,7 @@ func (n *node) Start() error {
 // Stop implements peer.Service
 func (n *node) Stop() error {
 	// Only stop the peer if it is running
+
 	if !n.isRunning {
 		n.logger.Error().Msg("can't stop peer: not running")
 		return NotRunningError{}

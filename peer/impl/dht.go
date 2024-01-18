@@ -378,8 +378,9 @@ func (n *node) GetTrustPerReality(node string, reality int) (float64, error) {
 	if err != nil {
 		return 0, xerrors.Errorf("error routing message %v in dht", msg)
 	}
-
+	fmt.Println("getting here")
 	t := <-chanTrust
+	fmt.Println("NOT coming here")
 
 	n.dht.Realities[reality].ResponseChans.Mu.Lock()
 
