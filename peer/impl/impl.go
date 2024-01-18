@@ -62,7 +62,14 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		multicast:         NewMulticast(),
 		peerCord:          newPeerCord(),
 		streaming:         NewStreaming(),
+		eigenTrust:        NewEigenTrust(conf.TotalPeers),
 	}
+
+	// if conf.IsBootstrap {
+	// 	n.bootstrap = NewBootstrap()
+	// } else {
+	// 	n.dht = NewDHT(conf.BootstrapAddrs)
+	// }
 
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
@@ -95,6 +102,18 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.PKResponseMessage{}, n.receivePKResponse)
 	conf.MessageRegistry.RegisterMessageCallback(types.DialMsg{}, n.ReceiveDial)
 	conf.MessageRegistry.RegisterMessageCallback(types.CallDataMessage{}, n.receiveCallDataMsg)
+	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustRequestMessage{}, n.ExecEigenTrustRequestMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustResponseMessage{}, n.ExecEigenTrustResponseMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.BootstrapRequestMessage{}, n.ExecBootstrapRequestMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.BootstrapResponseMessage{}, n.ExecBootstrapResponseMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.UpdateBootstrapMessage{}, n.ExecUpdateBootstrapMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTJoinRequestMessage{}, n.ExecDHTJoinRequestMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTJoinAcceptMessage{}, n.ExecDHTJoinAcceptMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTUpdateNeighborsMessage{}, n.ExecDHTUpdateNeighborsMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTSetTrustMessage{}, n.ExecDHTSetTrustMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTQueryMessage{}, n.ExecDHTQueryMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTQueryResponseMessage{}, n.ExecDHTQueryResponseMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.DHTNeighborsStatusMessage{}, n.ExecDHTNeighborsStatusMessage)
 
 	return n
 }
@@ -160,6 +179,15 @@ type node struct {
 
 	// Implements the PeerCord interface
 	peerCord PeerCord
+
+	// EigenTrust Trust system fora: aValue,
+	eigenTrust EigenTrust
+
+	// Information for DHT
+	dht DHT
+
+	// Information for bootstrap node
+	bootstrap BootstrapNode
 }
 
 // GetAddress returns the address of the node
@@ -194,6 +222,25 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 	}
 }
 
+// all peers will compute a new global trust value every 2 minutes
+func (n *node) InitiateEigenTrust() {
+
+	for {
+		select {
+		case <-n.mustStop:
+			return
+		default:
+			if time.Now().UnixMilli()%(n.conf.EigenPulseWait*1000) == 0 {
+				_, err := n.ComputeGlobalTrustValue()
+				if err != nil {
+					return
+				}
+			}
+		}
+
+	}
+}
+
 func loop(n *node) {
 	timeoutLoop := time.Second
 	if n.conf.HeartbeatInterval != 0 {
@@ -206,6 +253,12 @@ func loop(n *node) {
 
 	// Receive packets (this goroutine is not stopped at the end)
 	go n.receivePackets(receivedPackets)
+
+	// TOD: comment this back in for periodic eigentrust updates
+	if !n.conf.IsBootstrap {
+
+		go n.InitiateEigenTrust()
+	}
 
 	for {
 		// Things to do first to avoid blocking
@@ -265,13 +318,28 @@ func (n *node) Start() error {
 		return xerrors.Errorf("error when generating key pair: %v", err)
 	}
 	n.isRunning = true
+	// if !n.conf.IsBootstrap {
+	// 	err := n.SetTrust(n.GetAddress(), n.eigenTrust.p)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+
 	go loop(n)
+	// if !n.conf.IsBootstrap {
+	// 	n.AddPeer(n.conf.BootstrapAddrs...)
+	// 	err := n.JoinDHT()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 	return nil
 }
 
 // Stop implements peer.Service
 func (n *node) Stop() error {
 	// Only stop the peer if it is running
+
 	if !n.isRunning {
 		n.logger.Error().Msg("can't stop peer: not running")
 		return NotRunningError{}
@@ -282,6 +350,7 @@ func (n *node) Stop() error {
 		return err
 	}*/
 
+	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
 	n.isRunning = false

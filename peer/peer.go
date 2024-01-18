@@ -1,10 +1,11 @@
 package peer
 
 import (
+	"time"
+
 	"go.dedis.ch/cs438/registry"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
-	"time"
 )
 
 // Peer defines the interface of a peer in the Peerster system. It embeds all
@@ -15,6 +16,7 @@ type Peer interface {
 	Multicast
 	DataSharing
 	Streaming
+	CAN
 }
 
 // Factory is the type of function we are using to create new instances of
@@ -102,6 +104,42 @@ type Configuration struct {
 	// If no message is sent on the group during this interval, the group is
 	// deleted.
 	MulticastInactivityTimeout time.Duration
+	// Determines how much of a priori turst we want to use in the EigenTrust System.
+	// Should be less than 1.
+	// A lower value means less trusting on a priori value (will value the peers opinion more than the a priori trust)
+	// Default: 0.5
+	EigenAValue float64
+
+	// How much time to wait before calculating next eigen trust value (in seconds)
+	// Default: 30
+	EigenPulseWait int64
+
+	// threshold of delta to end eigen trust computation iterations
+	// Default: 0.00002
+	EigenEpsilon float64
+
+	// Max number of Iterations to play out before calculation stops
+	// this is necasssary in the case the system gets conjusted.
+	// Bigger Number == More secutity, but possibly slower and prone to conjestion
+	// Default: 50
+	EigenCalcIterations uint
+
+	// The threshhold at which the trust value should be at to make the call
+	// Default: 0.5
+	EigenCallTrustThreshold float64
+	IsBootstrap             bool
+
+	BootstrapReplace float64
+
+	BootstrapNodeLimit int
+
+	BootstrapTimeout time.Duration
+
+	BootstrapAddrs []string
+
+	SendNeighborsInterval time.Duration
+
+	NodeDiscardInterval time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

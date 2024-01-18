@@ -138,7 +138,23 @@ type Messaging interface {
 	// potentially lost a neighbor).
 	//
 	// - implemented in HW0
+
+	// Eigentrust
 	SetRoutingEntry(origin, relayAddr string)
+
+	ComputeGlobalTrustValue() (float64, error)
+
+	EigenRatePeer(peerIP string, ratingPerCall int)
+
+	// EigenTrust Testing Function Endpoints
+
+	AddToCallsOutgoingTo(peer string)
+
+	AddToCallsIncomingFrom(peer string)
+
+	// GetTrustValue used internally and externally to get the
+	// Global Trust Value of the peer
+	GetTrustValue() float64
 }
 
 // RoutingTable defines a simple next-hop routing table. The key is the origin

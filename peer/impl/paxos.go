@@ -3,12 +3,13 @@ package impl
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"go.dedis.ch/cs438/storage"
-	"go.dedis.ch/cs438/transport"
-	"go.dedis.ch/cs438/types"
 	"strconv"
 	"sync"
 	"time"
+
+	"go.dedis.ch/cs438/storage"
+	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 )
 
 type Paxos struct {
