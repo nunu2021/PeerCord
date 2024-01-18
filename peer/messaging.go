@@ -62,6 +62,10 @@ type Messaging interface {
 	AddToCallsOutgoingTo(peer string)
 
 	AddToCallsIncomingFrom(peer string)
+
+	// GetTrustValue used internally and externally to get the
+	// Global Trust Value of the peer
+	GetTrustValue() float64
 }
 
 // RoutingTable defines a simple next-hop routing table. The key is the origin

@@ -93,7 +93,7 @@ type Configuration struct {
 	EigenPulseWait int64
 
 	// threshold of delta to end eigen trust computation iterations
-	// Default: 0.002
+	// Default: 0.00002
 	EigenEpsilon float64
 
 	// Max number of Iterations to play out before calculation stops

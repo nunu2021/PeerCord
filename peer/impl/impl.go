@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -60,11 +59,11 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		eigenTrust:        NewEigenTrust(conf.TotalPeers),
 	}
 
-	if conf.IsBootstrap {
-		n.bootstrap = NewBootstrap()
-	} else {
-		n.dht = NewDHT(conf.BootstrapAddrs)
-	}
+	// if conf.IsBootstrap {
+	// 	n.bootstrap = NewBootstrap()
+	// } else {
+	// 	n.dht = NewDHT(conf.BootstrapAddrs)
+	// }
 
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
@@ -188,7 +187,6 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 		// Check if we must exit the function
 		select {
 		case <-n.mustStop:
-			fmt.Println("not happenign in receive")
 			return
 		default:
 		}
@@ -203,11 +201,9 @@ func (n *node) InitiateEigenTrust() {
 	for {
 		select {
 		case <-n.mustStop:
-			fmt.Println("happenign in eigen")
 			return
 		default:
 			if time.Now().UnixMilli()%(n.conf.EigenPulseWait*1000) == 0 {
-				fmt.Println("happening right now!")
 				_, err := n.ComputeGlobalTrustValue()
 				if err != nil {
 					return
@@ -235,7 +231,6 @@ func loop(n *node) {
 	if !n.conf.IsBootstrap {
 
 		go n.InitiateEigenTrust()
-		// fmt.Println("happening in ", n.GetAddress())
 	}
 
 	for {
@@ -287,21 +282,21 @@ func (n *node) Start() error {
 	}
 
 	n.isRunning = true
-	if !n.conf.IsBootstrap {
-		err := n.SetTrust(n.GetAddress(), n.eigenTrust.p)
-		if err != nil {
-			return err
-		}
-	}
+	// if !n.conf.IsBootstrap {
+	// 	err := n.SetTrust(n.GetAddress(), n.eigenTrust.p)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	go loop(n)
-	if !n.conf.IsBootstrap {
-		n.AddPeer(n.conf.BootstrapAddrs...)
-		err := n.JoinDHT()
-		if err != nil {
-			return err
-		}
-	}
+	// if !n.conf.IsBootstrap {
+	// 	n.AddPeer(n.conf.BootstrapAddrs...)
+	// 	err := n.JoinDHT()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 	return nil
 }
 
