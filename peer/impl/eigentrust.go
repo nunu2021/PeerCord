@@ -1,15 +1,5 @@
 package impl
 
-// TOD DONE: remove syntax errors from eigen code
-// TOD DONE: figure out a way to have a map of maps
-// TOD DONE: Implement exec message functions
-// TOD DONE: implement waiting for all trust values
-// TOD DONE: implement the rest of the algorithm
-// TOD DONE: Check if I implemented the t1c1i calculations correctly
-// TOD DONE: figure out a way to get total number of peers in a system
-// TOD DONE: Fix Linting Errors
-// TOD DONE: Add tests
-
 import (
 	"math"
 	"sync"
