@@ -117,6 +117,9 @@ type Messaging interface {
 	EndCall()
 	CallLineState() types.DialState
 
+	// Set GUI for audiovisual messaging
+	SetGui(gui *types.PeercordGUI)
+
 	// AddPeer adds new known addresses to the node. It must update the
 	// routing table of the node. Adding ourself should have no effect.
 	//

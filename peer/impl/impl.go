@@ -1,12 +1,13 @@
 package impl
 
 import (
-	"golang.org/x/xerrors"
 	"math"
 	"math/rand"
 	"os"
 	"sync"
 	"time"
+
+	"golang.org/x/xerrors"
 
 	"github.com/rs/zerolog"
 	"go.dedis.ch/cs438/peer"
@@ -61,6 +62,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		multicast:         NewMulticast(),
 		peerCord:          newPeerCord(),
 		streaming:         NewStreaming(),
+		gui:               nil,
 	}
 
 	// Register the different kinds of messages
@@ -156,11 +158,22 @@ type node struct {
 
 	// Implements the PeerCord interface
 	peerCord PeerCord
+
+	// Interface for the node to request input from the user
+	gui *types.PeercordGUI
 }
 
 // GetAddress returns the address of the node
 func (n *node) GetAddress() string {
 	return n.conf.Socket.GetAddress()
+}
+
+func (n *node) SetGui(gui *types.PeercordGUI) {
+	n.gui = gui
+}
+
+func (n *node) guiReady() bool {
+	return n.gui != nil
 }
 
 func (n *node) GetDataBlobStore() storage.Store {
@@ -254,10 +267,10 @@ func (n *node) Start() error {
 	// Initialize streaming components on startup to avoid
 	// opening & closing the webcam repeatedly. Camtron does not support
 	// opening & closing repeatedly.
-	if err := n.initializeStreaming(); err != nil {
-		n.logger.Error().Err(err).Msg("failed to initialize streaming")
-		return err
-	}
+	// if err := n.initializeStreaming(); err != nil {
+	// 	n.logger.Error().Err(err).Msg("failed to initialize streaming")
+	// 	return err
+	// }
 
 	err := n.GenerateKeyPair()
 	if err != nil {
@@ -276,10 +289,10 @@ func (n *node) Stop() error {
 		return NotRunningError{}
 	}
 
-	if err := n.destroyStreaming(); err != nil {
-		n.logger.Error().Err(err).Msg("failed to stop streaming")
-		return err
-	}
+	// if err := n.destroyStreaming(); err != nil {
+	// 	n.logger.Error().Err(err).Msg("failed to stop streaming")
+	// 	return err
+	// }
 
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}

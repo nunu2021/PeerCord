@@ -1,5 +1,29 @@
 package types
 
+import "time"
+
+/** GUI **/
+
+type PeercordGUI interface {
+
+	// Creates and shows the gui. This is a blocking call
+	Show() error
+
+	// Blocking call to ask the user if they would like to pick up a dial
+	PromptDial(peer string, trust float64, dialTimeout time.Duration) bool
+
+	// Blocking call to prompt user for boolen choice between A and B.
+	//
+	// Returns
+	//   true -> A
+	//   false -> B
+	PromptBinaryChoice(a, b string) bool
+
+	// Blocking call to prompt user to rate the quality of a call with the prompt string "prompt"
+	// Returns an integer [1, 5]
+	PromptRating(prompt string) int
+}
+
 /** Call Dialing **/
 type DialState int
 
