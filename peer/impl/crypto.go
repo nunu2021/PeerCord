@@ -1363,7 +1363,7 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 		//We neglect the msg because it's assumed to be forged by a malicious node
 		if n.guiReady() {
 			storedID, _ := n.GetPeerKey(packet.Header.Source)
-			choice := n.gui.PromptBinaryChoice(storedID.Str, message.RemoteID)
+			choice := n.gui.PromptBinaryChoice(packet.Header.Source+" = "+storedID.Str, packet.Header.Source+" = "+message.RemoteID)
 			if !choice {
 				n.AddPublicKey(packet.Header.Source, message.RemoteID, message.RemoteKey)
 			}

@@ -1,13 +1,18 @@
 package impl
 
 import (
+	"time"
+
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
-	"time"
 )
 
 // Unicast implements peer.Messaging
 func (n *node) Unicast(dest string, msg transport.Message) error {
+	encryptedMsg, err := n.EncryptOneToOneMsg(&msg, dest)
+	if err == nil {
+		msg = *encryptedMsg
+	}
 	header := transport.NewHeader(n.GetAddress(), n.GetAddress(), dest, 0)
 	pkt := transport.Packet{Header: &header, Msg: &msg}
 
