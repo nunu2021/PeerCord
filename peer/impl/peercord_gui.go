@@ -71,7 +71,7 @@ func containerRoutingSetup(node peer.Peer) *fyne.Container {
 	)
 }
 
-func (gui *PeercordGUI) Show(addr string) {
+func (gui *PeercordGUI) Show(addr, pubID string) {
 	gui.peer.SetGui(gui)
 
 	gui.app = app.New()
@@ -81,6 +81,12 @@ func (gui *PeercordGUI) Show(addr string) {
 	myIp := container.NewHBox(
 		widget.NewLabel("My IP:"),
 		widget.NewLabel(addr),
+	)
+
+	// My pubID Indicater
+	myID := container.NewHBox(
+		widget.NewLabel("My ID:"),
+		widget.NewLabel(pubID),
 	)
 
 	// Call Status
@@ -152,6 +158,7 @@ func (gui *PeercordGUI) Show(addr string) {
 		container.NewVBox(
 			containerRoutingSetup(gui.peer),
 			myIp,
+			myID,
 			callStatus,
 			callId,
 			peerAddressInput,
