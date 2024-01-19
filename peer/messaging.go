@@ -112,13 +112,16 @@ type Messaging interface {
 	// End the group call
 	GroupCallEnd()
 
-	// Get a list of members in the group call
+	// Get a map of members in the group call
 	GetGroupCallMembers() map[string]struct{}
 
 	// Peer Dialing Commands
 	DialPeer(peer string) (string, error)
 	EndCall()
 	CallLineState() types.DialState
+
+	// Set GUI for audiovisual messaging
+	SetGui(gui *types.PeercordGUI)
 
 	// AddPeer adds new known addresses to the node. It must update the
 	// routing table of the node. Adding ourself should have no effect.

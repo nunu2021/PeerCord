@@ -27,3 +27,8 @@ peer/impl/graph.pdf
 gui/node
 peer/tests/integration/node*
 gui/gui
+
+
+# Camtron-specific stuff
+camtron.log
+camtron-*
