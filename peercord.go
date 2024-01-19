@@ -25,5 +25,7 @@ func main() {
 	node := z.NewTestNode(t, impl.NewPeer, udp.NewUDP(), "127.0.0.1:0")
 	gui := impl.NewPeercordGUI(&node)
 
+	fmt.Println(fmt.Sprintf("Opening node on socket: %v", node.GetAddr()))
+
 	gui.Show(node.GetAddr())
 }

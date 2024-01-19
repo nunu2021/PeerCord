@@ -72,6 +72,29 @@ func (m DialMsg) HTML() string {
 }
 
 // -----------------------------------------------------------------------------
+// DialResponseMsg
+
+// NewEmpty implements types.Message.
+func (m DialResponseMsg) NewEmpty() Message {
+	return &DialResponseMsg{}
+}
+
+// Name implements types.Message.
+func (m DialResponseMsg) Name() string {
+	return "DialResponseMsg"
+}
+
+// String implements types.Message.
+func (m DialResponseMsg) String() string {
+	return fmt.Sprintf("{DialResponseMsg %v - %v - %v}", m.CallId, m.PubId, m.Accepted)
+}
+
+// HTML implements types.Message.
+func (m DialResponseMsg) HTML() string {
+	return m.String()
+}
+
+// -----------------------------------------------------------------------------
 // GroupCallVotePkt
 
 // NewEmpty implements types.Message.

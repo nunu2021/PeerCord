@@ -29,4 +29,5 @@ type O2OEncryptedPkt struct {
 var EncryptedMsgTypes = map[string]struct{}{
 	"GroupCallVotePkt": {},
 	"DialMsg":          {},
+	"DialResponseMsg":  {},
 }

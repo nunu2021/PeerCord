@@ -283,6 +283,10 @@ func (n *node) SetPublicID(id string) {
 	n.crypto.PublicID = id
 }
 
+func (n *node) GetPubId() string {
+	return n.crypto.PublicID
+}
+
 func (n *node) GetPK() rsa.PublicKey {
 	return n.crypto.KeyPair.PublicKey
 }
@@ -1358,7 +1362,7 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	} else if !idKnown {
 		//We neglect the msg because it's assumed to be forged by a malicious node
 		//TODO once we have trust and UI: ask the user to chose between the 2
-		return nil
+		return xerrors.Errorf("received unexpected key on the O2O message")
 	}
 
 	//We verify the message's signature
@@ -1429,8 +1433,7 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 	header := packet.Header.Copy()
 	pkt := transport.Packet{Header: &header, Msg: &transport.Message{Payload: payload, Type: message.Type}}
 
-	n.processPacket(pkt)
-	return nil
+	return n.cryptoProcessDirect(pkt)
 }
 
 func (n *node) ExecDHEncryptedPkt(msg types.Message, packet transport.Packet) error {
@@ -1449,10 +1452,17 @@ func (n *node) ExecDHEncryptedPkt(msg types.Message, packet transport.Packet) er
 	pkt := transport.Packet{Header: &header, Msg: &decryptedMsg}
 
 	// Process the message directly
-	err = n.conf.MessageRegistry.ProcessPacket(pkt)
+	return n.cryptoProcessDirect(pkt)
+}
+
+func (n *node) cryptoProcessDirect(pkt transport.Packet) error {
+	msgType := pkt.Msg.Type
+	n.logger.Warn().Msgf("Received encrypted msg of type %v", msgType)
+
+	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
 		n.logger.Warn().Err(err).Msg("failed to process packet")
 	}
 
-	return nil
+	return err
 }

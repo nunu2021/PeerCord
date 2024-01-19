@@ -66,6 +66,9 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		gui:               nil,
 	}
 
+	// Set a random initialized public ID
+	n.SetPublicID(RandomPubId())
+
 	// if conf.IsBootstrap {
 	// 	n.bootstrap = NewBootstrap()
 	// } else {
@@ -102,6 +105,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.PKRequestMessage{}, n.receivePKRequest)
 	conf.MessageRegistry.RegisterMessageCallback(types.PKResponseMessage{}, n.receivePKResponse)
 	conf.MessageRegistry.RegisterMessageCallback(types.DialMsg{}, n.ReceiveDial)
+	conf.MessageRegistry.RegisterMessageCallback(types.DialResponseMsg{}, n.ReceiveDialResponse)
 	conf.MessageRegistry.RegisterMessageCallback(types.CallDataMessage{}, n.receiveCallDataMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustRequestMessage{}, n.ExecEigenTrustRequestMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustResponseMessage{}, n.ExecEigenTrustResponseMessage)
@@ -190,7 +194,7 @@ type node struct {
 	// Information for bootstrap node
 	bootstrap BootstrapNode
 	// Interface for the node to request input from the user
-	gui *types.PeercordGUI
+	gui types.PeercordGUI
 }
 
 // GetAddress returns the address of the node
@@ -198,7 +202,7 @@ func (n *node) GetAddress() string {
 	return n.conf.Socket.GetAddress()
 }
 
-func (n *node) SetGui(gui *types.PeercordGUI) {
+func (n *node) SetGui(gui types.PeercordGUI) {
 	n.gui = gui
 }
 
@@ -301,6 +305,7 @@ func loop(n *node) {
 			if pkt.Header.Destination == n.GetAddress() {
 				n.processPacket(pkt)
 			} else if pkt.Header.TTL > 0 { // We must transfer the packet
+				n.logger.Warn().Msg("Relayed")
 				n.transferPacket(pkt)
 			} else {
 				n.logger.Info().Msg("dropped packet with TTL=0")
@@ -406,6 +411,7 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 // Called when the peer has received a new packet.
 func (n *node) processPacket(pkt transport.Packet) {
 	msgType := pkt.Msg.Type
+	n.logger.Warn().Msgf("Received msg of type %v", msgType)
 	if _, requiresEncryption := types.EncryptedMsgTypes[msgType]; requiresEncryption {
 		// TODO: Run a test to check this works
 		n.logger.Warn().Msgf("Received unencrypted msg of type %v. Ignoring", msgType)

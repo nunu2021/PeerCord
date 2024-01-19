@@ -7,7 +7,7 @@ import "time"
 type PeercordGUI interface {
 
 	// Creates and shows the gui. This is a blocking call
-	Show() error
+	Show(addr string)
 
 	// Blocking call to ask the user if they would like to pick up a dial
 	PromptDial(peer string, trust float64, dialTimeout time.Duration) bool
@@ -51,6 +51,12 @@ type DialMsg struct {
 	Caller  string
 	PubId   string
 	Members []string
+}
+
+type DialResponseMsg struct {
+	CallId   string
+	PubId    string
+	Accepted bool
 }
 
 /** Voting **/

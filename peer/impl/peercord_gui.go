@@ -72,7 +72,7 @@ func containerRoutingSetup(node peer.Peer) *fyne.Container {
 }
 
 func (gui *PeercordGUI) Show(addr string) {
-	gui.peer.SetGui(&gui.PeercordGUI)
+	gui.peer.SetGui(gui)
 
 	gui.app = app.New()
 	gui.mainWindow = gui.app.NewWindow("Peercord UI")
@@ -107,7 +107,7 @@ func (gui *PeercordGUI) Show(addr string) {
 
 	// Dial a Peer
 	dialButton := widget.NewButton("Dial Peer", func() {
-		callId := handleDial(gui.peer, gui.typedPeer)
+		callId := handleDial(gui.peer, gui.typedPeer, gui.mainWindow.Canvas())
 		callIdLabel.SetText(callId)
 	})
 
@@ -199,10 +199,10 @@ func (gui *PeercordGUI) Show(addr string) {
 	// }()
 
 	// TEST: Run and print prompt
-	go func() {
-		time.Sleep(time.Second * 2)
-		fmt.Println(gui.PromptDial("127.0.0.1", 3674.123, 8*time.Second))
-	}()
+	// go func() {
+	// 	time.Sleep(time.Second * 2)
+	// 	fmt.Println(gui.PromptDial("127.0.0.1", 3674.123, 8*time.Second))
+	// }()
 
 	gui.mainWindow.SetContent(content)
 	gui.mainWindow.Resize(fyne.NewSize(500, 600))
@@ -251,12 +251,36 @@ func handleRoutingSetup(node peer.Peer, peer, relay string) {
 }
 
 // handleDial dials the peer at the specified address, then returns the call id
-func handleDial(node peer.Peer, address string) string {
+func handleDial(node peer.Peer, address string, canvas fyne.Canvas) string {
 	callId, err := node.DialPeer(address)
 	if err != nil {
 		log.Err(err).Msgf("failed to dial peer %s", address)
 		return ""
 	}
+
+	var popUp *widget.PopUp
+
+	popUp = widget.NewModalPopUp(
+		container.NewVBox(
+			widget.NewLabel(fmt.Sprintf("Dialing %v...", address)),
+			widget.NewButton("Cancel", func() {
+				node.EndCall()
+				popUp.Hide()
+			}),
+		),
+		canvas,
+	)
+
+	go func() {
+		for range time.Tick(time.Millisecond * 100) {
+			if node.CallLineState() != types.Dialing {
+				popUp.Hide()
+			}
+		}
+	}()
+
+	popUp.Show()
+
 	return callId
 }
 

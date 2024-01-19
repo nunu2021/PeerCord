@@ -30,9 +30,6 @@ func newResponseChannel() chan bool {
 
 type PeerCord struct {
 
-	// Public Identity
-	PubId string
-
 	// List of members in our call
 	members safeMap[string, struct{}]
 
@@ -47,13 +44,8 @@ func RandomPubId() string {
 	return fmt.Sprintf("+41%010d", rand.Int()%int(10e9))
 }
 
-func (n *node) GetPubId() string {
-	return n.peerCord.PubId
-}
-
 func newPeerCord() PeerCord {
 	return PeerCord{
-		PubId:   RandomPubId(),
 		members: newSafeMap[string, struct{}](),
 		votes:   newSafeMap[string, VoteData](),
 		currentDial: DialingData{
@@ -73,7 +65,7 @@ func (n *node) RequestPK(peer string) error {
 
 	requestMessage := types.PKRequestMessage{
 		PeerId:      n.GetAddress(),
-		PubId:       n.GetPubId(),
+		PubId:       n.crypto.PublicID,
 		PubKeyBytes: publicKeyBytes,
 	}
 
@@ -103,7 +95,7 @@ func (n *node) receivePKRequest(msg types.Message, pkt transport.Packet) error {
 
 	responseMessage := types.PKResponseMessage{
 		PeerId:      n.GetAddress(),
-		PubId:       n.GetPubId(),
+		PubId:       n.crypto.PublicID,
 		PubKeyBytes: publicKeyBytes,
 	}
 
@@ -136,10 +128,13 @@ func (n *node) DialPeer(peer string) (string, error) {
 
 	// Check that we have a PK for the peer. If not, request it
 	_, exists := n.GetPeerKey(peer)
+	if !exists {
+		n.RequestPK(peer)
+	}
 
 	memberList := make([]string, 0, n.peerCord.members.len())
 	i := 0
-	for member, _ := range n.peerCord.members.internalMap() {
+	for member := range n.peerCord.members.internalMap() {
 		memberList[i] = member
 		i++
 	}
@@ -148,7 +143,7 @@ func (n *node) DialPeer(peer string) (string, error) {
 	dialMsg := types.DialMsg{
 		CallId:  xid.New().String(),
 		Caller:  n.GetAddress(),
-		PubId:   n.peerCord.PubId,
+		PubId:   n.crypto.PublicID,
 		Members: memberList,
 	}
 
@@ -170,13 +165,15 @@ func (n *node) DialPeer(peer string) (string, error) {
 
 		if err != nil {
 			msgSent <- false
-			panic(err)
+			n.logger.Err(err)
+			return
 		}
 
 		err = n.Unicast(peer, *encryptedMsg)
 		if err != nil {
 			msgSent <- false
-			panic(err)
+			n.logger.Err(err)
+			return
 		}
 
 		msgSent <- true
@@ -188,7 +185,7 @@ func (n *node) DialPeer(peer string) (string, error) {
 		accepted := false
 
 		if <-msgSent {
-			to := time.After(2 * time.Second)
+			to := time.After(10 * time.Second)
 
 			select {
 			case accepted = <-n.peerCord.currentDial.ResponseChannel:
@@ -224,64 +221,91 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	n.peerCord.currentDial.Lock()
 	defer n.peerCord.currentDial.Unlock()
 
-	var initiated bool
-
-	switch n.peerCord.currentDial.dialState {
-	case types.Idle:
-		// We have been dialed. Respond accordingly
-		if !n.PromptDial(dialMsg.Caller) {
-			// We declined so we ignore
-			// TODO: We could send a decline somehow? types.HangUpMsg
-			return nil
-		}
-
-		response := types.DialMsg{
-			CallId: dialMsg.CallId,
-			Caller: n.GetAddress(),
-			PubId:  n.peerCord.PubId,
-		}
-
-		transpMsg, err := n.conf.MessageRegistry.MarshalMessage(response)
-		if err != nil {
-			return err
-		}
-
-		err = n.Unicast(packet.Header.Source, transpMsg)
-		if err != nil {
-			return err
-		}
-
-		// We sent an adequete response. We are in a call
-		initiated = false
-
-	case types.Dialing:
-		// We have received a response. Check if it is for our current dial
-		if dialMsg.CallId != n.peerCord.currentDial.ID || packet.Header.Source != n.peerCord.currentDial.Peer {
-			n.logger.Warn().Msgf("Received a call from %v while already dialing other node", dialMsg.Caller)
-			return nil
-		}
-
-		// We have received an adequete response. We are in a call
-		initiated = true
-
-	case types.InCall:
-		// We are already in a call, we can ignore the message.
+	if n.peerCord.currentDial.dialState != types.Idle {
+		// We are not idle and we will ignore the dial.
 		return nil
 	}
 
-	// If we made it here, we have entered a call. Process the dial msg data
-	n.peerCord.currentDial.ResponseChannel <- true
+	// We have been dialed, ask the user if they want to answer the call
+	// TODO: Get the acual trust
+	n.logger.Warn().Msg("Received dial, prompting")
+	n.logger.Warn().Msg("Received dial, prompting2")
+	accepted := n.gui.PromptDial(dialMsg.Caller, 0, 10*time.Second)
 
+	response := types.DialResponseMsg{
+		CallId:   dialMsg.CallId,
+		PubId:    n.crypto.PublicID,
+		Accepted: accepted,
+	}
+
+	transpMsg, err := n.conf.MessageRegistry.MarshalMessage(response)
+	if err != nil {
+		return err
+	}
+
+	// Check that we have a PK for the peer. If not, request it
+	_, exists := n.GetPeerKey(packet.Header.Source)
+	if !exists {
+		n.RequestPK(packet.Header.Source)
+		time.Sleep(time.Second) // Wait for PK response
+	}
+
+	encryptedMsg, err := n.EncryptOneToOneMsg(&transpMsg, packet.Header.Source)
+
+	err = n.Unicast(packet.Header.Source, *encryptedMsg)
+	if err != nil {
+		return err
+	}
+
+	if accepted == false {
+		n.peerCord.currentDial.dialState = types.Idle
+		return nil
+	}
+
+	// If we made it here, we have entered a call. Set up the call data
 	n.peerCord.currentDial.dialState = types.InCall
 	n.peerCord.members.set(dialMsg.Caller, struct{}{})
-	n.peerCord.currentDial.IsLeader = initiated // If we initiated the call, we are the leader
+	n.peerCord.currentDial.IsLeader = false
 
 	return nil
 }
 
-func (n *node) PromptDial(caller string) bool {
-	// TODO: Make decision on trust and GUI
-	return true
+func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) error {
+	dialResponseMsg, ok := msg.(*types.DialResponseMsg)
+	if !ok {
+		panic("not a dial message")
+	}
+
+	n.peerCord.currentDial.Lock()
+	defer n.peerCord.currentDial.Unlock()
+
+	if n.peerCord.currentDial.dialState == types.Idle || dialResponseMsg.CallId != n.peerCord.currentDial.ID {
+		return fmt.Errorf("received dial response for call not addressed to us")
+	}
+
+	expectedID, exists := n.GetPeerKey(packet.Header.Source)
+	if !exists {
+		return fmt.Errorf("unable to retrieve pub id for %v", packet.Header.Source)
+	}
+
+	if packet.Header.Source != n.peerCord.currentDial.Peer || dialResponseMsg.PubId != expectedID.Str {
+		return fmt.Errorf("dial reponse is from the wrong source")
+	}
+
+	// We received a valid response.
+	if dialResponseMsg.Accepted == false {
+		// We received a response but we got declined
+		n.peerCord.currentDial.ResponseChannel <- false
+		return nil
+	}
+
+	// If we made it here, we have entered a call. Set up the call data
+	n.peerCord.currentDial.dialState = types.InCall
+	n.peerCord.members.set(n.peerCord.currentDial.Peer, struct{}{})
+	n.peerCord.currentDial.IsLeader = false
+
+	n.peerCord.currentDial.ResponseChannel <- true
+	return nil
 }
 
 func (n *node) EndCall() {

@@ -24,7 +24,7 @@ func (n *node) sendHeartbeat() error {
 
 		heartbeatMsg := types.HeartbeatMessage{
 			PeerId:      n.GetAddress(),
-			PubId:       n.peerCord.PubId,
+			PubId:       n.crypto.PublicID,
 			PubKeyBytes: publicKeyBytes,
 		}
 
