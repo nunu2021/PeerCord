@@ -1361,8 +1361,14 @@ func (n *node) ExecO2OEncryptedPkt(msg types.Message, packet transport.Packet) e
 		n.AddPublicKey(packet.Header.Source, message.RemoteID, message.RemoteKey)
 	} else if !idKnown {
 		//We neglect the msg because it's assumed to be forged by a malicious node
-		//TODO once we have trust and UI: ask the user to chose between the 2
-		return xerrors.Errorf("received unexpected key on the O2O message")
+		if n.guiReady() {
+			storedID, _ := n.GetPeerKey(packet.Header.Source)
+			choice := n.gui.PromptBinaryChoice(storedID.Str, message.RemoteID)
+			if !choice {
+				n.AddPublicKey(packet.Header.Source, message.RemoteID, message.RemoteKey)
+			}
+		}
+		//If there is no GUI, we keep the first (should only happen in tests thus we don't care)
 	}
 
 	//We verify the message's signature
