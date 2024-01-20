@@ -326,6 +326,82 @@ func TestCrypto_DH_Key_Exchange(t *testing.T) {
 
 // A,B,C,D fully connected
 // A starts a key exchange with B,C,D
+// B is late
+func TestCrypto_DH_Key_Exchange_Late_Answering(t *testing.T) {
+	//Generate nodes A,B,C,D
+	transp := udp.NewUDP()
+
+	nodeA := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithAutostart(false))
+	defer nodeA.Stop()
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithAutostart(false))
+	defer nodeB.Stop()
+
+	nodeC := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithAutostart(false))
+	defer nodeC.Stop()
+
+	nodeD := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithAutostart(false))
+	defer nodeD.Stop()
+	nodeA.AddPeer(nodeB.GetAddr())
+	nodeA.AddPeer(nodeC.GetAddr())
+	nodeA.AddPeer(nodeD.GetAddr())
+	nodeB.AddPeer(nodeA.GetAddr())
+	nodeB.AddPeer(nodeC.GetAddr())
+	nodeB.AddPeer(nodeD.GetAddr())
+	nodeC.AddPeer(nodeA.GetAddr())
+	nodeC.AddPeer(nodeB.GetAddr())
+	nodeC.AddPeer(nodeD.GetAddr())
+	nodeD.AddPeer(nodeA.GetAddr())
+	nodeD.AddPeer(nodeB.GetAddr())
+	nodeD.AddPeer(nodeC.GetAddr())
+	nodeA.Start()
+	nodeC.Start()
+	nodeD.Start()
+
+	//Do a DH key exchange
+	receivers := make(map[string]struct{})
+	receivers[nodeB.GetAddr()] = struct{}{}
+	receivers[nodeC.GetAddr()] = struct{}{}
+	receivers[nodeD.GetAddr()] = struct{}{}
+	go func() {
+		time.Sleep(time.Second * 3)
+		nodeB.Start()
+	}()
+	err := nodeA.StartDHKeyExchange(receivers)
+	require.NoError(t, err)
+
+	//Manually compute the shared secret
+	curve := nodeA.GetDHCurve()
+	ab, err := nodeA.ECDH(nodeB.GetDHPK())
+	require.NoError(t, err)
+	abSK, err := curve.NewPrivateKey(ab)
+	require.NoError(t, err)
+	ac, err := nodeA.ECDH(nodeC.GetDHPK())
+	require.NoError(t, err)
+	acSK, err := curve.NewPrivateKey(ac)
+	require.NoError(t, err)
+	ad, err := nodeA.ECDH(nodeD.GetDHPK())
+	require.NoError(t, err)
+	adSK, err := curve.NewPrivateKey(ad)
+	require.NoError(t, err)
+	abac, err := abSK.ECDH(acSK.PublicKey())
+	require.NoError(t, err)
+	abacPK, err := curve.NewPublicKey(abac)
+	require.NoError(t, err)
+	abacad, err := adSK.ECDH(abacPK)
+	require.NoError(t, err)
+	abacadPK, err := curve.NewPublicKey(abacad)
+	require.NoError(t, err)
+
+	//They should all have the sharead secret
+	require.Equal(t, true, nodeA.DHSharedSecretEqual(abacadPK))
+	require.Equal(t, true, nodeB.DHSharedSecretEqual(abacadPK))
+	require.Equal(t, true, nodeC.DHSharedSecretEqual(abacadPK))
+	require.Equal(t, true, nodeD.DHSharedSecretEqual(abacadPK))
+}
+
+// A,B,C,D fully connected
+// A starts a key exchange with B,C,D
 // B refuses to answer
 func TestCrypto_DH_Key_Exchange_Ignoring_Peer(t *testing.T) {
 	//Generate nodes A,B,C,D

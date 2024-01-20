@@ -24,3 +24,8 @@ type MulticastMessage struct {
 	// The embedded message
 	Msg *transport.Message
 }
+
+type MulticastGroupExistence struct {
+	GroupSender string
+	GroupID     string
+}

@@ -2,6 +2,7 @@ package impl
 
 import (
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/rs/xid"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
+	"golang.org/x/xerrors"
 )
 
 type DialingData struct {
@@ -22,6 +24,8 @@ type DialingData struct {
 	ResponseChannel chan bool
 
 	leader string
+
+	multicastGroupID string
 }
 
 func newResponseChannel() chan bool {
@@ -414,6 +418,15 @@ func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) e
 		if err != nil {
 			return err
 		}
+		multicastGRP := n.NewMulticastGroup()
+		n.peerCord.currentDial.multicastGroupID = multicastGRP
+		groupExistenceMsg := types.MulticastGroupExistence{GroupSender: n.GetAddress(), GroupID: multicastGRP}
+		data, err := json.Marshal(&groupExistenceMsg)
+		if err != nil {
+			return xerrors.Errorf("error in DH Shared secret Multicast grp existence marshaling: %v", err)
+		}
+		transportExistenceMsg := transport.Message{Type: groupExistenceMsg.Name(), Payload: data}
+		n.NaiveMulticast(transportExistenceMsg, n.peerCord.members.copy())
 	}
 
 	return nil

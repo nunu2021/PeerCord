@@ -1337,6 +1337,16 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	n.peerCord.members.data = message.MembersList
 	n.peerCord.members.mutex.Unlock()
 
+	multicastGRP := n.NewMulticastGroup()
+	n.peerCord.currentDial.multicastGroupID = multicastGRP
+	groupExistenceMsg := types.MulticastGroupExistence{GroupSender: n.GetAddress(), GroupID: multicastGRP}
+	data, err = json.Marshal(&groupExistenceMsg)
+	if err != nil {
+		return xerrors.Errorf("error in DH Shared secret Multicast grp existence marshaling: %v", err)
+	}
+	transportExistenceMsg := transport.Message{Type: groupExistenceMsg.Name(), Payload: data}
+	n.NaiveMulticast(transportExistenceMsg, message.MembersList)
+
 	return nil
 }
 

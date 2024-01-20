@@ -92,6 +92,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(
 		types.LeaveMulticastGroupRequestMessage{}, n.receiveLeaveMulticastGroupMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.MulticastMessage{}, n.receiveMulticastMessage)
+	conf.MessageRegistry.RegisterMessageCallback(types.MulticastGroupExistence{}, n.ExecMulticastGroupExistence)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosPrepareMessage{}, n.receivePaxosPrepareMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosProposeMessage{}, n.receivePaxosProposeMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.PaxosAcceptMessage{}, n.receivePaxosAcceptMsg)

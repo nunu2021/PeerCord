@@ -70,3 +70,26 @@ func (msg MulticastMessage) String() string {
 func (msg MulticastMessage) HTML() string {
 	return msg.String()
 }
+
+// -----------------------------------------------------------------------------
+// MulticastGroupExistence
+
+// NewEmpty implements types.Message.
+func (msg MulticastGroupExistence) NewEmpty() Message {
+	return &MulticastGroupExistence{}
+}
+
+// Name implements types.Message.
+func (msg MulticastGroupExistence) Name() string {
+	return "multicast group existence message"
+}
+
+// String implements types.Message.
+func (msg MulticastGroupExistence) String() string {
+	return "multicast group existence message " + msg.GroupID + " " + msg.GroupSender
+}
+
+// HTML implements types.Message.
+func (msg MulticastGroupExistence) HTML() string {
+	return msg.String()
+}

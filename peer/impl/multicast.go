@@ -21,11 +21,13 @@
 package impl
 
 import (
+	"sync"
+	"time"
+
 	"github.com/rs/xid"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
-	"sync"
-	"time"
+	"golang.org/x/xerrors"
 )
 
 func (n *node) NaiveMulticast(msg transport.Message, recipients map[string]struct{}) error {
@@ -524,4 +526,12 @@ func (n *node) receiveMulticastMessage(originalMsg types.Message, pkt transport.
 	}
 
 	return n.multicastStep(*msg.Msg, msg.GroupID, false)
+}
+
+func (n *node) ExecMulticastGroupExistence(msg types.Message, packet transport.Packet) error {
+	message, ok := msg.(*types.MulticastGroupExistence)
+	if !ok {
+		return xerrors.Errorf("type mismatch: %T", msg)
+	}
+	return n.JoinMulticastGroup(message.GroupSender, message.GroupID)
 }
