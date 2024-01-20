@@ -1,40 +1,17 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/WY5V-NMj)
-# CS438
+# PeerCord
+Audio and Video call application with user privacy insurance.
 
-Homework material for the "Decentralized System Engineering" course.
+## Dependencies
 
-Provided by the DEDIS lab at EPFL.
+go version 1.21
+[portaudio][https://github.com/gordonklaus/portaudio/tree/master]
+[camtron][https://github.com/vee2xx/camtron]
 
-## Run the tests
+## Run the app
+One can run the app executing the command `go run peercord.go` when in the top level directory of the repository
 
-See commands in the Makefile. For example: `make` will build all tests (equivalent to `make all`).
+## Run tests
 
-## Quick setup
-
-Install go = 1.21.
-
-Run a node:
-
-```sh
-cd gui
-go run gui.go start
-```
-
-Then open the web GUI page `gui/web/index.html` and enter the peer's proxy
-address provided by the peer's log: `proxy server is ready to handle requests at
-'127.0.0.1:xxxx'`. You can run as many peers as wanted and connect them together
-using the "routing table" > "add peer" section in the WEB GUI.
-
-## Screenshots
-
-1. Connect to a peer's proxy
-
-<img src="docs/assets/connect.png" width="500px">
-
-2. Add a peer
-
-<img src="docs/assets/add_peer.png" width="500px">
-
-3. Exchange chat messages
-
-<img src="docs/assets/unicast_chat.png" width="500px">
+The unit tests can be run using `go test -timeout {timeout value} -v -race -run ^{test name}$ go.dedis.ch/cs438/peer/unit` (recommended timeout: 5m)
+The integration tests can be run using `go test -timeout {timeout value} -v -race -run ^{test name}$ go.dedis.ch/cs438/peer/integration` (recommended timeout: 20m)
+For the cryptography part, the Key exchange latency measurements can be run using `go test -timeout {timeout value} -v -race -run ^TestCrypto_Perf_DH_{Key_Exchange/Removal/Addition}$ go.dedis.ch/cs438/peer/impl` (recommended timeout: 60m)
