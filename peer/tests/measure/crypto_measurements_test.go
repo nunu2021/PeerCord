@@ -1,7 +1,8 @@
-package impl
+package measure
 
 import (
 	"crypto/rand"
+	"go.dedis.ch/cs438/peer/impl"
 	"math/big"
 	mrand "math/rand"
 	"testing"
@@ -34,7 +35,7 @@ func TestCrypto_Perf_DH_Key_Exchange(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < netSize; i++ {
-		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
@@ -108,7 +109,7 @@ func TestCrypto_Perf_DH_Addition(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < netSize; i++ {
-		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
@@ -178,7 +179,7 @@ func TestCrypto_Perf_DH_Removal(t *testing.T) {
 	peers := make([]*z.TestNode, 0)
 
 	for i := 0; i < netSize; i++ {
-		nodeA := z.NewTestNode(t, NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
+		nodeA := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithHeartbeat(time.Hour),
 			z.WithAntiEntropy(time.Second),
 			z.WithContinueMongering(0.5), z.WithAutostart(false))
 		defer nodeA.Stop()
