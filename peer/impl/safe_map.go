@@ -85,3 +85,17 @@ func (sm *safeMap[T, U]) internalMap() map[T]U {
 	sm.mutex.Lock()
 	return sm.data
 }
+
+// Returns a copy of the internal map.
+func (sm *safeMap[T, U]) copy() map[T]U {
+	sm.mutex.Lock()
+	defer sm.mutex.Unlock()
+
+	copyMap := make(map[T]U)
+
+	for k, v := range sm.data {
+		copyMap[k] = v
+	}
+
+	return copyMap
+}

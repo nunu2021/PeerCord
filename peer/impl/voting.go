@@ -1,6 +1,9 @@
 package impl
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/rs/xid"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -8,12 +11,16 @@ import (
 
 type VoteData struct {
 	complete  bool
-	decisions safeMap[string, bool]
+	VoteType  types.VoteType
+	Target    string
+	Decisions safeMap[string, bool]
 }
 
-func newVoteData() VoteData {
+func newVoteData(voteType types.VoteType, target string) VoteData {
 	return VoteData{
-		decisions: newSafeMap[string, bool](),
+		VoteType:  voteType,
+		Target:    target,
+		Decisions: newSafeMap[string, bool](),
 	}
 }
 
@@ -27,10 +34,13 @@ func (n *node) StartVote(voteType types.VoteType, voteDecision bool, voteMeta st
 		Type:     voteType,
 		Decision: voteDecision,
 		Meta:     voteMeta,
+		Proposer: n.GetAddress(),
 	}
 
 	// Store this vote as a "seen" vote
-	n.peerCord.votes.set(voteId, newVoteData())
+	n.peerCord.votes.set(voteId, newVoteData(voteType, voteMeta))
+	vd, _ := n.peerCord.votes.get(voteId)
+	vd.Decisions.set(n.GetAddress(), voteDecision)
 
 	return voteId, n.SendGroupVote(myVote)
 }
@@ -59,15 +69,15 @@ func (n *node) ProcessVote(vote types.GroupCallVotePkt) {
 			return
 		}
 	} else {
-		n.peerCord.votes.set(vote.ID, newVoteData())
+		n.peerCord.votes.set(vote.ID, newVoteData(vote.Type, vote.Meta))
 	}
 
 	// Store the peer's result in the results group. If we've received a message from them before, we ignore the new
 	voteData, _ := n.peerCord.votes.get(vote.ID)
-	_, peerVoted := voteData.decisions.get(vote.Voter)
+	_, peerVoted := voteData.Decisions.get(vote.Voter)
 	if !peerVoted {
 		// New vote
-		voteData.decisions.set(vote.Voter, vote.Decision)
+		voteData.Decisions.set(vote.Voter, vote.Decision)
 	} else if voted {
 		// If the peer had already voted and we have already voted, nothing changed. Return to optimize
 		return
@@ -76,7 +86,7 @@ func (n *node) ProcessVote(vote types.GroupCallVotePkt) {
 	// Check if we need to vote. If yes, do so
 	if !voted {
 		// Make a vote decision
-		myDecision := n.GroupVoteDecision(vote.Type, vote.Meta)
+		myDecision := n.GroupVoteDecision(vote.Type, vote.Proposer, vote.Meta)
 
 		myVote := types.GroupCallVotePkt{
 			Voter:    n.GetAddress(),
@@ -84,16 +94,20 @@ func (n *node) ProcessVote(vote types.GroupCallVotePkt) {
 			Type:     vote.Type,
 			Decision: myDecision,
 			Meta:     vote.Meta,
+			Proposer: vote.Proposer,
 		}
 
 		// If we failed to send the vote, ignore for now.
-		_ = n.SendGroupVote(myVote)
+		err := n.SendGroupVote(myVote)
+		if err != nil {
+			n.logger.Err(err).Msgf("Unable to cast vote")
+		}
 	}
 
 	// Check for a consensus
 	nAgreers := 0
 	{
-		votes := voteData.decisions.internalMap()
+		votes := voteData.Decisions.internalMap()
 
 		for _, decision := range votes {
 			if decision {
@@ -102,10 +116,10 @@ func (n *node) ProcessVote(vote types.GroupCallVotePkt) {
 			}
 		}
 
-		voteData.decisions.unlock()
+		voteData.Decisions.unlock()
 	}
 
-	if float32(nAgreers)/float32(n.peerCord.members.len()) > types.VoteTypes[vote.Type].Threshold {
+	if float32(nAgreers)/float32(n.peerCord.members.len()+1) > types.VoteTypes[vote.Type].Threshold {
 		// The vote has reached a consensus
 		voteData.complete = true
 		n.CompleteVoteAction(vote.Type, vote.Meta)
@@ -113,9 +127,13 @@ func (n *node) ProcessVote(vote types.GroupCallVotePkt) {
 
 }
 
-func (n *node) GroupVoteDecision(voteType types.VoteType, voteMeta string) bool {
+func (n *node) GroupVoteDecision(voteType types.VoteType, proposer, voteMeta string) bool {
 	// Make Decision
-	voteDecision := true // TODO: Logic for vote decision
+	if n.guiReady() == false {
+		return false
+	}
+
+	voteDecision := n.gui.PromptVote(fmt.Sprintf(types.VoteTypes[voteType].Prompt, proposer, voteMeta), time.Second*8)
 
 	return voteDecision
 }
@@ -130,9 +148,11 @@ func (n *node) SendGroupVote(myVote types.GroupCallVotePkt) error {
 	var encryptedMsg *transport.Message
 
 	// Encrypt
-	if n.peerCord.members.len() == 2 {
+	if n.peerCord.members.len() == 1 {
 		// We are in a 1 to 1 encryption method
-		encryptedMsg, err = n.EncryptOneToOneMsg(&marshaledMsg, n.peerCord.currentDial.Peer)
+		for k := range n.peerCord.members.copy() {
+			encryptedMsg, err = n.EncryptOneToOneMsg(&marshaledMsg, k)
+		}
 	} else {
 		encryptedMsg, err = n.EncryptDHMsg(&marshaledMsg)
 	}
@@ -141,35 +161,20 @@ func (n *node) SendGroupVote(myVote types.GroupCallVotePkt) error {
 		return err
 	}
 
-	// And broadcast TODO: Replace with multicast
-	return n.Broadcast(*encryptedMsg)
+	// TODO: Replace with a multicast group
+	return n.NaiveMulticast(*encryptedMsg, n.peerCord.members.copy())
 }
 
 func (n *node) CompleteVoteAction(voteType types.VoteType, voteMeta string) {
 	switch voteType {
 	case types.GroupAdd:
-		n.peerCord.currentDial.Lock()
-		defer n.peerCord.currentDial.Unlock()
-
-		n.peerCord.members.set(voteMeta, struct{}{})
-
 		// If we are the leader, we have to initiate key exchanges
-		if n.peerCord.currentDial.IsLeader {
-			if n.peerCord.members.len() == 2 {
-				// We are entering a group call. Initiate DH
-				members := n.peerCord.members.internalMap()
-				defer n.peerCord.members.unlock()
+		fmt.Println(fmt.Sprintf("%v", n.peerCord.currentDial.IsLeader))
 
-				err := n.StartDHKeyExchange(members)
-				if err != nil {
-					// TODO: What if the key exchange failed?
-				}
-			} else {
-				// We are already in a call, run the group call add
-				err := n.GroupCallAdd(voteMeta)
-				if err != nil {
-					// TODO: What if the key exchange failed?
-				}
+		if n.peerCord.currentDial.IsLeader {
+			err := n.DialInvitePeer(voteMeta)
+			if err != nil {
+				n.logger.Err(err)
 			}
 		}
 	case types.GroupKick:

@@ -119,6 +119,9 @@ type Messaging interface {
 	DialPeer(peer string) (string, error)
 	EndCall()
 	CallLineState() types.DialState
+	StartVote(voteType types.VoteType, voteDecision bool, voteMeta string) (string, error)
+	GetVoteData(voteId string) map[string]bool
+	GetVoteString(voteId string) string
 
 	// Set GUI for audiovisual messaging
 	SetGui(gui types.PeercordGUI)

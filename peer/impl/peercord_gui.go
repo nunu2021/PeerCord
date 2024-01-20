@@ -3,6 +3,7 @@ package impl
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -16,6 +17,13 @@ import (
 	"go.dedis.ch/cs438/types"
 )
 
+type GUIVoteData struct {
+	method string
+	target string
+	agree  int
+	reject int
+}
+
 type PeercordGUI struct {
 	types.PeercordGUI
 
@@ -27,6 +35,10 @@ type PeercordGUI struct {
 	memberList    []string
 	selectedIndex int
 	typedPeer     string
+
+	currentVote string
+
+	callIdLabel *widget.Label
 }
 
 func NewPeercordGUI(peer peer.Peer) PeercordGUI {
@@ -34,6 +46,7 @@ func NewPeercordGUI(peer peer.Peer) PeercordGUI {
 		peer: peer,
 
 		selectedIndex: -1,
+		currentVote:   "",
 	}
 }
 
@@ -71,6 +84,70 @@ func containerRoutingSetup(node peer.Peer) *fyne.Container {
 	)
 }
 
+func (gui *PeercordGUI) containerVoteData() *fyne.Container {
+
+	actionLabel := widget.NewLabel("")
+	totalLabel := widget.NewLabel("")
+	agreeLabel := widget.NewLabel("")
+	rejectLabel := widget.NewLabel("")
+
+	// Vote Data Updater
+	go func() {
+		for range time.Tick(time.Millisecond * 100) {
+			if gui.currentVote != "" {
+				votes := gui.peer.GetVoteData(gui.currentVote)
+				voteString := gui.peer.GetVoteString(gui.currentVote)
+
+				accept := 0
+				reject := 0
+				total := 0
+
+				for _, decision := range votes {
+					total++
+					if decision {
+						accept++
+					} else {
+						reject++
+					}
+				}
+
+				totalLabel.SetText(fmt.Sprintf("(%v Nodes)", total))
+				agreeLabel.SetText(fmt.Sprint(accept))
+				rejectLabel.SetText(fmt.Sprint(reject))
+
+				actionLabel.SetText(fmt.Sprintf(voteString))
+
+			} else {
+				totalLabel.SetText("")
+				agreeLabel.SetText("")
+				rejectLabel.SetText("")
+
+				actionLabel.SetText("")
+			}
+		}
+	}()
+
+	return container.NewVBox(
+		container.NewHBox(
+			widget.NewLabel("Current Vote:"),
+			actionLabel,
+			totalLabel,
+		),
+		container.NewBorder(
+			nil,
+			nil,
+			container.NewHBox(
+				widget.NewLabel("Agree - "),
+				agreeLabel,
+			),
+			container.NewHBox(
+				widget.NewLabel("Reject - "),
+				rejectLabel,
+			),
+		),
+	)
+}
+
 func (gui *PeercordGUI) Show(addr, pubID string) {
 	gui.peer.SetGui(gui)
 
@@ -100,10 +177,10 @@ func (gui *PeercordGUI) Show(addr, pubID string) {
 	)
 
 	// Call ID: ______
-	callIdLabel := widget.NewLabel("")
+	gui.callIdLabel = widget.NewLabel("")
 	callId := container.NewHBox(
 		widget.NewLabel("Call ID:"),
-		callIdLabel,
+		gui.callIdLabel,
 	)
 
 	// Peer Address Input
@@ -114,7 +191,7 @@ func (gui *PeercordGUI) Show(addr, pubID string) {
 	// Dial a Peer
 	dialButton := widget.NewButton("Dial Peer", func() {
 		callId := handleDial(gui.peer, gui.typedPeer, gui.mainWindow.Canvas())
-		callIdLabel.SetText(callId)
+		gui.callIdLabel.SetText(callId)
 	})
 
 	// Vote to add
@@ -122,7 +199,7 @@ func (gui *PeercordGUI) Show(addr, pubID string) {
 		typedPeer := gui.getTypedPeer()
 
 		if typedPeer != "" {
-			handleVoteAdd(gui.peer, typedPeer)
+			gui.handleVoteAdd(gui.peer, typedPeer)
 		}
 	})
 
@@ -163,6 +240,7 @@ func (gui *PeercordGUI) Show(addr, pubID string) {
 			callId,
 			peerAddressInput,
 			dialButton,
+			gui.containerVoteData(),
 			groupAdd,
 			groupKick,
 		),
@@ -183,7 +261,7 @@ func (gui *PeercordGUI) Show(addr, pubID string) {
 	go func() {
 		for range time.Tick(time.Millisecond * 100) {
 			// Update member list
-			// gui.memberList = getMapKeys(gui.peer.GetGroupCallMembers())
+			gui.memberList = getMapKeys(gui.peer.GetGroupCallMembers())
 
 			err := groupCallData.Reload()
 			if err != nil {
@@ -212,7 +290,7 @@ func (gui *PeercordGUI) Show(addr, pubID string) {
 	// }()
 
 	gui.mainWindow.SetContent(content)
-	gui.mainWindow.Resize(fyne.NewSize(500, 600))
+	gui.mainWindow.Resize(fyne.NewSize(500, 700))
 	gui.mainWindow.ShowAndRun() // Blocking
 }
 
@@ -299,8 +377,8 @@ func handleLeaveCall(node peer.Peer) {
 }
 
 // handleVoteKick initiates a vote-add round for the member specified by address
-func handleVoteAdd(node peer.Peer, address string) {
-	fmt.Printf("Address %v\n", address)
+func (gui *PeercordGUI) handleVoteAdd(node peer.Peer, address string) {
+	gui.currentVote, _ = node.StartVote(types.GroupAdd, true, address)
 }
 
 // handleVoteKick initiates a vote-kicking round for the member specified by address
@@ -310,7 +388,8 @@ func handleVoteKick(node peer.Peer, address string) {
 
 /***** PROMPTS *****/
 
-func (gui *PeercordGUI) PromptDial(peer string, trust float64, dialTimeoutSec time.Duration) bool {
+// TODO: Change last element to strint pair
+func (gui *PeercordGUI) PromptDial(peer string, trust float64, dialTimeoutSec time.Duration, callId string, members ...string) bool {
 
 	retVal := make(chan bool)
 
@@ -326,10 +405,12 @@ func (gui *PeercordGUI) PromptDial(peer string, trust float64, dialTimeoutSec ti
 		popUp.Hide()
 	})
 
+	members = append(members, peer)
+
 	popUp = widget.NewModalPopUp(
 		container.NewVBox(
-			widget.NewLabel(fmt.Sprintf("Incoming call from %v. Pick up?", peer)),
-			widget.NewLabel(fmt.Sprintf("%v trust: %v", peer, trust)),
+			widget.NewLabel(fmt.Sprintf("Incoming call from %v. Pick up?", strings.Join(members, ", "))),
+			widget.NewLabel(fmt.Sprintf("%v trust: %v", peer, trust)), // TODO: Get trust for all the members
 			container.NewHBox(
 				hangUp,
 				pickUp,
@@ -342,6 +423,51 @@ func (gui *PeercordGUI) PromptDial(peer string, trust float64, dialTimeoutSec ti
 
 	result := false
 	to := time.After(dialTimeoutSec)
+
+	select {
+	case <-to:
+		popUp.Hide()
+	case result = <-retVal:
+	}
+
+	if result == true {
+		gui.callIdLabel.SetText(callId)
+	}
+
+	return result
+}
+
+// Blocking call to ask the user if they would like to vote in agreement
+func (gui *PeercordGUI) PromptVote(votePrompt string, voteTimeout time.Duration) bool {
+	retVal := make(chan bool)
+
+	var popUp *widget.PopUp
+
+	reject := widget.NewButton("Reject", func() {
+		retVal <- false
+		popUp.Hide()
+	})
+
+	accept := widget.NewButton("Accept", func() {
+		retVal <- true
+		popUp.Hide()
+	})
+
+	popUp = widget.NewModalPopUp(
+		container.NewVBox(
+			widget.NewLabel(votePrompt),
+			container.NewHBox(
+				reject,
+				accept,
+			),
+		),
+		gui.mainWindow.Canvas(),
+	)
+
+	popUp.Show()
+
+	result := false
+	to := time.After(voteTimeout)
 
 	select {
 	case <-to:

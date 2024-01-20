@@ -1,6 +1,8 @@
 package types
 
-import "time"
+import (
+	"time"
+)
 
 /** GUI **/
 
@@ -10,7 +12,10 @@ type PeercordGUI interface {
 	Show(addr, pubID string)
 
 	// Blocking call to ask the user if they would like to pick up a dial
-	PromptDial(peer string, trust float64, dialTimeout time.Duration) bool
+	PromptDial(peer string, trust float64, dialTimeout time.Duration, callId string, members ...string) bool
+
+	// Blocking call to ask the user if they would like to vote in agreement
+	PromptVote(votePrompt string, voteTimeout time.Duration) bool
 
 	// Blocking call to prompt user for boolen choice between A and B.
 	//
@@ -69,11 +74,13 @@ type GroupCallVotePkt struct {
 	Type     VoteType
 	Decision bool
 	Meta     string
+	Proposer string
 }
 
 type VoteData struct {
 	Name      string
 	Threshold float32
+	Prompt    string
 }
 
 const (
@@ -85,9 +92,11 @@ var VoteTypes = []VoteData{
 	{
 		Name:      "groupAdd",
 		Threshold: 0.5,
+		Prompt:    "Member %v is voting to add %v",
 	},
 	{
 		Name:      "groupKick",
 		Threshold: 0.5,
+		Prompt:    "Member %v is voting to kick %v",
 	},
 }

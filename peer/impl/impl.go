@@ -364,6 +364,10 @@ func (n *node) Stop() error {
 		return NotRunningError{}
 	}
 
+	if n.CallLineState() != types.Idle {
+		n.EndCall()
+	}
+
 	// if err := n.destroyStreaming(); err != nil {
 	// 	n.logger.Error().Err(err).Msg("failed to stop streaming")
 	// 	return err
@@ -411,7 +415,6 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 // Called when the peer has received a new packet.
 func (n *node) processPacket(pkt transport.Packet) {
 	msgType := pkt.Msg.Type
-	n.logger.Warn().Msgf("Received msg of type %v", msgType)
 	if _, requiresEncryption := types.EncryptedMsgTypes[msgType]; requiresEncryption {
 		// TODO: Run a test to check this works
 		n.logger.Warn().Msgf("Received unencrypted msg of type %v. Ignoring", msgType)
@@ -421,6 +424,7 @@ func (n *node) processPacket(pkt transport.Packet) {
 	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {
 		n.logger.Warn().Err(err).Msg("failed to process packet")
+		n.logger.Warn().Err(err).Msg(pkt.Msg.Type)
 	}
 }
 
