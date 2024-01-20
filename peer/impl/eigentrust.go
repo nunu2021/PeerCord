@@ -45,6 +45,8 @@ type EigenTrust struct {
 
 	// mutual exclusion on the GlobalTrustValue
 	GlobalTrustValueMutex sync.Mutex
+
+	kMutex sync.Mutex
 }
 
 func NewEigenTrust(totalPeers uint) EigenTrust {
@@ -152,7 +154,9 @@ func (n *node) ComputeGlobalTrustValue() (float64, error) {
 		delta = math.Abs(globalTrustVal - tPlus)
 
 		// update Global trust value
+		n.eigenTrust.kMutex.Lock()
 		n.eigenTrust.k++
+		n.eigenTrust.kMutex.Unlock()
 
 		// err = n.SetTrust(n.GetAddress(), tPlus)
 		// if err != nil {
@@ -245,8 +249,11 @@ func (n *node) CheckReceivedTrustValueCount() map[string]int {
 
 // processes packet that is requesting this peer's trust value
 func (n *node) SendTrustValueRequest(includeLocalTrust bool, dest string) error {
+	n.eigenTrust.kMutex.Lock()
+	kval := n.eigenTrust.k
+	n.eigenTrust.kMutex.Unlock()
 	eigenReqMsg := types.EigenTrustRequestMessage{
-		KStep:        n.eigenTrust.k,
+		KStep:        kval,
 		Source:       n.conf.Socket.GetAddress(),
 		IncludeLocal: includeLocalTrust,
 	}
@@ -289,8 +296,11 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 		trust *= localTrustValue
 
 	}
+	n.eigenTrust.kMutex.Lock()
+	kval := n.eigenTrust.k
+	n.eigenTrust.kMutex.Unlock()
 	eigenResponseMsg := types.EigenTrustResponseMessage{
-		KStep:  n.eigenTrust.k,
+		KStep:  kval,
 		Source: n.conf.Socket.GetAddress(),
 		Value:  trust,
 	}
