@@ -219,7 +219,7 @@ func (n *node) GetNamingStore() storage.Store {
 	return n.conf.Storage.GetNamingStore()
 }
 
-func (n *node) receivePackets(receivedPackets chan transport.Packet) {
+func (n *node) receivePackets(receivedPackets, rumorsPackets chan transport.Packet) {
 	for {
 		// Receive a packet
 		pkt, err := n.conf.Socket.Recv(math.MaxInt64)
@@ -234,7 +234,11 @@ func (n *node) receivePackets(receivedPackets chan transport.Packet) {
 		default:
 		}
 
-		receivedPackets <- pkt
+		if pkt.Msg.Type == "rumor" {
+			rumorsPackets <- pkt
+		} else {
+			receivedPackets <- pkt
+		}
 	}
 }
 
@@ -266,9 +270,16 @@ func loop(n *node) {
 		timeoutLoop = min(timeoutLoop, n.conf.AntiEntropyInterval/10)
 	}
 	receivedPackets := make(chan transport.Packet, 1000)
+	rumorsPackets := make(chan transport.Packet, 50)
 
 	// Receive packets (this goroutine is not stopped at the end)
-	go n.receivePackets(receivedPackets)
+	go n.receivePackets(receivedPackets, rumorsPackets)
+
+	go func(c chan transport.Packet) {
+		for p := range c {
+			n.processPacket(p)
+		}
+	}(rumorsPackets)
 
 	// TOD: comment this back in for periodic eigentrust updates
 	if !n.conf.IsBootstrap {
@@ -303,14 +314,16 @@ func loop(n *node) {
 
 		case pkt := <-receivedPackets:
 			// The packet is for us
-			if pkt.Header.Destination == n.GetAddress() {
-				n.processPacket(pkt)
-			} else if pkt.Header.TTL > 0 { // We must transfer the packet
-				n.logger.Warn().Msg("Relayed")
-				n.transferPacket(pkt)
-			} else {
-				n.logger.Info().Msg("dropped packet with TTL=0")
-			}
+			go func() {
+				if pkt.Header.Destination == n.GetAddress() {
+					n.processPacket(pkt)
+				} else if pkt.Header.TTL > 0 { // We must transfer the packet
+					n.logger.Warn().Msg("Relayed")
+					n.transferPacket(pkt)
+				} else {
+					n.logger.Info().Msg("dropped packet with TTL=0")
+				}
+			}()
 
 		case <-time.After(timeoutLoop):
 		}
