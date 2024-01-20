@@ -26,6 +26,11 @@ type DialingData struct {
 	leader string
 
 	multicastGroupID string
+
+	dialStopChan       chan struct{}
+	dialTimeStart      time.Time
+	dialAudioBytesSent uint
+	dialVideoBytesSent uint
 }
 
 func newResponseChannel() chan bool {
@@ -427,6 +432,41 @@ func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) e
 		}
 		transportExistenceMsg := transport.Message{Type: groupExistenceMsg.Name(), Payload: data}
 		n.NaiveMulticast(transportExistenceMsg, n.peerCord.members.copy())
+		n.peerCord.currentDial.dialStopChan = make(chan struct{})
+		n.peerCord.currentDial.dialTimeStart = time.Now()
+		go func(stopChan chan struct{}) {
+			for {
+				time.Sleep(time.Millisecond * 100)
+				select {
+				case <-stopChan:
+					close(stopChan)
+					n.logger.Debug().Msg("stop sending packets")
+					return
+				default:
+					callMsg := n.GetNextCallDataMessage()
+					data, err := json.Marshal(&callMsg)
+					if err != nil {
+						n.logger.Err(err).Msg("error when marshaling next call data")
+					} else {
+						transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
+						encryptedMsg, err := n.EncryptDHMsg(&transportMsg)
+						if err != nil {
+							n.logger.Err(err).Msg("error when encrypting next call msg")
+						} else {
+							err = n.Multicast(*encryptedMsg, n.peerCord.currentDial.multicastGroupID)
+							if err != nil {
+								n.logger.Err(err).Msg("error when encrypting next call msg")
+							} else {
+								n.peerCord.currentDial.Lock()
+								n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
+								n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
+								n.peerCord.currentDial.Unlock()
+							}
+						}
+					}
+				}
+			}
+		}(n.peerCord.currentDial.dialStopChan)
 	}
 
 	return nil
@@ -452,6 +492,10 @@ func (n *node) EndCall() {
 	n.peerCord.currentDial.ResponseChannel = newResponseChannel()
 
 	n.peerCord.currentDial.dialState = types.Idle
+
+	n.peerCord.currentDial.dialAudioBytesSent = 0
+	n.peerCord.currentDial.dialVideoBytesSent = 0
+	n.peerCord.currentDial.dialStopChan <- struct{}{}
 }
 
 func (n *node) receiveHangUp(msg types.Message, packet transport.Packet) error {
@@ -539,4 +583,16 @@ func (n *node) SendToCall(msg *transport.Message) error {
 
 func (n *node) IsLeader() bool {
 	return n.peerCord.currentDial.leader == n.GetAddress()
+}
+
+func (n *node) GetAudioThroughput() float64 {
+	n.peerCord.currentDial.Lock()
+	defer n.peerCord.currentDial.Unlock()
+	return float64(n.peerCord.currentDial.dialAudioBytesSent) / float64(time.Since(n.peerCord.currentDial.dialTimeStart))
+}
+
+func (n *node) GetVideoThroughput() float64 {
+	n.peerCord.currentDial.Lock()
+	defer n.peerCord.currentDial.Unlock()
+	return float64(n.peerCord.currentDial.dialVideoBytesSent) / float64(time.Since(n.peerCord.currentDial.dialTimeStart))
 }

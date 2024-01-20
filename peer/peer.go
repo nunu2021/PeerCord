@@ -17,6 +17,7 @@ type Peer interface {
 	DataSharing
 	Streaming
 	CAN
+	Crypto
 }
 
 // Factory is the type of function we are using to create new instances of

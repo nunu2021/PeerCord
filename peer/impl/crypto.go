@@ -1346,6 +1346,43 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	}
 	transportExistenceMsg := transport.Message{Type: groupExistenceMsg.Name(), Payload: data}
 	n.NaiveMulticast(transportExistenceMsg, message.MembersList)
+	n.peerCord.currentDial.Lock()
+	n.peerCord.currentDial.dialStopChan = make(chan struct{})
+	n.peerCord.currentDial.dialTimeStart = time.Now()
+	go func(stopChan chan struct{}) {
+		for {
+			time.Sleep(time.Millisecond * 100)
+			select {
+			case <-stopChan:
+				close(stopChan)
+				n.logger.Debug().Msg("stop sending packets")
+				return
+			default:
+				callMsg := n.GetNextCallDataMessage()
+				data, err := json.Marshal(&callMsg)
+				if err != nil {
+					n.logger.Err(err).Msg("error when marshaling next call data")
+				} else {
+					transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
+					encryptedMsg, err := n.EncryptDHMsg(&transportMsg)
+					if err != nil {
+						n.logger.Err(err).Msg("error when encrypting next call msg")
+					} else {
+						err = n.Multicast(*encryptedMsg, n.peerCord.currentDial.multicastGroupID)
+						if err != nil {
+							n.logger.Err(err).Msg("error when encrypting next call msg")
+						} else {
+							n.peerCord.currentDial.Lock()
+							n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
+							n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
+							n.peerCord.currentDial.Unlock()
+						}
+					}
+				}
+			}
+		}
+	}(n.peerCord.currentDial.dialStopChan)
+	n.peerCord.currentDial.Unlock()
 
 	return nil
 }

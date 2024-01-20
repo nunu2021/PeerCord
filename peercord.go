@@ -29,7 +29,7 @@ func main() {
 
 	fmt.Println(fmt.Sprintf("Opening node on socket: %v", node.GetAddr()))
 
-	gui.Show(node.GetAddr(), node.GetPubId())
+	gui.Show(node.GetAddr(), node.GetPubId(), node.GetAudioThroughput(), node.GetVideoThroughput())
 
 	node.Stop()
 }

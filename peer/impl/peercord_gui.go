@@ -148,7 +148,7 @@ func (gui *PeercordGUI) containerVoteData() *fyne.Container {
 	)
 }
 
-func (gui *PeercordGUI) Show(addr, pubID string) {
+func (gui *PeercordGUI) Show(addr, pubID string, audioThroughput, videoThroughput float64) {
 	gui.peer.SetGui(gui)
 
 	gui.app = app.New()
@@ -164,6 +164,16 @@ func (gui *PeercordGUI) Show(addr, pubID string) {
 	myID := container.NewHBox(
 		widget.NewLabel("My ID:"),
 		widget.NewLabel(pubID),
+	)
+
+	// Throughputs
+	audioThroughputContainer := container.NewHBox(
+		widget.NewLabel("Audio throughput:"),
+		widget.NewLabel(strconv.FormatFloat(audioThroughput, 'E', -1, 64)),
+	)
+	videoThroughputContainer := container.NewHBox(
+		widget.NewLabel("Video throughput:"),
+		widget.NewLabel(strconv.FormatFloat(videoThroughput, 'E', -1, 64)),
 	)
 
 	// Call Status
@@ -243,6 +253,8 @@ func (gui *PeercordGUI) Show(addr, pubID string) {
 			gui.containerVoteData(),
 			groupAdd,
 			groupKick,
+			audioThroughputContainer,
+			videoThroughputContainer,
 		),
 		nil,
 		nil,

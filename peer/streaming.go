@@ -11,4 +11,7 @@ type Streaming interface {
 	// GetNextCallDataMessage packages the next audio and video stream packets into a message.
 	// Under the hood, calls GetNextVideoBytes and GetNextAudioBytes.
 	GetNextCallDataMessage() types.CallDataMessage
+
+	GetAudioThroughput() float64
+	GetVideoThroughput() float64
 }
