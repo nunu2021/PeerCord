@@ -106,6 +106,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	conf.MessageRegistry.RegisterMessageCallback(types.PKResponseMessage{}, n.receivePKResponse)
 	conf.MessageRegistry.RegisterMessageCallback(types.DialMsg{}, n.ReceiveDial)
 	conf.MessageRegistry.RegisterMessageCallback(types.DialResponseMsg{}, n.ReceiveDialResponse)
+	conf.MessageRegistry.RegisterMessageCallback(types.HangUpMsg{}, n.receiveHangUp)
 	conf.MessageRegistry.RegisterMessageCallback(types.CallDataMessage{}, n.receiveCallDataMsg)
 	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustRequestMessage{}, n.ExecEigenTrustRequestMessage)
 	conf.MessageRegistry.RegisterMessageCallback(types.EigenTrustResponseMessage{}, n.ExecEigenTrustResponseMessage)

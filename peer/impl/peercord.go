@@ -21,7 +21,7 @@ type DialingData struct {
 
 	ResponseChannel chan bool
 
-	IsLeader bool
+	leader string
 }
 
 func newResponseChannel() chan bool {
@@ -223,7 +223,7 @@ func (n *node) DialInvitePeer(peer string) error {
 	n.peerCord.currentDial.Lock()
 	defer n.peerCord.currentDial.Unlock()
 
-	if n.peerCord.currentDial.dialState != types.InCall || !n.peerCord.currentDial.IsLeader {
+	if n.peerCord.currentDial.dialState != types.InCall || !n.IsLeader() {
 		return fmt.Errorf("peer cannot invite another peer. Not a leader of an existing call")
 	}
 
@@ -314,8 +314,6 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 
 	// We have been dialed, ask the user if they want to answer the call
 	// TODO: Get the acual trust
-	n.logger.Warn().Msg("Received dial, prompting")
-	n.logger.Warn().Msg("Received dial, prompting2")
 	accepted := n.gui.PromptDial(dialMsg.Caller, 0, 10*time.Second, dialMsg.CallId, dialMsg.Members...)
 
 	response := types.DialResponseMsg{
@@ -356,7 +354,7 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	// If it is a group call, the members list will be updated in key exchange
 	n.peerCord.members.set(dialMsg.Caller, struct{}{})
 
-	n.peerCord.currentDial.IsLeader = false
+	n.peerCord.currentDial.leader = dialMsg.Caller
 
 	return nil
 }
@@ -364,7 +362,7 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) error {
 	dialResponseMsg, ok := msg.(*types.DialResponseMsg)
 	if !ok {
-		panic("not a dial message")
+		panic("not a dial response message")
 	}
 
 	n.peerCord.currentDial.Lock()
@@ -404,12 +402,13 @@ func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) e
 		// We were dialing to create a call
 		n.peerCord.currentDial.dialState = types.InCall
 		n.peerCord.members.set(n.peerCord.currentDial.Peer, struct{}{})
-		n.peerCord.currentDial.IsLeader = true
+		n.peerCord.currentDial.leader = n.GetAddress()
 	} else {
 		// This is a result of a group call add.
 		n.peerCord.members.set(n.peerCord.currentDial.Peer, struct{}{})
 
 		fmt.Println("Starting key exchange")
+		fmt.Println(n.peerCord.members.copy())
 
 		err := n.StartDHKeyExchange(n.peerCord.members.copy())
 		if err != nil {
@@ -424,12 +423,58 @@ func (n *node) EndCall() {
 	n.peerCord.currentDial.Lock()
 	defer n.peerCord.currentDial.Unlock()
 
-	n.peerCord.currentDial.dialState = types.Idle
+	if n.peerCord.currentDial.dialState == types.InCall {
+		hangUp := types.HangUpMsg{
+			Member: n.GetAddress(),
+			CallId: n.peerCord.currentDial.ID,
+		}
+
+		marshaledMsg, err := n.conf.MessageRegistry.MarshalMessage(hangUp)
+		if err == nil {
+			n.SendToCall(&marshaledMsg)
+		}
+	}
+
 	n.peerCord.members = newSafeMap[string, struct{}]()
 	n.peerCord.currentDial.ResponseChannel = newResponseChannel()
 
-	// TODO: add hangup message
-	// hangUp := types.HangUpMessage
+	n.peerCord.currentDial.dialState = types.Idle
+}
+
+func (n *node) receiveHangUp(msg types.Message, packet transport.Packet) error {
+	hangUpMsg, ok := msg.(*types.HangUpMsg)
+	if !ok {
+		panic("not a hang up message")
+	}
+
+	n.peerCord.currentDial.Lock()
+
+	if n.peerCord.currentDial.dialState == types.Idle || hangUpMsg.CallId != n.peerCord.currentDial.ID {
+		n.peerCord.currentDial.Unlock()
+		return fmt.Errorf("received hang up message not for me")
+	}
+
+	isLeader := n.IsLeader()
+	n.peerCord.currentDial.Unlock()
+
+	if isLeader {
+		// One of our members left. We need to remove them from the call
+		n.peerCord.members.delete(hangUpMsg.Member)
+		if n.peerCord.members.len() == 0 {
+			// Our call is over. End the call.
+			go n.EndCall()
+		} else if n.peerCord.members.len() > 1 {
+			// We are still in a group call so we have to regenerate the keys
+			n.GroupCallRemove(hangUpMsg.Member)
+		}
+	} else {
+		if n.peerCord.currentDial.leader == hangUpMsg.Member {
+			// The leader left the call. We need to hang up
+			go n.EndCall()
+		}
+	}
+
+	return nil
 }
 
 func (n *node) CallLineState() types.DialState {
@@ -450,4 +495,35 @@ func (n *node) GetGroupCallMembers() map[string]struct{} {
 	}
 
 	return copyMemberMap
+}
+
+func (n *node) SendToCall(msg *transport.Message) error {
+	var encryptedMsg *transport.Message
+	var err error
+
+	// Encrypt
+	if n.peerCord.members.len() > 1 {
+		encryptedMsg, err = n.EncryptDHMsg(msg)
+	} else {
+		// We are in a 1 to 1 encryption method
+		for k := range n.peerCord.members.copy() {
+			encryptedMsg, err = n.EncryptOneToOneMsg(msg, k)
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	// TODO: Replace with a multicast group
+	// n.NaiveMulticast(*encryptedMsg, n.peerCord.members.copy())
+	n.logger.Warn().Msgf("Sending to group msg of type %v", msg.Type)
+	for member := range n.peerCord.members.copy() {
+		go n.Unicast(member, *encryptedMsg)
+	}
+	return nil
+}
+
+func (n *node) IsLeader() bool {
+	return n.peerCord.currentDial.leader == n.GetAddress()
 }

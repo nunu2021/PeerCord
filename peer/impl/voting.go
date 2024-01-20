@@ -145,33 +145,15 @@ func (n *node) SendGroupVote(myVote types.GroupCallVotePkt) error {
 		return err
 	}
 
-	var encryptedMsg *transport.Message
-
-	// Encrypt
-	if n.peerCord.members.len() == 1 {
-		// We are in a 1 to 1 encryption method
-		for k := range n.peerCord.members.copy() {
-			encryptedMsg, err = n.EncryptOneToOneMsg(&marshaledMsg, k)
-		}
-	} else {
-		encryptedMsg, err = n.EncryptDHMsg(&marshaledMsg)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	// TODO: Replace with a multicast group
-	return n.NaiveMulticast(*encryptedMsg, n.peerCord.members.copy())
+	return n.SendToCall(&marshaledMsg)
 }
 
 func (n *node) CompleteVoteAction(voteType types.VoteType, voteMeta string) {
 	switch voteType {
 	case types.GroupAdd:
 		// If we are the leader, we have to initiate key exchanges
-		fmt.Println(fmt.Sprintf("%v", n.peerCord.currentDial.IsLeader))
 
-		if n.peerCord.currentDial.IsLeader {
+		if n.IsLeader() {
 			err := n.DialInvitePeer(voteMeta)
 			if err != nil {
 				n.logger.Err(err)
@@ -181,7 +163,7 @@ func (n *node) CompleteVoteAction(voteType types.VoteType, voteMeta string) {
 		n.peerCord.members.delete(voteMeta)
 
 		// If we are the leader, we have to initiate key exchanges
-		if n.peerCord.currentDial.IsLeader {
+		if n.IsLeader() {
 			if n.peerCord.members.len() == 2 {
 				// We are entering individual calls again. TODO: Make sure we the other users PK
 			} else {

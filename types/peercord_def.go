@@ -64,6 +64,11 @@ type DialResponseMsg struct {
 	Accepted bool
 }
 
+type HangUpMsg struct {
+	Member string
+	CallId string
+}
+
 /** Voting **/
 
 type VoteType int

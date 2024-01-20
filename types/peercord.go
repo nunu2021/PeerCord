@@ -95,6 +95,29 @@ func (m DialResponseMsg) HTML() string {
 }
 
 // -----------------------------------------------------------------------------
+// HangUpMsg
+
+// NewEmpty implements types.Message.
+func (m HangUpMsg) NewEmpty() Message {
+	return &HangUpMsg{}
+}
+
+// Name implements types.Message.
+func (m HangUpMsg) Name() string {
+	return "HangUpMsg"
+}
+
+// String implements types.Message.
+func (m HangUpMsg) String() string {
+	return fmt.Sprintf("{HangUpMsg %v - %v}", m.Member, m.CallId)
+}
+
+// HTML implements types.Message.
+func (m HangUpMsg) HTML() string {
+	return m.String()
+}
+
+// -----------------------------------------------------------------------------
 // GroupCallVotePkt
 
 // NewEmpty implements types.Message.

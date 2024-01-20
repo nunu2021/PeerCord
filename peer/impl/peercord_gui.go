@@ -349,7 +349,7 @@ func handleDial(node peer.Peer, address string, canvas fyne.Canvas) string {
 		container.NewVBox(
 			widget.NewLabel(fmt.Sprintf("Dialing %v...", address)),
 			widget.NewButton("Cancel", func() {
-				node.EndCall()
+				go node.EndCall()
 				popUp.Hide()
 			}),
 		),
