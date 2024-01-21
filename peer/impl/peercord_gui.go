@@ -384,7 +384,7 @@ func handleDial(node peer.Peer, address string, canvas fyne.Canvas) string {
 // handleLeaveCall leaves the current call if not idling.
 func handleLeaveCall(node peer.Peer) {
 	if node.CallLineState() != types.Idle {
-		node.EndCall()
+		go node.EndCall()
 	}
 }
 

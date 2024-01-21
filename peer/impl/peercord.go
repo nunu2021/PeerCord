@@ -554,10 +554,14 @@ func (n *node) EndCall() {
 
 		marshaledMsg, err := n.conf.MessageRegistry.MarshalMessage(hangUp)
 		if err == nil {
-			n.SendToCall(&marshaledMsg)
+			err = n.SendToCall(&marshaledMsg)
+			if err != nil {
+				n.logger.Err(err).Msg("error when sending hang up msg")
+			}
 		}
 
 		if n.guiReady() {
+			n.logger.Debug().Msg("rating call")
 			rating := n.gui.PromptRating("Please rate your experience with this call based on the peer who called you. Options: {2 = good, 1 = bad}")
 			originPeer := n.peerCord.currentDial.leader
 
@@ -565,16 +569,19 @@ func (n *node) EndCall() {
 		}
 	}
 
+	n.logger.Debug().Msg("reset call")
 	n.peerCord.members = newSafeMap[string, struct{}]()
 	n.peerCord.currentDial.ResponseChannel = newResponseChannel()
 
 	n.peerCord.currentDial.dialState = types.Idle
+	n.peerCord.currentDial.ID = ""
 
 	n.peerCord.currentDial.dialAudioBytesSent = 0
 	n.peerCord.currentDial.dialVideoBytesSent = 0
 	n.peerCord.currentDial.dialStopChan <- struct{}{}
 	close(n.peerCord.currentDial.dialStopChan)
 	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
+
 }
 
 func (n *node) receiveHangUp(msg types.Message, packet transport.Packet) error {
@@ -582,6 +589,8 @@ func (n *node) receiveHangUp(msg types.Message, packet transport.Packet) error {
 	if !ok {
 		panic("not a hang up message")
 	}
+
+	n.logger.Debug().Msg("hang up received")
 
 	n.peerCord.currentDial.Lock()
 
