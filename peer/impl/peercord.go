@@ -365,6 +365,40 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	n.peerCord.members.set(dialMsg.Caller, struct{}{})
 
 	n.peerCord.currentDial.leader = dialMsg.Caller
+	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
+	n.peerCord.currentDial.dialTimeStart = time.Now()
+	go func(stopChan chan struct{}, peer string) {
+		for {
+			time.Sleep(time.Millisecond * 100)
+			select {
+			case <-stopChan:
+				n.logger.Debug().Msg("stop sending packets")
+				return
+			default:
+				callMsg := n.GetNextCallDataMessage()
+				data, err := json.Marshal(&callMsg)
+				if err != nil {
+					n.logger.Err(err).Msg("error when marshaling next 1t1 call data")
+				} else {
+					transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
+					encryptedMsg, err := n.EncryptOneToOneMsg(&transportMsg, peer)
+					if err != nil {
+						n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
+					} else {
+						err = n.Unicast(peer, *encryptedMsg)
+						if err != nil {
+							n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
+						} else {
+							n.peerCord.currentDial.Lock()
+							n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
+							n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
+							n.peerCord.currentDial.Unlock()
+						}
+					}
+				}
+			}
+		}
+	}(n.peerCord.currentDial.dialStopChan, dialMsg.Caller)
 
 	return nil
 }
@@ -413,6 +447,40 @@ func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) e
 		n.peerCord.currentDial.dialState = types.InCall
 		n.peerCord.members.set(n.peerCord.currentDial.Peer, struct{}{})
 		n.peerCord.currentDial.leader = n.GetAddress()
+		n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
+		n.peerCord.currentDial.dialTimeStart = time.Now()
+		go func(stopChan chan struct{}, peer string) {
+			for {
+				time.Sleep(time.Millisecond * 100)
+				select {
+				case <-stopChan:
+					n.logger.Debug().Msg("stop sending packets")
+					return
+				default:
+					callMsg := n.GetNextCallDataMessage()
+					data, err := json.Marshal(&callMsg)
+					if err != nil {
+						n.logger.Err(err).Msg("error when marshaling next 1t1 call data")
+					} else {
+						transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
+						encryptedMsg, err := n.EncryptOneToOneMsg(&transportMsg, peer)
+						if err != nil {
+							n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
+						} else {
+							err = n.Unicast(peer, *encryptedMsg)
+							if err != nil {
+								n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
+							} else {
+								n.peerCord.currentDial.Lock()
+								n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
+								n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
+								n.peerCord.currentDial.Unlock()
+							}
+						}
+					}
+				}
+			}
+		}(n.peerCord.currentDial.dialStopChan, n.peerCord.currentDial.Peer)
 	} else {
 		// This is a result of a group call add.
 		n.peerCord.members.set(n.peerCord.currentDial.Peer, struct{}{})
@@ -433,14 +501,15 @@ func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) e
 		}
 		transportExistenceMsg := transport.Message{Type: groupExistenceMsg.Name(), Payload: data}
 		n.NaiveMulticast(transportExistenceMsg, n.peerCord.members.copy())
-		n.peerCord.currentDial.dialStopChan = make(chan struct{})
+		n.peerCord.currentDial.dialStopChan <- struct{}{}
+		close(n.peerCord.currentDial.dialStopChan)
+		n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
 		n.peerCord.currentDial.dialTimeStart = time.Now()
 		go func(stopChan chan struct{}) {
 			for {
 				time.Sleep(time.Millisecond * 100)
 				select {
 				case <-stopChan:
-					close(stopChan)
 					n.logger.Debug().Msg("stop sending packets")
 					return
 				default:
@@ -504,6 +573,7 @@ func (n *node) EndCall() {
 	n.peerCord.currentDial.dialAudioBytesSent = 0
 	n.peerCord.currentDial.dialVideoBytesSent = 0
 	n.peerCord.currentDial.dialStopChan <- struct{}{}
+	close(n.peerCord.currentDial.dialStopChan)
 	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
 }
 

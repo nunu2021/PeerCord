@@ -1354,7 +1354,6 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 			time.Sleep(time.Millisecond * 100)
 			select {
 			case <-stopChan:
-				close(stopChan)
 				n.logger.Debug().Msg("stop sending packets")
 				return
 			default:
