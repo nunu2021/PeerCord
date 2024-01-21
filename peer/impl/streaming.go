@@ -1,9 +1,7 @@
 package impl
 
 import (
-	"crypto/rand"
 	"errors"
-	"math/big"
 	"os"
 	"time"
 
@@ -153,17 +151,17 @@ func (n *node) GetNextAudioBytes() []byte {
 }
 
 func (n *node) GetNextCallDataMessage() types.CallDataMessage {
-	s1, _ := rand.Int(rand.Reader, big.NewInt(10))
-	s2, _ := rand.Int(rand.Reader, big.NewInt(10))
+	// s1, _ := rand.Int(rand.Reader, big.NewInt(10))
+	// s2, _ := rand.Int(rand.Reader, big.NewInt(10))
 
-	r1 := make([]byte, s1.Int64())
-	r2 := make([]byte, s2.Int64())
-	rand.Read(r1)
-	rand.Read(r2)
-	return types.CallDataMessage{
-		VideoBytes: r1,
-		AudioBytes: r2,
-	}
+	// r1 := make([]byte, s1.Int64())
+	// r2 := make([]byte, s2.Int64())
+	// rand.Read(r1)
+	// rand.Read(r2)
+	// return types.CallDataMessage{
+	// 	VideoBytes: r1,
+	// 	AudioBytes: r2,
+	// }
 	return types.CallDataMessage{
 		VideoBytes: n.GetNextVideoBytes(),
 		AudioBytes: n.GetNextAudioBytes(),
