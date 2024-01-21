@@ -44,6 +44,7 @@ func main() {
 	}
 	fmt.Print("Please copy the address fo the bootstrap node here:")
 	input, err = reader.ReadString('\n')
+	input = strings.TrimSuffix(input, "\n")
 	if err != nil {
 		fmt.Println("An error occured while reading input. Please try again", err)
 		return
