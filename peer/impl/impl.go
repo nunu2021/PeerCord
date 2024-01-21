@@ -69,13 +69,13 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	// Set a random initialized public ID
 	n.SetPublicID(RandomPubId())
 
-    if conf.StartTrust {
-        if conf.IsBootstrap {
-            n.bootstrap = NewBootstrap()
-        } else {
-            n.dht = NewDHT(conf.BootstrapAddrs)
-        }
-    }
+	if conf.StartTrust {
+		if conf.IsBootstrap {
+			n.bootstrap = NewBootstrap()
+		} else {
+			n.dht = NewDHT(conf.BootstrapAddrs)
+		}
+	}
 
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
@@ -343,10 +343,10 @@ func (n *node) Start() error {
 	// Initialize streaming components on startup to avoid
 	// opening & closing the webcam repeatedly. Camtron does not support
 	// opening & closing repeatedly.
-	if err := n.initializeStreaming(); err != nil {
-		n.logger.Error().Err(err).Msg("failed to initialize streaming")
-		return err
-	}
+	// if err := n.initializeStreaming(); err != nil {
+	// 	n.logger.Error().Err(err).Msg("failed to initialize streaming")
+	// 	return err
+	// }
 
 	err := n.GenerateKeyPair()
 	if err != nil {
@@ -382,10 +382,10 @@ func (n *node) Stop() error {
 		n.EndCall()
 	}
 
-	if err := n.destroyStreaming(); err != nil {
-		n.logger.Error().Err(err).Msg("failed to stop streaming")
-		return err
-	}
+	// if err := n.destroyStreaming(); err != nil {
+	// 	n.logger.Error().Err(err).Msg("failed to stop streaming")
+	// 	return err
+	// }
 
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
