@@ -15,7 +15,7 @@ sudo apt-get install portaudio19-dev
   - Does not require any specific installation steps. When the app is first run, it will automatically download the required binaries and placed them at the top-level directory, which may take some time.
 
 ## Run the app
-Run the app with the following command at the top-level directory.
+Run the app (one node) with the following command at the top-level directory.
 ```shell
 go run peercord.go
 ```
