@@ -290,7 +290,6 @@ func (n *node) receiveEmptyMsg(msg types.Message, pkt transport.Packet) error {
 	return nil
 }
 
-// TODO: Test the new heartbeat
 func (n *node) receiveHeartbeatMsg(msg types.Message, pkt transport.Packet) error {
 	heartbeatMsg, ok := msg.(*types.HeartbeatMessage)
 	if !ok {
@@ -298,7 +297,6 @@ func (n *node) receiveHeartbeatMsg(msg types.Message, pkt transport.Packet) erro
 	}
 
 	// Even if we have seen this peer before, we will just write the key
-	// TODO: If the peer key has changed, maybe reduce trust?
 	n.AddPublicKey(heartbeatMsg.PeerId, heartbeatMsg.PubId, heartbeatMsg.PubKeyBytes)
 
 	return nil

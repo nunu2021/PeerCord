@@ -2,13 +2,14 @@ package impl
 
 import (
 	"errors"
+	"os"
+	"time"
+
 	"github.com/gordonklaus/portaudio"
 	"github.com/vee2xx/camtron"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
-	"os"
-	"time"
 )
 
 type Streaming struct {
@@ -117,11 +118,11 @@ func (n *node) inputVideoStreamHandler() {
 }
 
 func (n *node) receiveCallDataMsg(msg types.Message, pkt transport.Packet) error {
-	data, ok := msg.(*types.CallDataMessage)
-	if !ok {
-		panic("not a CallDataMessage")
-	}
-	n.logger.Printf("received %d video bytes and %d audio bytes", len(data.VideoBytes), len(data.AudioBytes))
+	// data, ok := msg.(*types.CallDataMessage)
+	// if !ok {
+	// 	panic("not a CallDataMessage")
+	// }
+	// n.logger.Printf("received %d video bytes and %d audio bytes", len(data.VideoBytes), len(data.AudioBytes))
 	return nil
 }
 

@@ -44,6 +44,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -261,11 +262,9 @@ type Crypto struct {
 }
 
 func (n *node) CreateCallMembers() map[string]struct{} {
-	callMembers := make(map[string]struct{})
-	for s := range n.crypto.DHPartialSecrets {
-		callMembers[s] = struct{}{}
-	}
+	callMembers := n.peerCord.members.copy()
 	callMembers[n.GetAddress()] = struct{}{}
+	fmt.Printf("%v\r\n", callMembers)
 	return callMembers
 }
 
@@ -293,7 +292,6 @@ func (n *node) GetPK() rsa.PublicKey {
 
 func (n *node) AddPublicKey(peer, pubID string, key []byte) {
 	//Add a public key + id to the known IDs
-	// TODO: We should put the check here for if we already have received this key
 	n.crypto.KnownPKs.Mutex.Lock()
 	n.crypto.KnownPKs.Map[peer] = StrBytesPair{Str: pubID, Bytes: key}
 	n.crypto.KnownPKs.Mutex.Unlock()
@@ -1522,7 +1520,9 @@ func (n *node) ExecDHEncryptedPkt(msg types.Message, packet transport.Packet) er
 
 func (n *node) cryptoProcessDirect(pkt transport.Packet) error {
 	msgType := pkt.Msg.Type
-	n.logger.Warn().Msgf("Received encrypted msg of type %v", msgType)
+	if pkt.Msg.Type != "calldata" {
+		n.logger.Warn().Msgf("Received encrypted msg of type %v", msgType)
+	}
 
 	err := n.conf.MessageRegistry.ProcessPacket(pkt)
 	if err != nil {

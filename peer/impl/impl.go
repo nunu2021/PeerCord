@@ -432,7 +432,6 @@ func (n *node) SetRoutingEntry(origin, relayAddr string) {
 func (n *node) processPacket(pkt transport.Packet) {
 	msgType := pkt.Msg.Type
 	if _, requiresEncryption := types.EncryptedMsgTypes[msgType]; requiresEncryption {
-		// TODO: Run a test to check this works
 		n.logger.Warn().Msgf("Received unencrypted msg of type %v. Ignoring", msgType)
 		return
 	}

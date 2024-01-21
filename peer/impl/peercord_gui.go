@@ -2,6 +2,7 @@ package impl
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -218,7 +219,7 @@ func (gui *PeercordGUI) Show(addr, pubID string, audioThroughput, videoThroughpu
 		selectedRemote := gui.getSelecedRemote()
 
 		if selectedRemote != "" {
-			handleVoteKick(gui.peer, selectedRemote)
+			gui.handleVoteKick(gui.peer, selectedRemote)
 		}
 	})
 
@@ -274,6 +275,9 @@ func (gui *PeercordGUI) Show(addr, pubID string, audioThroughput, videoThroughpu
 		for range time.Tick(time.Millisecond * 100) {
 			// Update member list
 			gui.memberList = getMapKeys(gui.peer.GetGroupCallMembers())
+			sort.Slice(gui.memberList, func(a, b int) bool {
+				return gui.memberList[a] < gui.memberList[b]
+			})
 
 			err := groupCallData.Reload()
 			if err != nil {
@@ -394,13 +398,12 @@ func (gui *PeercordGUI) handleVoteAdd(node peer.Peer, address string) {
 }
 
 // handleVoteKick initiates a vote-kicking round for the member specified by address
-func handleVoteKick(node peer.Peer, address string) {
-	fmt.Printf("Address %v\n", address)
+func (gui *PeercordGUI) handleVoteKick(node peer.Peer, address string) {
+	gui.currentVote, _ = node.StartVote(types.GroupKick, true, address)
 }
 
 /***** PROMPTS *****/
 
-// TODO: Change last element to strint pair
 func (gui *PeercordGUI) PromptDial(peer string, trust float64, dialTimeoutSec time.Duration, callId string, members ...string) bool {
 
 	retVal := make(chan bool)

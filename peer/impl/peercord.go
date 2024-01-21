@@ -323,8 +323,12 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	}
 
 	// We have been dialed, ask the user if they want to answer the call
-	// TODO: Get the acual trust
-	accepted := n.gui.PromptDial(dialMsg.Caller, 0, 10*time.Second, dialMsg.CallId, dialMsg.Members...)
+	// trust, err := n.GetTrust(dialMsg.Caller)
+	// if err != nil {
+	// 	return fmt.Errorf("Failed to get trust from user")
+	// }
+	trust := 0.0
+	accepted := n.gui.PromptDial(dialMsg.Caller, trust, 10*time.Second, dialMsg.CallId, dialMsg.Members...)
 
 	response := types.DialResponseMsg{
 		CallId:   dialMsg.CallId,
@@ -484,7 +488,6 @@ func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) e
 		n.peerCord.members.set(n.peerCord.currentDial.Peer, struct{}{})
 
 		fmt.Println("Starting key exchange")
-		fmt.Println(n.peerCord.members.copy())
 
 		err := n.StartDHKeyExchange(n.peerCord.members.copy())
 		if err != nil {
@@ -654,7 +657,6 @@ func (n *node) SendToCall(msg *transport.Message) error {
 	}
 
 	// TODO: Replace with a multicast group
-	// n.NaiveMulticast(*encryptedMsg, n.peerCord.members.copy())
 	n.logger.Warn().Msgf("Sending to group msg of type %v", msg.Type)
 	for member := range n.peerCord.members.copy() {
 		go n.Unicast(member, *encryptedMsg)

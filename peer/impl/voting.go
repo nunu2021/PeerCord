@@ -57,7 +57,6 @@ func (n *node) ReceiveGroupCallVotePktMsg(msg types.Message, packet transport.Pa
 }
 
 // Callback for processing a vote for a specific vote
-// TODO: We need to clean up old votes and include a timeout maybe?
 func (n *node) ProcessVote(vote types.GroupCallVotePkt) {
 
 	// Check if we have seen this vote before.
@@ -113,7 +112,6 @@ func (n *node) ProcessVote(vote types.GroupCallVotePkt) {
 
 		for _, decision := range votes {
 			if decision {
-				// TODO: Weight decisions based on users trust
 				nAgreers++
 			}
 		}
@@ -162,16 +160,27 @@ func (n *node) CompleteVoteAction(voteType types.VoteType, voteMeta string) {
 			}
 		}
 	case types.GroupKick:
-		n.peerCord.members.delete(voteMeta)
-
 		// If we are the leader, we have to initiate key exchanges
 		if n.IsLeader() {
+			hangUp := types.HangUpMsg{
+				Member: n.GetAddress(),
+				CallId: n.peerCord.currentDial.ID,
+			}
+
+			marshaledMsg, err := n.conf.MessageRegistry.MarshalMessage(hangUp)
+			if err == nil {
+				err = n.Unicast(voteMeta, marshaledMsg)
+				if err != nil {
+					n.logger.Err(err).Msg("error when sending hang up msg")
+				}
+			}
+
 			if n.peerCord.members.len() == 2 {
 				// We are entering individual calls again. TODO: Make sure we the other users PK
 			} else {
 				err := n.GroupCallRemove(voteMeta)
 				if err != nil {
-					// TODO: What if the key exchange failed?
+					n.logger.Err(err).Msg("error when reinitializing group key")
 				}
 			}
 		}
