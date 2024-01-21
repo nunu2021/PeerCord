@@ -69,11 +69,11 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	// Set a random initialized public ID
 	n.SetPublicID(RandomPubId())
 
-	// if conf.IsBootstrap {
-	// 	n.bootstrap = NewBootstrap()
-	// } else {
-	// 	n.dht = NewDHT(conf.BootstrapAddrs)
-	// }
+	if conf.IsBootstrap {
+		n.bootstrap = NewBootstrap()
+	} else if conf.StartTrust {
+		n.dht = NewDHT(conf.BootstrapAddrs)
+	}
 
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
@@ -352,22 +352,19 @@ func (n *node) Start() error {
 		return xerrors.Errorf("error when generating key pair: %v", err)
 	}
 	n.isRunning = true
-	// if !n.conf.IsBootstrap {
-	// 	err := n.SetTrust(n.GetAddress(), n.eigenTrust.p)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
-
 	go loop(n)
-	// if !n.conf.IsBootstrap {
-	// 	n.AddPeer(n.conf.BootstrapAddrs...)
-	// 	err := n.JoinDHT()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
-	return nil
+	if !n.conf.IsBootstrap && n.conf.StartTrust {
+		n.AddPeer(n.conf.BootstrapAddrs...)
+		err = n.JoinDHT()
+		if err != nil {
+			return err
+		}
+		err := n.SetTrust(n.GetAddress(), n.eigenTrust.p)
+		if err != nil {
+			return err
+		}
+	}
+    return nil
 }
 
 // Stop implements peer.Service

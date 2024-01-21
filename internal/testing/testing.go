@@ -144,21 +144,15 @@ type configTemplate struct {
 
 	dataRequestBackoff peer.Backoff
 
-	totalPeers         uint
-	paxosThreshold     func(uint) int
-	paxosID            uint
-	paxosProposerRetry time.Duration
-
-	MulticastJoinTimeout        time.Duration
-	MulticastLeaveTimeout       time.Duration
-	MulticastResendJoinInterval time.Duration
-	MulticastHeartbeat          time.Duration
-	MulticastInactivityTimeout  time.Duration
-	EigenAValue                 float64
-	EigenCalcIterations         uint
-	EigenEpsilon                float64
-	EigenPulseWait              int64
-	EigenCallTrustThreshold     float64
+	EigenAValue             float64
+	EigenCalcIterations     uint
+	EigenEpsilon            float64
+	EigenPulseWait          int64
+	EigenCallTrustThreshold float64
+	totalPeers              uint
+	paxosThreshold          func(uint) int
+	paxosID                 uint
+	paxosProposerRetry      time.Duration
 
 	IsBootstrap           bool
 	BootstrapReplace      float64
@@ -167,6 +161,13 @@ type configTemplate struct {
 	BootstrapAddrs        []string
 	SendNeighborsInterval time.Duration
 	NodeDiscardInterval   time.Duration
+	StartTrust            bool
+
+	MulticastJoinTimeout        time.Duration
+	MulticastLeaveTimeout       time.Duration
+	MulticastResendJoinInterval time.Duration
+	MulticastHeartbeat          time.Duration
+	MulticastInactivityTimeout  time.Duration
 }
 
 func newConfigTemplate() configTemplate {
@@ -202,6 +203,19 @@ func newConfigTemplate() configTemplate {
 		paxosID:            0,
 		paxosProposerRetry: time.Second * 5,
 
+		EigenAValue:             0.5,
+		EigenCalcIterations:     50,
+		EigenEpsilon:            0.00002,
+		EigenPulseWait:          30,
+		EigenCallTrustThreshold: 0.5,
+		IsBootstrap:             false,
+		BootstrapReplace:        0.75,
+		BootstrapNodeLimit:      10,
+		BootstrapTimeout:        time.Second * 3,
+		BootstrapAddrs:          []string{},
+		SendNeighborsInterval:   time.Second * 10,
+		NodeDiscardInterval:     time.Second * 20,
+        StartTrust:              false,
 		// These values are smaller than what they would be in a real system.
 		// It is to test the correctness of the implementation in a reasonable
 		// time. The values should verify the following constraints:
@@ -212,18 +226,6 @@ func newConfigTemplate() configTemplate {
 		MulticastResendJoinInterval: 3 * time.Second,
 		MulticastHeartbeat:          10 * time.Second,
 		MulticastInactivityTimeout:  35 * time.Second,
-		EigenAValue:                 0.5,
-		EigenCalcIterations:         50,
-		EigenEpsilon:                0.00002,
-		EigenPulseWait:              30,
-		EigenCallTrustThreshold:     0.5,
-		IsBootstrap:                 false,
-		BootstrapReplace:            0.75,
-		BootstrapNodeLimit:          10,
-		BootstrapTimeout:            time.Second * 3,
-		BootstrapAddrs:              []string{},
-		SendNeighborsInterval:       time.Second * 1,
-		NodeDiscardInterval:         time.Second * 3,
 	}
 }
 
@@ -333,36 +335,6 @@ func WithPaxosProposerRetry(d time.Duration) Option {
 	}
 }
 
-func WithMulticastJoinTimeout(d time.Duration) Option {
-	return func(ct *configTemplate) {
-		ct.MulticastJoinTimeout = d
-	}
-}
-
-func WithMulticastLeaveTimeout(d time.Duration) Option {
-	return func(ct *configTemplate) {
-		ct.MulticastLeaveTimeout = d
-	}
-}
-
-func WithMulticastResendJoinInterval(d time.Duration) Option {
-	return func(ct *configTemplate) {
-		ct.MulticastResendJoinInterval = d
-	}
-}
-
-func WithMulticastHeartbeat(d time.Duration) Option {
-	return func(ct *configTemplate) {
-		ct.MulticastHeartbeat = d
-	}
-}
-
-func WithMulticastInactivityTimeout(d time.Duration) Option {
-	return func(ct *configTemplate) {
-		ct.MulticastInactivityTimeout = d
-	}
-}
-
 // WithBootstrap sets a bootstrap to True.
 func WithBootstrap() Option {
 	return func(ct *configTemplate) {
@@ -413,6 +385,44 @@ func WithNodeDiscardInterval(d time.Duration) Option {
 	}
 }
 
+// WithStartTrust sets the boolean for whether or not we want to start the trust system to true
+func WithStartTrust() Option {
+	return func(ct *configTemplate) {
+		ct.StartTrust = true
+	}
+}
+
+
+func WithMulticastJoinTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastJoinTimeout = d
+	}
+}
+
+func WithMulticastLeaveTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastLeaveTimeout = d
+	}
+}
+
+func WithMulticastResendJoinInterval(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastResendJoinInterval = d
+	}
+}
+
+func WithMulticastHeartbeat(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastHeartbeat = d
+	}
+}
+
+func WithMulticastInactivityTimeout(d time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.MulticastInactivityTimeout = d
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -440,11 +450,6 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.PaxosThreshold = template.paxosThreshold
 	config.PaxosID = template.paxosID
 	config.PaxosProposerRetry = template.paxosProposerRetry
-	config.MulticastJoinTimeout = template.MulticastJoinTimeout
-	config.MulticastLeaveTimeout = template.MulticastLeaveTimeout
-	config.MulticastResendJoinInterval = template.MulticastResendJoinInterval
-	config.MulticastHeartbeat = template.MulticastHeartbeat
-	config.MulticastInactivityTimeout = template.MulticastInactivityTimeout
 	config.EigenAValue = template.EigenAValue
 	config.EigenCalcIterations = template.EigenCalcIterations
 	config.EigenCallTrustThreshold = template.EigenCallTrustThreshold
@@ -457,6 +462,12 @@ func NewTestNode(t require.TestingT, f peer.Factory, trans transport.Transport,
 	config.BootstrapAddrs = template.BootstrapAddrs
 	config.SendNeighborsInterval = template.SendNeighborsInterval
 	config.NodeDiscardInterval = template.NodeDiscardInterval
+	config.StartTrust = template.StartTrust
+	config.MulticastJoinTimeout = template.MulticastJoinTimeout
+	config.MulticastLeaveTimeout = template.MulticastLeaveTimeout
+	config.MulticastResendJoinInterval = template.MulticastResendJoinInterval
+	config.MulticastHeartbeat = template.MulticastHeartbeat
+	config.MulticastInactivityTimeout = template.MulticastInactivityTimeout
 
 	node := f(config)
 
@@ -956,3 +967,4 @@ func NewSenderSocket(transp transport.Transport, address string) (transport.Clos
 type Terminable interface {
 	Terminate() error
 }
+
