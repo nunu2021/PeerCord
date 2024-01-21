@@ -23,7 +23,16 @@ func (testing) FailNow() {
 }
 
 func main() {
-	node := z.NewTestNode(t, impl.NewPeer, udp.NewUDP(), "127.0.0.1:0", z.WithAntiEntropy(time.Millisecond*500), z.WithContinueMongering(1), z.WithHeartbeat(time.Hour*24), z.WithStartTrust())
+	transp := udp.NewUDP()
+
+	bootstrap := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithBootstrap())
+	node := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0",
+		z.WithAntiEntropy(time.Millisecond*500),
+		z.WithContinueMongering(1),
+		z.WithHeartbeat(time.Hour*24),
+		z.WithStartTrust(),
+		z.WithBootstrapAddrs([]string{bootstrap.GetAddr()}),
+	)
 
 	gui := impl.NewPeercordGUI(&node)
 

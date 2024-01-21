@@ -323,11 +323,11 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	}
 
 	// We have been dialed, ask the user if they want to answer the call
-	// trust, err := n.GetTrust(dialMsg.Caller)
-	// if err != nil {
-	// 	return fmt.Errorf("Failed to get trust from user")
-	// }
-	trust := 0.0
+	trust, err := n.GetTrust(dialMsg.Caller)
+	if err != nil {
+		return fmt.Errorf("Failed to get trust from user")
+	}
+	// trust := 0.0
 	accepted := n.gui.PromptDial(dialMsg.Caller, trust, 10*time.Second, dialMsg.CallId, dialMsg.Members...)
 
 	response := types.DialResponseMsg{
