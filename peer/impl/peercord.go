@@ -369,39 +369,41 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	n.peerCord.members.set(dialMsg.Caller, struct{}{})
 
 	n.peerCord.currentDial.leader = dialMsg.Caller
-	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
-	n.peerCord.currentDial.dialTimeStart = time.Now()
-	go func(stopChan chan struct{}, peer string) {
-		for {
-			time.Sleep(time.Millisecond * 100)
-			select {
-			case <-stopChan:
-				return
-			default:
-				callMsg := n.GetNextCallDataMessage()
-				data, err := json.Marshal(&callMsg)
-				if err != nil {
-					n.logger.Err(err).Msg("error when marshaling next 1t1 call data")
-				} else {
-					transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
-					encryptedMsg, err := n.EncryptOneToOneMsg(&transportMsg, peer)
+	if len(dialMsg.Members) == 1 {
+		n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
+		n.peerCord.currentDial.dialTimeStart = time.Now()
+		go func(stopChan chan struct{}, peer string) {
+			for {
+				time.Sleep(time.Millisecond * 100)
+				select {
+				case <-stopChan:
+					return
+				default:
+					callMsg := n.GetNextCallDataMessage()
+					data, err := json.Marshal(&callMsg)
 					if err != nil {
-						n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
+						n.logger.Err(err).Msg("error when marshaling next 1t1 call data")
 					} else {
-						err = n.Unicast(peer, *encryptedMsg)
+						transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
+						encryptedMsg, err := n.EncryptOneToOneMsg(&transportMsg, peer)
 						if err != nil {
 							n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
 						} else {
-							n.peerCord.currentDial.Lock()
-							n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
-							n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
-							n.peerCord.currentDial.Unlock()
+							err = n.Unicast(peer, *encryptedMsg)
+							if err != nil {
+								n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
+							} else {
+								n.peerCord.currentDial.Lock()
+								n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
+								n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
+								n.peerCord.currentDial.Unlock()
+							}
 						}
 					}
 				}
 			}
-		}
-	}(n.peerCord.currentDial.dialStopChan, dialMsg.Caller)
+		}(n.peerCord.currentDial.dialStopChan, dialMsg.Caller)
+	}
 
 	return nil
 }
