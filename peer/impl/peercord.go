@@ -69,6 +69,7 @@ func newPeerCord() PeerCord {
 		votes:   newSafeMap[string, VoteData](),
 		currentDial: DialingData{
 			ResponseChannel: newResponseChannel(),
+			dialStopChan:    make(chan struct{}, 1),
 		},
 	}
 }
@@ -487,10 +488,12 @@ func (n *node) EndCall() {
 			n.SendToCall(&marshaledMsg)
 		}
 
-		rating := n.gui.PromptRating("Please rate your experience with this call based on the peer who called you. Options: {2 = good, 1 = bad}")
-		originPeer := n.peerCord.currentDial.leader
+		if n.guiReady() {
+			rating := n.gui.PromptRating("Please rate your experience with this call based on the peer who called you. Options: {2 = good, 1 = bad}")
+			originPeer := n.peerCord.currentDial.leader
 
-		n.EigenRatePeer(originPeer, rating-2)
+			n.EigenRatePeer(originPeer, rating-2)
+		}
 	}
 
 	n.peerCord.members = newSafeMap[string, struct{}]()
@@ -500,7 +503,8 @@ func (n *node) EndCall() {
 
 	n.peerCord.currentDial.dialAudioBytesSent = 0
 	n.peerCord.currentDial.dialVideoBytesSent = 0
-	// n.peerCord.currentDial.dialStopChan <- struct{}{}
+	n.peerCord.currentDial.dialStopChan <- struct{}{}
+	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
 }
 
 func (n *node) receiveHangUp(msg types.Message, packet transport.Packet) error {

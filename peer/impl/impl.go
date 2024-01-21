@@ -379,6 +379,7 @@ func (n *node) Stop() error {
 		return NotRunningError{}
 	}
 
+	n.gui = nil
 	if n.CallLineState() != types.Idle {
 		n.EndCall()
 	}

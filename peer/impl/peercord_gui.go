@@ -612,3 +612,7 @@ func (gui *PeercordGUI) PromptRating(prompt string) int {
 
 	return <-retVal
 }
+
+func (gui *PeercordGUI) RegisterCurrentVote(voteId string) {
+	gui.currentVote = voteId
+}

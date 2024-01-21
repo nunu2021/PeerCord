@@ -102,6 +102,8 @@ func (n *node) ProcessVote(vote types.GroupCallVotePkt) {
 		if err != nil {
 			n.logger.Err(err).Msgf("Unable to cast vote")
 		}
+
+		n.gui.RegisterCurrentVote(vote.ID)
 	}
 
 	// Check for a consensus

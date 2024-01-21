@@ -27,6 +27,8 @@ type PeercordGUI interface {
 	// Blocking call to prompt user to rate the quality of a call with the prompt string "prompt"
 	// Returns an integer [1, 5]
 	PromptRating(prompt string) int
+
+	RegisterCurrentVote(voteId string)
 }
 
 /** Call Dialing **/

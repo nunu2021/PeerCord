@@ -1347,7 +1347,7 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	transportExistenceMsg := transport.Message{Type: groupExistenceMsg.Name(), Payload: data}
 	n.NaiveMulticast(transportExistenceMsg, message.MembersList)
 	n.peerCord.currentDial.Lock()
-	n.peerCord.currentDial.dialStopChan = make(chan struct{})
+	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
 	n.peerCord.currentDial.dialTimeStart = time.Now()
 	go func(stopChan chan struct{}) {
 		for {
