@@ -95,7 +95,7 @@ for loc, p in peers.items():
 # Start the peers
 def start_peer(name):
     ip_neighbors = ' '.join([peers[n].get_ip() + ':4242' for n in neighbors[name]])
-    peers[name].run_command(f"nohup ./vm-peer {peers[name].get_ip()} 4242 {PACKETS_PER_SECOND} {len(peers)} {len(neighbors[name])} " + ip_neighbors + " > output 2>&1 &")
+    peers[name].run_command(f"./vm-peer {peers[name].get_ip()} 4242 {PACKETS_PER_SECOND} {len(peers)} {len(neighbors[name])} " + ip_neighbors)
 
 threads = [threading.Thread(target=start_peer, args=(name,)) for name in peers]
 for thread in threads:
