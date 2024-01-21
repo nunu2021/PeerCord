@@ -44,7 +44,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -264,7 +263,6 @@ type Crypto struct {
 func (n *node) CreateCallMembers() map[string]struct{} {
 	callMembers := n.peerCord.members.copy()
 	callMembers[n.GetAddress()] = struct{}{}
-	fmt.Printf("%v\r\n", callMembers)
 	return callMembers
 }
 
@@ -785,6 +783,7 @@ func DHRemoveRound2(n *node, member string) error {
 	var waitGrp sync.WaitGroup
 	var lock sync.Mutex
 	removedPeers := make([]string, 0)
+	remainingMembers := make(map[string]struct{})
 
 	round2Messages, err := BuildPartialSecretsRemove(n, member)
 	for s := range n.crypto.DHInitSecrets {
@@ -792,6 +791,7 @@ func DHRemoveRound2(n *node, member string) error {
 		if s == n.GetAddress() {
 			continue
 		}
+		remainingMembers[s] = struct{}{}
 		n.crypto.DHchannels.Add(s)
 		waitGrp.Add(1)
 		go func(c chan struct{}, peer string, msg transport.Message) {
@@ -829,6 +829,53 @@ func DHRemoveRound2(n *node, member string) error {
 			return xerrors.Errorf("error when removing unanswering peer: %v", err)
 		}
 	}
+
+	multicastGRP := n.NewMulticastGroup()
+	n.peerCord.currentDial.multicastGroupID = multicastGRP
+	groupExistenceMsg := types.MulticastGroupExistence{GroupSender: n.GetAddress(), GroupID: multicastGRP}
+	data, err := json.Marshal(&groupExistenceMsg)
+	if err != nil {
+		return xerrors.Errorf("error in DH Shared secret Multicast grp existence marshaling: %v", err)
+	}
+	transportExistenceMsg := transport.Message{Type: groupExistenceMsg.Name(), Payload: data}
+	n.NaiveMulticast(transportExistenceMsg, remainingMembers)
+	n.peerCord.currentDial.Lock()
+	n.peerCord.currentDial.dialStopChan <- struct{}{}
+	close(n.peerCord.currentDial.dialStopChan)
+	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
+	n.peerCord.currentDial.dialTimeStart = time.Now()
+	go func(stopChan chan struct{}) {
+		for {
+			time.Sleep(time.Millisecond * 100)
+			select {
+			case <-stopChan:
+				return
+			default:
+				callMsg := n.GetNextCallDataMessage()
+				data, err := json.Marshal(&callMsg)
+				if err != nil {
+					n.logger.Err(err).Msg("error when marshaling next call data")
+				} else {
+					transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
+					encryptedMsg, err := n.EncryptDHMsg(&transportMsg)
+					if err != nil {
+						n.logger.Err(err).Msg("error when encrypting next call msg")
+					} else {
+						err = n.Multicast(*encryptedMsg, n.peerCord.currentDial.multicastGroupID)
+						if err != nil {
+							n.logger.Err(err).Msg("error when encrypting next call msg")
+						} else {
+							n.peerCord.currentDial.Lock()
+							n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
+							n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
+							n.peerCord.currentDial.Unlock()
+						}
+					}
+				}
+			}
+		}
+	}(n.peerCord.currentDial.dialStopChan)
+	n.peerCord.currentDial.Unlock()
 
 	return err
 }
@@ -1345,6 +1392,12 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 	transportExistenceMsg := transport.Message{Type: groupExistenceMsg.Name(), Payload: data}
 	n.NaiveMulticast(transportExistenceMsg, message.MembersList)
 	n.peerCord.currentDial.Lock()
+	membersliststr := ""
+	for s := range message.MembersList {
+		membersliststr += "  " + s
+	}
+	n.peerCord.currentDial.dialStopChan <- struct{}{}
+	close(n.peerCord.currentDial.dialStopChan)
 	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
 	n.peerCord.currentDial.dialTimeStart = time.Now()
 	go func(stopChan chan struct{}) {
@@ -1352,7 +1405,6 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 			time.Sleep(time.Millisecond * 100)
 			select {
 			case <-stopChan:
-				n.logger.Debug().Msg("stop sending packets")
 				return
 			default:
 				callMsg := n.GetNextCallDataMessage()
@@ -1380,7 +1432,6 @@ func (n *node) ExecGroupCallDHSharedSecret(msg types.Message, packet transport.P
 		}
 	}(n.peerCord.currentDial.dialStopChan)
 	n.peerCord.currentDial.Unlock()
-
 	return nil
 }
 

@@ -323,11 +323,11 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	}
 
 	// We have been dialed, ask the user if they want to answer the call
-	// trust, err := n.GetTrust(dialMsg.Caller)
-	// if err != nil {
-	// 	return fmt.Errorf("Failed to get trust from user")
-	// }
-	trust := 0.0
+	trust, err := n.GetTrust(dialMsg.Caller)
+	if err != nil {
+		return fmt.Errorf("Failed to get trust from user")
+	}
+	// trust := 0.0
 	accepted := n.gui.PromptDial(dialMsg.Caller, trust, 10*time.Second, dialMsg.CallId, dialMsg.Members...)
 
 	response := types.DialResponseMsg{
@@ -369,39 +369,42 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	n.peerCord.members.set(dialMsg.Caller, struct{}{})
 
 	n.peerCord.currentDial.leader = dialMsg.Caller
-	n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
-	n.peerCord.currentDial.dialTimeStart = time.Now()
-	go func(stopChan chan struct{}, peer string) {
-		for {
-			time.Sleep(time.Millisecond * 100)
-			select {
-			case <-stopChan:
-				return
-			default:
-				callMsg := n.GetNextCallDataMessage()
-				data, err := json.Marshal(&callMsg)
-				if err != nil {
-					n.logger.Err(err).Msg("error when marshaling next 1t1 call data")
-				} else {
-					transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
-					encryptedMsg, err := n.EncryptOneToOneMsg(&transportMsg, peer)
+	if len(dialMsg.Members) == 0 {
+		// We are in a 1:1 call, we can start transmitting immediately
+		n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
+		n.peerCord.currentDial.dialTimeStart = time.Now()
+		go func(stopChan chan struct{}, peer string) {
+			for {
+				time.Sleep(time.Millisecond * 100)
+				select {
+				case <-stopChan:
+					return
+				default:
+					callMsg := n.GetNextCallDataMessage()
+					data, err := json.Marshal(&callMsg)
 					if err != nil {
-						n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
+						n.logger.Err(err).Msg("error when marshaling next 1t1 call data")
 					} else {
-						err = n.Unicast(peer, *encryptedMsg)
+						transportMsg := transport.Message{Payload: data, Type: callMsg.Name()}
+						encryptedMsg, err := n.EncryptOneToOneMsg(&transportMsg, peer)
 						if err != nil {
 							n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
 						} else {
-							n.peerCord.currentDial.Lock()
-							n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
-							n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
-							n.peerCord.currentDial.Unlock()
+							err = n.Unicast(peer, *encryptedMsg)
+							if err != nil {
+								n.logger.Err(err).Msg("error when encrypting next 1t1 call msg")
+							} else {
+								n.peerCord.currentDial.Lock()
+								n.peerCord.currentDial.dialVideoBytesSent += uint(len(callMsg.VideoBytes))
+								n.peerCord.currentDial.dialAudioBytesSent += uint(len(callMsg.AudioBytes))
+								n.peerCord.currentDial.Unlock()
+							}
 						}
 					}
 				}
 			}
-		}
-	}(n.peerCord.currentDial.dialStopChan, dialMsg.Caller)
+		}(n.peerCord.currentDial.dialStopChan, dialMsg.Caller)
+	}
 
 	return nil
 }

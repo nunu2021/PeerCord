@@ -342,10 +342,10 @@ func (n *node) Start() error {
 	// Initialize streaming components on startup to avoid
 	// opening & closing the webcam repeatedly. Camtron does not support
 	// opening & closing repeatedly.
-	// if err := n.initializeStreaming(); err != nil {
-	// 	n.logger.Error().Err(err).Msg("failed to initialize streaming")
-	// 	return err
-	// }
+	if err := n.initializeStreaming(); err != nil {
+		n.logger.Error().Err(err).Msg("failed to initialize streaming")
+		return err
+	}
 
 	err := n.GenerateKeyPair()
 	if err != nil {
@@ -364,7 +364,7 @@ func (n *node) Start() error {
 			return err
 		}
 	}
-    return nil
+	return nil
 }
 
 // Stop implements peer.Service
@@ -381,10 +381,10 @@ func (n *node) Stop() error {
 		n.EndCall()
 	}
 
-	// if err := n.destroyStreaming(); err != nil {
-	// 	n.logger.Error().Err(err).Msg("failed to stop streaming")
-	// 	return err
-	// }
+	if err := n.destroyStreaming(); err != nil {
+		n.logger.Error().Err(err).Msg("failed to stop streaming")
+		return err
+	}
 
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}

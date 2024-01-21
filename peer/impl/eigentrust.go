@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -50,10 +51,11 @@ type EigenTrust struct {
 }
 
 func NewEigenTrust(totalPeers uint) EigenTrust {
-	tempP := 1 / float64(totalPeers)
+	tempP := 1.0 / float64(totalPeers)
 	if totalPeers > 3 {
-		tempP = 0
+		tempP = 0.0
 	}
+	fmt.Println("is this happenign??", totalPeers)
 	return EigenTrust{
 		IncomingCallRatingSum: newSafeMap[string, int](),
 		CallsOutgoingTo:       newSafeMap[string, int](),

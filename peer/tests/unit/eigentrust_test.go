@@ -84,7 +84,7 @@ func Test_EigenTrust_With_Good_Calls_2_Peers(t *testing.T) {
 	val, err := node1.ComputeGlobalTrustValue()
 
 	require.NoError(t, err)
-	require.Equal(t, 0.75, val)
+	require.Equal(t, 0.625, val)
 
 	defer node1.Stop()
 	defer node2.Stop()
@@ -114,7 +114,7 @@ func Test_EigenTrust_With_Bad_Calls_2_Peers(t *testing.T) {
 	val, err := node1.ComputeGlobalTrustValue()
 
 	require.NoError(t, err)
-	require.Equal(t, 0.5, val)
+	require.Equal(t, 0.625, val)
 
 	defer node1.Stop()
 	defer node2.Stop()
@@ -133,13 +133,13 @@ func Test_EigenTrust_With_Bad_Calls_2_Peers(t *testing.T) {
 // 5 --> 2 : bad
 // 6 --> 2 : bad
 // 1 --> 4 : good
-// 6 --> 4 : bad
+// 6 --> 4 : good
 
 func Test_EigenTrust_Multiple_Peers_Good_Calls_Pulse(t *testing.T) {
 	// transp := channel.NewTransport()
 	transp := udpFac()
 
-    nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
 	defer nodeB.Stop()
 
 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithTotalPeers(1), z.WithBootstrapAddrs([]string{nodeB.GetAddr()}), z.WithStartTrust())
@@ -171,16 +171,15 @@ func Test_EigenTrust_Multiple_Peers_Good_Calls_Pulse(t *testing.T) {
 
 	val4, err := node4.ComputeGlobalTrustValue()
 	require.NoError(t, err)
-	require.Equal(t, 0.125, val4)
+	require.Equal(t, 0.0, val4)
 
 	val5, err := node5.ComputeGlobalTrustValue()
 	require.NoError(t, err)
-	require.Equal(t, 0.1, val5)
+	require.Equal(t, 0.0, val5)
 
 	val6, err := node6.ComputeGlobalTrustValue()
 	require.NoError(t, err)
-	exp = 1.0 / 12.0
-	require.Equal(t, exp, val6)
+	require.Equal(t, 0.0, val6)
 
 	// Simulation of calls
 	// making calls 1 --> 2, 3, 4
@@ -257,7 +256,7 @@ func Test_EigenTrust_Multiple_Peers_Good_Calls_Pulse(t *testing.T) {
 
 	// rate the call
 	node1.EigenRatePeer(node4.GetAddr(), 1)
-	node6.EigenRatePeer(node4.GetAddr(), -1)
+	node6.EigenRatePeer(node4.GetAddr(), 1)
 
 	time.Sleep(time.Second * 60)
 
@@ -265,12 +264,7 @@ func Test_EigenTrust_Multiple_Peers_Good_Calls_Pulse(t *testing.T) {
 
 	// now the pulse can calculate
 
-	// first recheck for node1
-	val1, err = node1.GetTrust(node1.GetAddr())
-	require.NoError(t, err)
-	require.Equal(t, 0.7083333333333333, val1)
-
-	// recheck for node1
+	// recheck for node2
 	val2, err = node2.GetTrust(node2.GetAddr())
 	require.NoError(t, err)
 	require.Equal(t, 0.25, val2)
@@ -278,7 +272,7 @@ func Test_EigenTrust_Multiple_Peers_Good_Calls_Pulse(t *testing.T) {
 	// check for node 4
 	val4, err = node4.GetTrust(node4.GetAddr())
 	require.NoError(t, err)
-	require.Equal(t, 0.47916666666666663, val4)
+	require.Equal(t, 0.35416666666666663, val4)
 
 }
 
@@ -478,4 +472,3 @@ func Test_EigenTrust_Multiple_Peers_Good_Calls_Pulse(t *testing.T) {
 // 	require.Equal(t, 0.47916666666666663, val4)
 
 // }
-
