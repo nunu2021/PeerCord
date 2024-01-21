@@ -369,7 +369,8 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 	n.peerCord.members.set(dialMsg.Caller, struct{}{})
 
 	n.peerCord.currentDial.leader = dialMsg.Caller
-	if len(dialMsg.Members) == 1 {
+	if len(dialMsg.Members) == 0 {
+		// We are in a 1:1 call, we can start transmitting immediately
 		n.peerCord.currentDial.dialStopChan = make(chan struct{}, 1)
 		n.peerCord.currentDial.dialTimeStart = time.Now()
 		go func(stopChan chan struct{}, peer string) {

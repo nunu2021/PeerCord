@@ -364,7 +364,7 @@ func (n *node) Start() error {
 			return err
 		}
 	}
-    return nil
+	return nil
 }
 
 // Stop implements peer.Service

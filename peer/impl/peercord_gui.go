@@ -168,13 +168,16 @@ func (gui *PeercordGUI) Show(addr, pubID string, audioThroughput, videoThroughpu
 	)
 
 	// Throughputs
+	audioThroughputLabel := widget.NewLabel("")
+	videoThroughputLabel := widget.NewLabel("")
+
 	audioThroughputContainer := container.NewHBox(
 		widget.NewLabel("Audio throughput:"),
-		widget.NewLabel(strconv.FormatFloat(audioThroughput, 'E', -1, 64)),
+		audioThroughputLabel,
 	)
 	videoThroughputContainer := container.NewHBox(
 		widget.NewLabel("Video throughput:"),
-		widget.NewLabel(strconv.FormatFloat(videoThroughput, 'E', -1, 64)),
+		videoThroughputLabel,
 	)
 
 	// Call Status
@@ -267,6 +270,14 @@ func (gui *PeercordGUI) Show(addr, pubID string, audioThroughput, videoThroughpu
 	go func() {
 		for range time.Tick(time.Millisecond * 100) {
 			callStatusLabel.SetText(getDialStateString(gui.peer))
+		}
+	}()
+
+	// Throughput Updater
+	go func() {
+		for range time.Tick(time.Millisecond * 100) {
+			audioThroughputLabel.SetText(strconv.FormatFloat(gui.peer.GetAudioThroughput(), 'E', -1, 64))
+			videoThroughputLabel.SetText(strconv.FormatFloat(gui.peer.GetVideoThroughput(), 'E', -1, 64))
 		}
 	}()
 
