@@ -23,6 +23,7 @@ import (
 var MAXX uint16 = 0xFFFF
 var MAXY uint16 = 0xFFFF
 var MAXZ uint16 = 0xFFFF
+var NUM_REALITIES int = 1
 
 type Reality struct {
 	mu            *sync.Mutex
@@ -38,7 +39,13 @@ type DHT struct {
 	BootstrapAddrs  []string
 	BootstrapChan   chan struct{}
 	BootstrapUpdate map[string]struct{}
-	Realities       [5]Reality
+	Realities       [1]Reality
+}
+
+type TimeoutError struct{}
+
+func (e *TimeoutError) Error() string {
+	return "Timeout in GetTrust"
 }
 
 func NewReality(bootstrapAddrs []string) Reality {
@@ -71,7 +78,7 @@ func NewReality(bootstrapAddrs []string) Reality {
 func NewDHT(bootstrapAddrs []string) DHT {
 	d := DHT{
 		mu:              &sync.Mutex{},
-		Realities:       *new([5]Reality),
+		Realities:       *new([1]Reality),
 		BootstrapAddrs:  bootstrapAddrs,
 		BootstrapChan:   make(chan struct{}),
 		BootstrapUpdate: make(map[string]struct{}),
@@ -270,12 +277,14 @@ func (n *node) BordersZone(z types.Zone, zNew types.Zone) bool {
 
 // Function to join the Dht
 func (n *node) JoinDHT() error {
-	return n.QueryBootstrap()
+    err := n.QueryBootstrap()
+    time.Sleep(time.Second * 1)
+    return err
 }
 
 // Sends message to set trust value
 func (n *node) SetTrust(node string, trustValue float64) error {
-	for i := 0; i < 5; i++ {
+	for i := 0; i < NUM_REALITIES; i++ {
 		err := n.SetTrustPerReality(node, trustValue, i)
 		if err != nil {
 			return err
@@ -312,12 +321,21 @@ func (n *node) GetTrust(node string) (float64, error) {
 	trustVals := make(map[float64]int)
 	maxCount := 0
 	retVal := 0.0
-
-	for i := 0; i < 5; i++ {
+    cont := false
+	for i := 0; i < NUM_REALITIES; i++ {
 		num, err := n.GetTrustPerReality(node, i)
 		if err != nil {
-			return 0, err
-		}
+            switch err.(type) {
+                default:
+                    return 0, err
+                case *TimeoutError:
+                    cont = true
+            }
+        }
+        if cont {
+            continue
+        }
+
 		_, ok := trustVals[num]
 		if !ok {
 			trustVals[num] = 1
@@ -325,7 +343,6 @@ func (n *node) GetTrust(node string) (float64, error) {
 			trustVals[num]++
 		}
 	}
-
 	for trust, count := range trustVals {
 		if count > maxCount {
 			retVal = trust
@@ -341,12 +358,6 @@ func (n *node) GetTrust(node string) (float64, error) {
 // Sends message to each reality to get the trust value of a node
 func (n *node) GetTrustPerReality(node string, reality int) (float64, error) {
 	n.dht.Realities[reality].mu.Lock()
-	val, ok := n.dht.Realities[reality].Points[node]
-	if ok {
-		n.dht.Realities[reality].mu.Unlock()
-		return val, nil
-	}
-
 	point := n.Hash(node)
 	if Contains(n.dht.Realities[reality].Area.Zone, point) {
 		trustVal := n.dht.Realities[reality].Points[node]
@@ -379,15 +390,22 @@ func (n *node) GetTrustPerReality(node string, reality int) (float64, error) {
 		return 0, xerrors.Errorf("error routing message %v in dht", msg)
 	}
 
-	t := <-chanTrust
-
-	n.dht.Realities[reality].ResponseChans.Mu.Lock()
-
-	close(n.dht.Realities[reality].ResponseChans.Map[id])
-	delete(n.dht.Realities[reality].ResponseChans.Map, id)
-	n.dht.Realities[reality].ResponseChans.Mu.Unlock()
-
-	return t, nil
+    timer := time.NewTimer(time.Second * 5)
+    select {
+        case t := <-chanTrust:
+            timer.Stop()
+            n.dht.Realities[reality].ResponseChans.Mu.Lock()
+            close(n.dht.Realities[reality].ResponseChans.Map[id])
+            delete(n.dht.Realities[reality].ResponseChans.Map, id)
+            n.dht.Realities[reality].ResponseChans.Mu.Unlock()
+            return t, nil
+        case <-timer.C:
+            n.dht.Realities[reality].ResponseChans.Mu.Lock()
+            close(n.dht.Realities[reality].ResponseChans.Map[id])
+            delete(n.dht.Realities[reality].ResponseChans.Map, id)
+            n.dht.Realities[reality].ResponseChans.Mu.Unlock()
+            return 0, &TimeoutError{}
+    }
 }
 
 // *******************************************
@@ -482,16 +500,13 @@ func (n *node) QueryBootstrap() error {
 		}
 
 		timer := time.NewTimer(n.conf.BootstrapTimeout)
-	in:
-		for {
-			select {
-			case <-timer.C:
-				break in
-			case <-n.dht.BootstrapChan:
-				timer.Stop()
-				return nil
-			}
-		}
+        select {
+            case <-timer.C:
+                break
+            case <-n.dht.BootstrapChan:
+                timer.Stop()
+                return nil
+        }
 	}
 
 	return xerrors.Errorf("no bootstrap nodes available")
@@ -499,7 +514,7 @@ func (n *node) QueryBootstrap() error {
 
 // Sends the join request message to each reality
 func (n *node) SendDHTJoin(IPAddrs []string) error {
-	for i := 0; i < 5; i++ {
+	for i := 0; i < NUM_REALITIES; i++ {
 		p := RandomPoint()
 
 		msg := types.DHTJoinRequestMessage{Source: n.GetAddress(), Destination: p, Reality: i}
@@ -543,7 +558,7 @@ func (n *node) ForwardCloser(p types.Point, msg *transport.Message, reality int)
 
 // Sends a status message (like the AntiEntropy message)
 func (n *node) SendStatus() {
-	for i := 0; i < 5; i++ {
+	for i := 0; i < NUM_REALITIES; i++ {
 		n.dht.Realities[i].mu.Lock()
 		if len(n.dht.Realities[i].Neighbors) == 0 {
 			n.dht.Realities[i].mu.Unlock()
@@ -595,6 +610,7 @@ func (n *node) UpdateMyNeighbors(reality int) {
 	newNeighbors := make(map[string]types.SequencedZone)
 	for neighbor, area := range n.dht.Realities[reality].Neighbors {
 		if n.BordersZone(myZone, area.Zone) {
+		    n.routingTable.set(neighbor, neighbor)
 			newNeighbors[neighbor] = area
 		}
 	}
@@ -637,13 +653,34 @@ func (n *node) GetKeys(m map[string]types.SequencedZone) []string {
 	return keys
 }
 
+func (n *node) UnicastToRecipients(recipients []string, msg types.Message) error {
+	mMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+
+    for _, recipient := range recipients {
+        wg.Add(1)
+        go func(dest string) {
+            defer wg.Done()
+            _ = n.Unicast(dest, mMsg)
+        }(recipient)
+    }
+    wg.Wait()
+
+	return nil
+}
+
 // Sends a message to the list of neighbors given
 func (n *node) SendToNeighbors(msg types.Message, neighbors []string) error {
 	recipients := make(map[string]struct{})
 	for _, neighbor := range neighbors {
 		recipients[neighbor] = struct{}{}
 	}
-	return n.marshalAndBroadcastAsPrivate(recipients, msg)
+	// return n.marshalAndBroadcastAsPrivate(recipients, msg)
+	return n.UnicastToRecipients(neighbors, msg)
 }
 
 // Sends a status message to each neighbor
@@ -655,6 +692,24 @@ func (n *node) SendNeighbors(reality int) {
 		Reality:   reality,
 	}
 	_ = n.SendToNeighbors(msg, n.GetKeys(n.dht.Realities[reality].Neighbors))
+}
+
+// Checks for stale neighbors
+// If a neighbor has not sent a message in NodeDiscardInterval
+// time, then we delete the node from our neighbors list
+//
+// Default = 3s
+func (n *node) CheckAndRefresh(reality int) {
+	n.dht.Realities[reality].RefreshTimes.Mu.Lock()
+	defer n.dht.Realities[reality].RefreshTimes.Mu.Unlock()
+	curTime := time.Now()
+	for node, prevTime := range n.dht.Realities[reality].RefreshTimes.Map {
+		if curTime.Sub(prevTime) > n.conf.NodeDiscardInterval {
+			delete(n.dht.Realities[reality].Neighbors, node)
+		} else {
+			n.dht.Realities[reality].RefreshTimes.Map[node] = curTime
+		}
+	}
 }
 
 // ---------------------------------------
@@ -747,15 +802,18 @@ func (n *node) ExecDHTJoinAcceptMessage(msg types.Message, pkt transport.Packet)
 	for neighbor := range d.Neighbors {
 		n.routingTable.set(neighbor, neighbor)
 	}
+
+    neighbors := n.dht.Realities[d.Reality].Neighbors
 	n.dht.Realities[d.Reality].mu.Unlock()
 
 	// Send an update message to my neighbors
 	updateMsg := types.DHTUpdateNeighborsMessage{
 		Reality:  d.Reality,
 		Node:     n.GetAddress(),
-		NodeArea: n.dht.Realities[d.Reality].Area,
+		NodeArea: d.Area,
 	}
-	err := n.SendToNeighbors(updateMsg, n.GetKeys(n.dht.Realities[d.Reality].Neighbors))
+
+	err := n.SendToNeighbors(updateMsg, n.GetKeys(neighbors))
 	if err != nil {
 		return xerrors.Errorf("error broadcasting private message: %v", err)
 	}
@@ -788,30 +846,13 @@ func (n *node) ExecDHTUpdateNeighborsMessage(msg types.Message, pkt transport.Pa
 	if !n.BordersZone(n.dht.Realities[d.Reality].Area.Zone, d.NodeArea.Zone) {
 		delete(n.dht.Realities[d.Reality].Neighbors, d.Node)
 	} else {
+        n.routingTable.set(d.Node, d.Node)
 		val, ok := n.dht.Realities[d.Reality].Neighbors[d.Node]
 		if !ok || d.NodeArea.Number > val.Number {
 			n.dht.Realities[d.Reality].Neighbors[d.Node] = d.NodeArea
 		}
 	}
 	return nil
-}
-
-// Checks for stale neighbors
-// If a neighbor has not sent a message in NodeDiscardInterval
-// time, then we delete the node from our neighbors list
-//
-// Default = 3s
-func (n *node) CheckAndRefresh(reality int) {
-	n.dht.Realities[reality].RefreshTimes.Mu.Lock()
-	defer n.dht.Realities[reality].RefreshTimes.Mu.Unlock()
-	curTime := time.Now()
-	for node, prevTime := range n.dht.Realities[reality].RefreshTimes.Map {
-		if curTime.Sub(prevTime) > n.conf.NodeDiscardInterval {
-			delete(n.dht.Realities[reality].Neighbors, node)
-		} else {
-			n.dht.Realities[reality].RefreshTimes.Map[node] = curTime
-		}
-	}
 }
 
 func (n *node) ExecDHTNeighborsStatusMessage(msg types.Message, pkt transport.Packet) error {
@@ -830,6 +871,7 @@ func (n *node) ExecDHTNeighborsStatusMessage(msg types.Message, pkt transport.Pa
 		if node == n.GetAddress() {
 			continue
 		}
+		n.routingTable.set(node, node)
 		newNeighbors = n.AddNode(node, area, newNeighbors, d.Reality)
 	}
 
@@ -873,12 +915,7 @@ func (n *node) ExecDHTQueryMessage(msg types.Message, pkt transport.Packet) erro
 			TrustValue: n.dht.Realities[d.Reality].Points[d.Source],
 		}
 		n.dht.Realities[d.Reality].mu.Unlock()
-		tMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
-		if err != nil {
-			return xerrors.Errorf("error marshalling message %v", msg)
-		}
-
-		return n.Unicast(d.Sender, tMsg)
+		return n.UnicastToRecipients([]string{d.Sender}, msg)
 	}
 	n.dht.Realities[d.Reality].mu.Unlock()
 	return n.ForwardCloser(d.Point, pkt.Msg, d.Reality)
@@ -890,7 +927,12 @@ func (n *node) ExecDHTQueryResponseMessage(msg types.Message, pkt transport.Pack
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
 	n.dht.Realities[d.Reality].ResponseChans.Mu.Lock()
-	n.dht.Realities[d.Reality].ResponseChans.Map[d.UniqueID] <- d.TrustValue
+    channel, ok := n.dht.Realities[d.Reality].ResponseChans.Map[d.UniqueID]
+    if !ok {
+        n.dht.Realities[d.Reality].ResponseChans.Mu.Unlock()
+        return xerrors.Errorf("No such response channel for reality %d", d.Reality)
+    }
+	channel <- d.TrustValue
 	n.dht.Realities[d.Reality].ResponseChans.Mu.Unlock()
 	return nil
 }
@@ -916,3 +958,4 @@ func (n *node) ExecBootstrapResponseMessage(msg types.Message, pkt transport.Pac
 	}
 	return nil
 }
+

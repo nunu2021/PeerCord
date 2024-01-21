@@ -141,6 +141,8 @@ type Configuration struct {
 	SendNeighborsInterval time.Duration
 
 	NodeDiscardInterval time.Duration
+
+	StartTrust bool
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

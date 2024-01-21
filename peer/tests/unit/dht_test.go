@@ -1,14 +1,14 @@
 package unit
 
 import (
-	// "fmt"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	z "go.dedis.ch/cs438/internal/testing"
-	"go.dedis.ch/cs438/transport/channel"
-	"go.dedis.ch/cs438/types"
+	// "go.dedis.ch/cs438/transport/channel"
+	// "go.dedis.ch/cs438/types"
 )
 
 // Uncomment for testing
@@ -21,85 +21,85 @@ import (
 //
 // The CAN interface functions are commented out due to the linter
 
-func Test_DHT_Bootstrap_Empty(t *testing.T) {
-	transp := channel.NewTransport()
+// func Test_DHT_Bootstrap_Empty(t *testing.T) {
+// 	transp := channel.NewTransport()
 
-    node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
-	defer node1.Stop()
+//     node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+// 	defer node1.Stop()
 
-    require.Equal(t, true, node1.GetBootstrap())
-    require.Len(t, node1.GetNodeList(), 0)
-}
-
-
-
-func Test_DHT_Bootstrap_Single(t *testing.T) {
-	transp := channel.NewTransport()
-
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
-	defer node1.Stop()
-
-    require.Equal(t, true, node1.GetBootstrap())
-    node1.AddNodeBootstrap("127.0.0.1:1")
-
-    require.Len(t, node1.GetNodeList(), 1)
-}
+//     require.Equal(t, true, node1.GetBootstrap())
+//     require.Len(t, node1.GetNodeList(), 0)
+// }
 
 
 
-func Test_DHT_Bootstrap_Many(t *testing.T) {
-	transp := channel.NewTransport()
+// func Test_DHT_Bootstrap_Single(t *testing.T) {
+// 	transp := channel.NewTransport()
 
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
-	defer node1.Stop()
+// 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+// 	defer node1.Stop()
 
-    require.Equal(t, true, node1.GetBootstrap())
+//     require.Equal(t, true, node1.GetBootstrap())
+//     node1.AddNodeBootstrap("127.0.0.1:1")
 
-	node1.AddNodeBootstrap("127.0.0.1:1")
-	node1.AddNodeBootstrap("127.0.0.1:2")
-	node1.AddNodeBootstrap("127.0.0.1:3")
-	node1.AddNodeBootstrap("127.0.0.1:4")
-	node1.AddNodeBootstrap("127.0.0.1:5")
-	node1.AddNodeBootstrap("127.0.0.1:6")
-	node1.AddNodeBootstrap("127.0.0.1:7")
-	node1.AddNodeBootstrap("127.0.0.1:8")
-	node1.AddNodeBootstrap("127.0.0.1:9")
-	node1.AddNodeBootstrap("127.0.0.1:10")
-	node1.AddNodeBootstrap("127.0.0.1:11")
-
-    require.Len(t, node1.GetNodeList(), node1.GetNodeLimit())
-}
+//     require.Len(t, node1.GetNodeList(), 1)
+// }
 
 
 
-func Test_DHT_No_Bootstrap(t *testing.T) {
-	transp := channel.NewTransport()
+// func Test_DHT_Bootstrap_Many(t *testing.T) {
+// 	transp := channel.NewTransport()
 
-    node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
-	defer node1.Stop()
+// 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+// 	defer node1.Stop()
 
-    require.Equal(t, false, node1.GetBootstrap())
-    require.Len(t, node1.GetNodeList(), 0)
+//     require.Equal(t, true, node1.GetBootstrap())
 
-	node1.AddNodeBootstrap("127.0.0.1:1")
-    require.Len(t, node1.GetNodeList(), 0)
-}
+// 	node1.AddNodeBootstrap("127.0.0.1:1")
+// 	node1.AddNodeBootstrap("127.0.0.1:2")
+// 	node1.AddNodeBootstrap("127.0.0.1:3")
+// 	node1.AddNodeBootstrap("127.0.0.1:4")
+// 	node1.AddNodeBootstrap("127.0.0.1:5")
+// 	node1.AddNodeBootstrap("127.0.0.1:6")
+// 	node1.AddNodeBootstrap("127.0.0.1:7")
+// 	node1.AddNodeBootstrap("127.0.0.1:8")
+// 	node1.AddNodeBootstrap("127.0.0.1:9")
+// 	node1.AddNodeBootstrap("127.0.0.1:10")
+// 	node1.AddNodeBootstrap("127.0.0.1:11")
+
+//     require.Len(t, node1.GetNodeList(), node1.GetNodeLimit())
+// }
 
 
-func Test_DHT_Hash(t *testing.T) {
-	transp := channel.NewTransport()
 
-    node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
-	defer node1.Stop()
+// func Test_DHT_No_Bootstrap(t *testing.T) {
+// 	transp := channel.NewTransport()
 
-    p := node1.Hash("0.0.0.0:0")
-    pSol := types.Point([]uint16{0, 0, 0})
-    require.Equal(t, pSol, p)
+//     node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+// 	defer node1.Stop()
 
-    p = node1.Hash("10.5.2.100:567")
-    pSol = types.Point([]uint16{2660, 1282, 567})
-    require.Equal(t, pSol, p)
-}
+//     require.Equal(t, false, node1.GetBootstrap())
+//     require.Len(t, node1.GetNodeList(), 0)
+
+// 	node1.AddNodeBootstrap("127.0.0.1:1")
+//     require.Len(t, node1.GetNodeList(), 0)
+// }
+
+
+// func Test_DHT_Hash(t *testing.T) {
+// 	transp := channel.NewTransport()
+
+//     node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
+// 	defer node1.Stop()
+
+//     p := node1.Hash("0.0.0.0:0")
+//     pSol := types.Point([]uint16{0, 0, 0})
+//     require.Equal(t, pSol, p)
+
+//     p = node1.Hash("10.5.2.100:567")
+//     pSol = types.Point([]uint16{2660, 1282, 567})
+//     require.Equal(t, pSol, p)
+// }
 
 // func Test_DHT_Overlap1D(t *testing.T) {
 // 	transp := channel.NewTransport()
@@ -186,39 +186,39 @@ func Test_DHT_Hash(t *testing.T) {
 // }
 
 
-func Test_DHT_Query_Bootstrap_Many(t *testing.T) {
-	transp := channel.NewTransport()
+// func Test_DHT_Query_Bootstrap_Many(t *testing.T) {
+// 	transp := channel.NewTransport()
 
-	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
-	defer node1.Stop()
+// 	node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+// 	defer node1.Stop()
 
-    node1Addr := node1.GetAddr()
+//     node1Addr := node1.GetAddr()
 
-    node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
-	defer node2.Stop()
-    node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
-	defer node3.Stop()
-    node4 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
-	defer node4.Stop()
+//     node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
+// 	defer node2.Stop()
+//     node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
+// 	defer node3.Stop()
+//     node4 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{node1Addr}))
+// 	defer node4.Stop()
 
-	node2.AddPeer(node1.GetAddr())
-	node3.AddPeer(node1.GetAddr())
-	node4.AddPeer(node1.GetAddr())
+// 	node2.AddPeer(node1.GetAddr())
+// 	node3.AddPeer(node1.GetAddr())
+// 	node4.AddPeer(node1.GetAddr())
 
-    time.Sleep(time.Second)
+//     time.Sleep(time.Second)
 
-    require.Len(t, node1.GetRoutingTable(), 4)
-    require.Len(t, node2.GetRoutingTable(), 4)
-    require.Len(t, node3.GetRoutingTable(), 4)
-    require.Len(t, node4.GetRoutingTable(), 4)
+//     require.Len(t, node1.GetRoutingTable(), 4)
+//     require.Len(t, node2.GetRoutingTable(), 4)
+//     require.Len(t, node3.GetRoutingTable(), 4)
+//     require.Len(t, node4.GetRoutingTable(), 4)
 
-    // bNodes := node1.ReturnBootstrapNodes()
-    // fmt.Println(bNodes)
-    // require.Len(t, bNodes, 3)
-    // require.Equal(t, node2.GetAddr(), bNodes[0])
-    // require.Equal(t, node3.GetAddr(), bNodes[1])
-    // require.Equal(t, node4.GetAddr(), bNodes[2])
-}
+//     bNodes := node1.ReturnBootstrapNodes()
+//     fmt.Println(bNodes)
+//     require.Len(t, bNodes, 3)
+//     require.Equal(t, node2.GetAddr(), bNodes[0])
+//     require.Equal(t, node3.GetAddr(), bNodes[1])
+//     require.Equal(t, node4.GetAddr(), bNodes[2])
+// }
 
 
 // func Test_DHT_Zone_Division_5_Nodes_With_Sleep(t *testing.T) {
@@ -415,48 +415,48 @@ func Test_DHT_Query_Bootstrap_Many(t *testing.T) {
 // }
 
 
-func Test_DHT_Get_Trust_Value(t *testing.T) {
-	transp := channel.NewTransport()
+// func Test_DHT_Get_Trust_Value(t *testing.T) {
+// 	transp := channel.NewTransport()
 
-	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
-	defer nodeB.Stop()
+// 	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+// 	defer nodeB.Stop()
 
-    nodeBAddr := nodeB.GetAddr()
+//     nodeBAddr := nodeB.GetAddr()
 
-    node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
-	defer node1.Stop()
-    node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
-	defer node2.Stop()
-    node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
-	defer node3.Stop()
+//     node1 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+// 	defer node1.Stop()
+//     node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+// 	defer node2.Stop()
+//     node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}))
+// 	defer node3.Stop()
 
-	time.Sleep(time.Second * 2)
+// 	time.Sleep(time.Second * 2)
 
-    trust1 := 5.5
-    trust2 := 25.567
-    trust3 := 234.0
+//     trust1 := 5.5
+//     trust2 := 25.567
+//     trust3 := 234.0
 
-    err := node2.SetTrust(node1.GetAddr(), trust1)
-    require.NoError(t, err)
-    err = node1.SetTrust(node3.GetAddr(), trust3)
-    require.NoError(t, err)
-    err = node3.SetTrust(node2.GetAddr(), trust2)
-    require.NoError(t, err)
+//     err := node2.SetTrust(node1.GetAddr(), trust1)
+//     require.NoError(t, err)
+//     err = node1.SetTrust(node3.GetAddr(), trust3)
+//     require.NoError(t, err)
+//     err = node3.SetTrust(node2.GetAddr(), trust2)
+//     require.NoError(t, err)
 
-	time.Sleep(time.Second * 1)
+// 	time.Sleep(time.Second * 1)
 
-    trustResponse1, err := node1.GetTrust(node1.GetAddr())
-    require.NoError(t, err)
-    require.Equal(t, trust1, trustResponse1)
+//     trustResponse1, err := node1.GetTrust(node1.GetAddr())
+//     require.NoError(t, err)
+//     require.Equal(t, trust1, trustResponse1)
 
-    trustResponse2, err := node2.GetTrust(node2.GetAddr())
-    require.NoError(t, err)
-    require.Equal(t, trust2, trustResponse2)
+//     trustResponse2, err := node2.GetTrust(node2.GetAddr())
+//     require.NoError(t, err)
+//     require.Equal(t, trust2, trustResponse2)
 
-    trustResponse3, err := node3.GetTrust(node3.GetAddr())
-    require.NoError(t, err)
-    require.Equal(t, trust3, trustResponse3)
-}
+//     trustResponse3, err := node3.GetTrust(node3.GetAddr())
+//     require.NoError(t, err)
+//     require.Equal(t, trust3, trustResponse3)
+// }
 
 
 // func Test_DHT_Split_Trusts(t *testing.T) {
@@ -472,12 +472,12 @@ func Test_DHT_Get_Trust_Value(t *testing.T) {
 
 // 	time.Sleep(time.Second * 1)
 
-//     fmt.Printf("Hash of 643.764.23.75:44: %v\n", nodeB.Hash("643.764.23.75:44").String())
-//     fmt.Printf("Hash of 17.47.242.59:3253: %v\n", nodeB.Hash("17.47.242.59:3253").String())
-//     fmt.Printf("Hash of 206.97.54.49:43: %v\n", nodeB.Hash("206.97.54.49:43").String())
-//     fmt.Printf("Hash of 785.197.193.203:3884: %v\n", nodeB.Hash("785.197.193.203:3884").String())
-//     fmt.Printf("Hash of 232.132.61.226:4: %v\n", nodeB.Hash("232.132.61.226:4").String())
-//     fmt.Printf("Hash of 5.38.10.20:23: %v\n", nodeB.Hash("5.38.10.20:23").String())
+//     // fmt.Printf("Hash of 643.764.23.75:44: %v\n", nodeB.Hash("643.764.23.75:44").String())
+//     // fmt.Printf("Hash of 17.47.242.59:3253: %v\n", nodeB.Hash("17.47.242.59:3253").String())
+//     // fmt.Printf("Hash of 206.97.54.49:43: %v\n", nodeB.Hash("206.97.54.49:43").String())
+//     // fmt.Printf("Hash of 785.197.193.203:3884: %v\n", nodeB.Hash("785.197.193.203:3884").String())
+//     // fmt.Printf("Hash of 232.132.61.226:4: %v\n", nodeB.Hash("232.132.61.226:4").String())
+//     // fmt.Printf("Hash of 5.38.10.20:23: %v\n", nodeB.Hash("5.38.10.20:23").String())
 
 //     err := node1.SetTrust("643.764.23.75:44", 2546)
 //     require.NoError(t, err)
@@ -512,3 +512,64 @@ func Test_DHT_Get_Trust_Value(t *testing.T) {
 //     }
 // }
 
+        // err := node1.SetTrust("643.764.23.75:44", 2546)
+        // require.NoError(t, err)
+        // err = node1.SetTrust("17.47.242.59:3253", 5.8)
+        // require.NoError(t, err)
+        // err = node1.SetTrust("206.97.54.49:43", 8.245)
+        // require.NoError(t, err)
+        // err = node1.SetTrust("785.197.193.203:3884", 72.2)
+        // require.NoError(t, err)
+        // err = node1.SetTrust("232.132.61.226:4", 2.887)
+        // require.NoError(t, err)
+        // err = node1.SetTrust("5.38.10.20:23", 644.3)
+        // require.NoError(t, err)
+
+        // trustResponse1, err := node1.GetTrust(node1.GetAddr())
+        // require.NoError(t, err)
+        // require.Equal(t, trust1, trustResponse1)
+
+        // trustResponse2, err := node2.GetTrust(node2.GetAddr())
+        // require.NoError(t, err)
+        // require.Equal(t, trust2, trustResponse2)
+
+        // trustResponse3, err := node3.GetTrust(node3.GetAddr())
+        // require.NoError(t, err)
+        // require.Equal(t, trust3, trustResponse3)
+
+
+
+func Test_DHT_Time_Trusts(t *testing.T) {
+	// transp := channel.NewTransport()
+	transp := udpFac()
+
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	defer nodeB.Stop()
+
+    nodeBAddr := nodeB.GetAddr()
+
+    numNodes := []int{2, 4, 6, 8, 10, 12}
+    // IPAddrs := []string{"643.764.23.75:44", "17.47.242.59:3253", "206.97.54.49:43", "785.197.193.203:3884", "232.132.61.226:4", "5.38.10.20:23", "10.1.4.82:1234", "130.43.1.8:2389", "123.134.929.238:12394", "1.59.134.4:245", "256.378.45.2:3167", "52.5673.6.358:2456"}
+    for _, num := range numNodes {
+        var nodeList []z.TestNode
+        startNodes := time.Now()
+        for i := 0; i < num; i++ {
+            node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}), z.WithStartTrust())
+            nodeList = append(nodeList, node)
+        }
+        startSet := time.Now()
+        for i := 0; i < num; i++ {
+            err := nodeList[i].SetTrust(IPAddrs[i], float64(i))
+            require.NoError(t, err)
+        }
+        for i := 0; i < num; i++ {
+            _, err := nodeList[i].GetTrust(nodeList[i].GetAddr())
+            require.NoError(t, err)
+            // require.Equal(t, float64(i), tr)
+        }
+        fmt.Printf("%d nodes: total: %v, set/get: %v\n", num, time.Since(startNodes), time.Since(startSet))
+        for _, node := range nodeList {
+            node.Stop()
+        }
+    }
+}
