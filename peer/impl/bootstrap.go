@@ -27,11 +27,13 @@ func (n *node) AddNodeBootstrap(addr string) {
     }
 
     b := &n.bootstrap
+    n.bootstrap.mu.Lock()
     if len(b.NodeList) < n.conf.BootstrapNodeLimit {
         b.NodeList = append(b.NodeList, addr)
     } else if (rand.Float64() < n.conf.BootstrapReplace) {
         b.NodeList[rand.Intn(n.conf.BootstrapNodeLimit)] = addr
     }
+    n.bootstrap.mu.Unlock()
 }
 
 

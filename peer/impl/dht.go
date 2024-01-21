@@ -23,7 +23,7 @@ import (
 var MAXX uint16 = 0xFFFF
 var MAXY uint16 = 0xFFFF
 var MAXZ uint16 = 0xFFFF
-var NUM_REALITIES int = 2
+var NUM_REALITIES int = 1
 
 type Reality struct {
 	mu            *sync.Mutex
@@ -39,7 +39,7 @@ type DHT struct {
 	BootstrapAddrs  []string
 	BootstrapChan   chan struct{}
 	BootstrapUpdate map[string]struct{}
-	Realities       [2]Reality
+	Realities       [1]Reality
 }
 
 type TimeoutError struct{}
@@ -78,7 +78,7 @@ func NewReality(bootstrapAddrs []string) Reality {
 func NewDHT(bootstrapAddrs []string) DHT {
 	d := DHT{
 		mu:              &sync.Mutex{},
-		Realities:       *new([2]Reality),
+		Realities:       *new([1]Reality),
 		BootstrapAddrs:  bootstrapAddrs,
 		BootstrapChan:   make(chan struct{}),
 		BootstrapUpdate: make(map[string]struct{}),
@@ -802,15 +802,18 @@ func (n *node) ExecDHTJoinAcceptMessage(msg types.Message, pkt transport.Packet)
 	for neighbor := range d.Neighbors {
 		n.routingTable.set(neighbor, neighbor)
 	}
+
+    neighbors := n.dht.Realities[d.Reality].Neighbors
 	n.dht.Realities[d.Reality].mu.Unlock()
 
 	// Send an update message to my neighbors
 	updateMsg := types.DHTUpdateNeighborsMessage{
 		Reality:  d.Reality,
 		Node:     n.GetAddress(),
-		NodeArea: n.dht.Realities[d.Reality].Area,
+		NodeArea: d.Area,
 	}
-	err := n.SendToNeighbors(updateMsg, n.GetKeys(n.dht.Realities[d.Reality].Neighbors))
+
+	err := n.SendToNeighbors(updateMsg, n.GetKeys(neighbors))
 	if err != nil {
 		return xerrors.Errorf("error broadcasting private message: %v", err)
 	}
@@ -868,6 +871,7 @@ func (n *node) ExecDHTNeighborsStatusMessage(msg types.Message, pkt transport.Pa
 		if node == n.GetAddress() {
 			continue
 		}
+		n.routingTable.set(node, node)
 		newNeighbors = n.AddNode(node, area, newNeighbors, d.Reality)
 	}
 
