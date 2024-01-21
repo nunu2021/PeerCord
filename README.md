@@ -15,6 +15,12 @@ sudo apt-get install portaudio19-dev
   - Does not require any specific installation steps. When the app is first run, it will automatically download the required binaries and placed them at the top-level directory, which may take some time.
 
 ## Run the app
+
+Before running the peercord peer, you need to initialize bootstrap.go:
+```shell
+cd bootstrap
+go run bootstrap.go
+```
 Run the app (one node) with the following command at the top-level directory.
 ```shell
 go run peercord.go
@@ -53,7 +59,3 @@ go test -timeout 60m -v -race -run ^TestCrypto_Perf_DH_Key_Exchange$ ./peer/test
 go test -timeout 60m -v -race -run ^TestCrypto_Perf_DH_Removal$ ./peer/tests/measure
 go test -timeout 60m -v -race -run ^TestCrypto_Perf_DH_Addition$ ./peer/tests/measure
 ```
-
-## Evaluate the multicast algorithm
-
-To reproduce the evaluation of the multicast that is presented in the report, you must install and configure `gcloud` to access to Google Cloud Compute Engine. Then, executing `create-vms.py` will automatically create virtual machines at the correct locations, install the required dependencies on them, deploy the executable `vm-peer` (build from `vm-peer.go` which is available on the `google-cloud` branch) and run the benchmark. 

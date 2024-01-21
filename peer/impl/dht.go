@@ -1,15 +1,15 @@
 package impl
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"encoding/binary"
-	"net"
 
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
