@@ -55,7 +55,6 @@ func NewEigenTrust(totalPeers uint) EigenTrust {
 	if totalPeers > 3 {
 		tempP = 0.0
 	}
-	fmt.Println("is this happenign??", totalPeers)
 	return EigenTrust{
 		IncomingCallRatingSum: newSafeMap[string, int](),
 		CallsOutgoingTo:       newSafeMap[string, int](),
@@ -344,6 +343,7 @@ func (n *node) ExecEigenTrustResponseMessage(Msg types.Message, pkt transport.Pa
 		panic("not a data reply message")
 	}
 	peerTrustVal, err := n.GetTrust(eigenRspnMsg.Source)
+	fmt.Println("peerTrustVal,", peerTrustVal)
 	if err != nil {
 		return err
 	}

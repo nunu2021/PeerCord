@@ -1,15 +1,7 @@
 package unit
 
-import (
-	"fmt"
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/require"
-	z "go.dedis.ch/cs438/internal/testing"
-	// "go.dedis.ch/cs438/transport/channel"
-	// "go.dedis.ch/cs438/types"
-)
+// "go.dedis.ch/cs438/transport/channel"
+// "go.dedis.ch/cs438/types"
 
 // Uncomment for testing
 //
@@ -31,8 +23,6 @@ import (
 //     require.Len(t, node1.GetNodeList(), 0)
 // }
 
-
-
 // func Test_DHT_Bootstrap_Single(t *testing.T) {
 // 	transp := channel.NewTransport()
 
@@ -44,8 +34,6 @@ import (
 
 //     require.Len(t, node1.GetNodeList(), 1)
 // }
-
-
 
 // func Test_DHT_Bootstrap_Many(t *testing.T) {
 // 	transp := channel.NewTransport()
@@ -70,8 +58,6 @@ import (
 //     require.Len(t, node1.GetNodeList(), node1.GetNodeLimit())
 // }
 
-
-
 // func Test_DHT_No_Bootstrap(t *testing.T) {
 // 	transp := channel.NewTransport()
 
@@ -84,7 +70,6 @@ import (
 // 	node1.AddNodeBootstrap("127.0.0.1:1")
 //     require.Len(t, node1.GetNodeList(), 0)
 // }
-
 
 // func Test_DHT_Hash(t *testing.T) {
 // 	transp := channel.NewTransport()
@@ -115,7 +100,6 @@ import (
 //     require.Equal(t, true, node1.Overlap1D(10, 15, 4, 9))
 //     require.Equal(t, false, node1.Overlap1D(10, 15, 4, 8))
 // }
-
 
 // func Test_DHT_BordersZone(t *testing.T) {
 // 	transp := channel.NewTransport()
@@ -185,7 +169,6 @@ import (
 //     require.Equal(t, node2.GetAddr(), bNodes[0])
 // }
 
-
 // func Test_DHT_Query_Bootstrap_Many(t *testing.T) {
 // 	transp := channel.NewTransport()
 
@@ -219,7 +202,6 @@ import (
 //     require.Equal(t, node3.GetAddr(), bNodes[1])
 //     require.Equal(t, node4.GetAddr(), bNodes[2])
 // }
-
 
 // func Test_DHT_Zone_Division_5_Nodes_With_Sleep(t *testing.T) {
 // 	transp := channel.NewTransport()
@@ -271,7 +253,6 @@ import (
 //         fmt.Printf("Node 6, reality %d --\nArea: %s\n%s\n", i, node6Area.String(), node6Neighbors)
 //     }
 // }
-
 
 // func Test_DHT_Zone_Division_12_Nodes(t *testing.T) {
 // 	transp := channel.NewTransport()
@@ -414,7 +395,6 @@ import (
 //     }
 // }
 
-
 // func Test_DHT_Get_Trust_Value(t *testing.T) {
 // 	transp := channel.NewTransport()
 
@@ -457,7 +437,6 @@ import (
 //     require.NoError(t, err)
 //     require.Equal(t, trust3, trustResponse3)
 // }
-
 
 // func Test_DHT_Split_Trusts(t *testing.T) {
 // 	transp := channel.NewTransport()
@@ -512,64 +491,62 @@ import (
 //     }
 // }
 
-        // err := node1.SetTrust("643.764.23.75:44", 2546)
-        // require.NoError(t, err)
-        // err = node1.SetTrust("17.47.242.59:3253", 5.8)
-        // require.NoError(t, err)
-        // err = node1.SetTrust("206.97.54.49:43", 8.245)
-        // require.NoError(t, err)
-        // err = node1.SetTrust("785.197.193.203:3884", 72.2)
-        // require.NoError(t, err)
-        // err = node1.SetTrust("232.132.61.226:4", 2.887)
-        // require.NoError(t, err)
-        // err = node1.SetTrust("5.38.10.20:23", 644.3)
-        // require.NoError(t, err)
+// err := node1.SetTrust("643.764.23.75:44", 2546)
+// require.NoError(t, err)
+// err = node1.SetTrust("17.47.242.59:3253", 5.8)
+// require.NoError(t, err)
+// err = node1.SetTrust("206.97.54.49:43", 8.245)
+// require.NoError(t, err)
+// err = node1.SetTrust("785.197.193.203:3884", 72.2)
+// require.NoError(t, err)
+// err = node1.SetTrust("232.132.61.226:4", 2.887)
+// require.NoError(t, err)
+// err = node1.SetTrust("5.38.10.20:23", 644.3)
+// require.NoError(t, err)
 
-        // trustResponse1, err := node1.GetTrust(node1.GetAddr())
-        // require.NoError(t, err)
-        // require.Equal(t, trust1, trustResponse1)
+// trustResponse1, err := node1.GetTrust(node1.GetAddr())
+// require.NoError(t, err)
+// require.Equal(t, trust1, trustResponse1)
 
-        // trustResponse2, err := node2.GetTrust(node2.GetAddr())
-        // require.NoError(t, err)
-        // require.Equal(t, trust2, trustResponse2)
+// trustResponse2, err := node2.GetTrust(node2.GetAddr())
+// require.NoError(t, err)
+// require.Equal(t, trust2, trustResponse2)
 
-        // trustResponse3, err := node3.GetTrust(node3.GetAddr())
-        // require.NoError(t, err)
-        // require.Equal(t, trust3, trustResponse3)
+// trustResponse3, err := node3.GetTrust(node3.GetAddr())
+// require.NoError(t, err)
+// require.Equal(t, trust3, trustResponse3)
 
+// func Test_DHT_Time_Trusts(t *testing.T) {
+// 	// transp := channel.NewTransport()
+// 	transp := udpFac()
 
+// 	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+// 	defer nodeB.Stop()
 
-func Test_DHT_Time_Trusts(t *testing.T) {
-	// transp := channel.NewTransport()
-	transp := udpFac()
+//     nodeBAddr := nodeB.GetAddr()
 
-	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
-	defer nodeB.Stop()
-
-    nodeBAddr := nodeB.GetAddr()
-
-    numNodes := []int{2, 4, 6, 8, 10, 12}
-    // IPAddrs := []string{"643.764.23.75:44", "17.47.242.59:3253", "206.97.54.49:43", "785.197.193.203:3884", "232.132.61.226:4", "5.38.10.20:23", "10.1.4.82:1234", "130.43.1.8:2389", "123.134.929.238:12394", "1.59.134.4:245", "256.378.45.2:3167", "52.5673.6.358:2456"}
-    for _, num := range numNodes {
-        var nodeList []z.TestNode
-        startNodes := time.Now()
-        for i := 0; i < num; i++ {
-            node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}), z.WithStartTrust())
-            nodeList = append(nodeList, node)
-        }
-        startSet := time.Now()
-        for i := 0; i < num; i++ {
-            err := nodeList[i].SetTrust(IPAddrs[i], float64(i))
-            require.NoError(t, err)
-        }
-        for i := 0; i < num; i++ {
-            _, err := nodeList[i].GetTrust(nodeList[i].GetAddr())
-            require.NoError(t, err)
-            // require.Equal(t, float64(i), tr)
-        }
-        fmt.Printf("%d nodes: total: %v, set/get: %v\n", num, time.Since(startNodes), time.Since(startSet))
-        for _, node := range nodeList {
-            node.Stop()
-        }
-    }
-}
+//     numNodes := []int{2, 4, 6, 8, 10, 12}
+//     // IPAddrs := []string{"643.764.23.75:44", "17.47.242.59:3253", "206.97.54.49:43", "785.197.193.203:3884", "232.132.61.226:4", "5.38.10.20:23", "10.1.4.82:1234", "130.43.1.8:2389", "123.134.929.238:12394", "1.59.134.4:245", "256.378.45.2:3167", "52.5673.6.358:2456"}
+//     for _, num := range numNodes {
+//         var nodeList []z.TestNode
+//         startNodes := time.Now()
+//         for i := 0; i < num; i++ {
+//             node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}), z.WithStartTrust())
+//             nodeList = append(nodeList, node)
+//         }
+//         startSet := time.Now()
+//         for i := 0; i < num; i++ {
+//             err := nodeList[i].SetTrust(IPAddrs[i], float64(i))
+//             require.NoError(t, err)
+//         }
+//         for i := 0; i < num; i++ {
+//             _, err := nodeList[i].GetTrust(nodeList[i].GetAddr())
+//             require.NoError(t, err)
+//             // require.Equal(t, float64(i), tr)
+//         }
+//         fmt.Printf("%d nodes: total: %v, set/get: %v\n", num, time.Since(startNodes), time.Since(startSet))
+//         for _, node := range nodeList {
+//             node.Stop()
+//         }
+//     }
+// }

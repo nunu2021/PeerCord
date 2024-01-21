@@ -277,9 +277,9 @@ func (n *node) BordersZone(z types.Zone, zNew types.Zone) bool {
 
 // Function to join the Dht
 func (n *node) JoinDHT() error {
-    err := n.QueryBootstrap()
-    time.Sleep(time.Second * 1)
-    return err
+	err := n.QueryBootstrap()
+	time.Sleep(time.Second * 1)
+	return err
 }
 
 // Sends message to set trust value
@@ -321,20 +321,20 @@ func (n *node) GetTrust(node string) (float64, error) {
 	trustVals := make(map[float64]int)
 	maxCount := 0
 	retVal := 0.0
-    cont := false
+	cont := false
 	for i := 0; i < NUM_REALITIES; i++ {
 		num, err := n.GetTrustPerReality(node, i)
 		if err != nil {
-            switch err.(type) {
-                default:
-                    return 0, err
-                case *TimeoutError:
-                    cont = true
-            }
-        }
-        if cont {
-            continue
-        }
+			switch err.(type) {
+			default:
+				return 0, err
+			case *TimeoutError:
+				cont = true
+			}
+		}
+		if cont {
+			continue
+		}
 
 		_, ok := trustVals[num]
 		if !ok {
@@ -390,22 +390,22 @@ func (n *node) GetTrustPerReality(node string, reality int) (float64, error) {
 		return 0, xerrors.Errorf("error routing message %v in dht", msg)
 	}
 
-    timer := time.NewTimer(time.Second * 5)
-    select {
-        case t := <-chanTrust:
-            timer.Stop()
-            n.dht.Realities[reality].ResponseChans.Mu.Lock()
-            close(n.dht.Realities[reality].ResponseChans.Map[id])
-            delete(n.dht.Realities[reality].ResponseChans.Map, id)
-            n.dht.Realities[reality].ResponseChans.Mu.Unlock()
-            return t, nil
-        case <-timer.C:
-            n.dht.Realities[reality].ResponseChans.Mu.Lock()
-            close(n.dht.Realities[reality].ResponseChans.Map[id])
-            delete(n.dht.Realities[reality].ResponseChans.Map, id)
-            n.dht.Realities[reality].ResponseChans.Mu.Unlock()
-            return 0, &TimeoutError{}
-    }
+	timer := time.NewTimer(time.Second * 7)
+	select {
+	case t := <-chanTrust:
+		timer.Stop()
+		n.dht.Realities[reality].ResponseChans.Mu.Lock()
+		close(n.dht.Realities[reality].ResponseChans.Map[id])
+		delete(n.dht.Realities[reality].ResponseChans.Map, id)
+		n.dht.Realities[reality].ResponseChans.Mu.Unlock()
+		return t, nil
+	case <-timer.C:
+		n.dht.Realities[reality].ResponseChans.Mu.Lock()
+		close(n.dht.Realities[reality].ResponseChans.Map[id])
+		delete(n.dht.Realities[reality].ResponseChans.Map, id)
+		n.dht.Realities[reality].ResponseChans.Mu.Unlock()
+		return 0, &TimeoutError{}
+	}
 }
 
 // *******************************************
@@ -500,13 +500,13 @@ func (n *node) QueryBootstrap() error {
 		}
 
 		timer := time.NewTimer(n.conf.BootstrapTimeout)
-        select {
-            case <-timer.C:
-                break
-            case <-n.dht.BootstrapChan:
-                timer.Stop()
-                return nil
-        }
+		select {
+		case <-timer.C:
+			break
+		case <-n.dht.BootstrapChan:
+			timer.Stop()
+			return nil
+		}
 	}
 
 	return xerrors.Errorf("no bootstrap nodes available")
@@ -610,7 +610,7 @@ func (n *node) UpdateMyNeighbors(reality int) {
 	newNeighbors := make(map[string]types.SequencedZone)
 	for neighbor, area := range n.dht.Realities[reality].Neighbors {
 		if n.BordersZone(myZone, area.Zone) {
-		    n.routingTable.set(neighbor, neighbor)
+			n.routingTable.set(neighbor, neighbor)
 			newNeighbors[neighbor] = area
 		}
 	}
@@ -661,14 +661,14 @@ func (n *node) UnicastToRecipients(recipients []string, msg types.Message) error
 
 	var wg sync.WaitGroup
 
-    for _, recipient := range recipients {
-        wg.Add(1)
-        go func(dest string) {
-            defer wg.Done()
-            _ = n.Unicast(dest, mMsg)
-        }(recipient)
-    }
-    wg.Wait()
+	for _, recipient := range recipients {
+		wg.Add(1)
+		go func(dest string) {
+			defer wg.Done()
+			_ = n.Unicast(dest, mMsg)
+		}(recipient)
+	}
+	wg.Wait()
 
 	return nil
 }
@@ -803,7 +803,7 @@ func (n *node) ExecDHTJoinAcceptMessage(msg types.Message, pkt transport.Packet)
 		n.routingTable.set(neighbor, neighbor)
 	}
 
-    neighbors := n.dht.Realities[d.Reality].Neighbors
+	neighbors := n.dht.Realities[d.Reality].Neighbors
 	n.dht.Realities[d.Reality].mu.Unlock()
 
 	// Send an update message to my neighbors
@@ -846,7 +846,7 @@ func (n *node) ExecDHTUpdateNeighborsMessage(msg types.Message, pkt transport.Pa
 	if !n.BordersZone(n.dht.Realities[d.Reality].Area.Zone, d.NodeArea.Zone) {
 		delete(n.dht.Realities[d.Reality].Neighbors, d.Node)
 	} else {
-        n.routingTable.set(d.Node, d.Node)
+		n.routingTable.set(d.Node, d.Node)
 		val, ok := n.dht.Realities[d.Reality].Neighbors[d.Node]
 		if !ok || d.NodeArea.Number > val.Number {
 			n.dht.Realities[d.Reality].Neighbors[d.Node] = d.NodeArea
@@ -927,11 +927,11 @@ func (n *node) ExecDHTQueryResponseMessage(msg types.Message, pkt transport.Pack
 		return xerrors.Errorf("type mismatch: %T", msg)
 	}
 	n.dht.Realities[d.Reality].ResponseChans.Mu.Lock()
-    channel, ok := n.dht.Realities[d.Reality].ResponseChans.Map[d.UniqueID]
-    if !ok {
-        n.dht.Realities[d.Reality].ResponseChans.Mu.Unlock()
-        return xerrors.Errorf("No such response channel for reality %d", d.Reality)
-    }
+	channel, ok := n.dht.Realities[d.Reality].ResponseChans.Map[d.UniqueID]
+	if !ok {
+		n.dht.Realities[d.Reality].ResponseChans.Mu.Unlock()
+		return xerrors.Errorf("No such response channel for reality %d", d.Reality)
+	}
 	channel <- d.TrustValue
 	n.dht.Realities[d.Reality].ResponseChans.Mu.Unlock()
 	return nil
@@ -958,4 +958,3 @@ func (n *node) ExecBootstrapResponseMessage(msg types.Message, pkt transport.Pac
 	}
 	return nil
 }
-

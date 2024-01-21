@@ -324,6 +324,8 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 
 	// We have been dialed, ask the user if they want to answer the call
 	trust, err := n.GetTrust(dialMsg.Caller)
+
+	fmt.Println(trust, "is the trust for ", dialMsg.Caller, "this address is:", n.GetAddress())
 	if err != nil {
 		return fmt.Errorf("Failed to get trust from user")
 	}

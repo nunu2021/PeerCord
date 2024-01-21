@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"os"
@@ -245,7 +246,12 @@ func (n *node) receivePackets(receivedPackets, rumorsPackets chan transport.Pack
 
 // all peers will compute a new global trust value every 2 minutes
 func (n *node) InitiateEigenTrust() {
-
+	err := n.SetTrust(n.GetAddress(), n.eigenTrust.p)
+	if err != nil {
+		return
+	}
+	t, err := n.GetTrust(n.GetAddress())
+	fmt.Println(t, "whattt", n.eigenTrust.p)
 	for {
 		select {
 		case <-n.mustStop:
@@ -342,10 +348,10 @@ func (n *node) Start() error {
 	// Initialize streaming components on startup to avoid
 	// opening & closing the webcam repeatedly. Camtron does not support
 	// opening & closing repeatedly.
-	if err := n.initializeStreaming(); err != nil {
-		n.logger.Error().Err(err).Msg("failed to initialize streaming")
-		return err
-	}
+	// if err := n.initializeStreaming(); err != nil {
+	// 	n.logger.Error().Err(err).Msg("failed to initialize streaming")
+	// 	return err
+	// }
 
 	err := n.GenerateKeyPair()
 	if err != nil {
@@ -381,10 +387,10 @@ func (n *node) Stop() error {
 		n.EndCall()
 	}
 
-	if err := n.destroyStreaming(); err != nil {
-		n.logger.Error().Err(err).Msg("failed to stop streaming")
-		return err
-	}
+	// if err := n.destroyStreaming(); err != nil {
+	// 	n.logger.Error().Err(err).Msg("failed to stop streaming")
+	// 	return err
+	// }
 
 	n.mustStop <- struct{}{}
 	n.mustStop <- struct{}{}
