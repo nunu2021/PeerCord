@@ -372,7 +372,6 @@ func (n *node) ReceiveDial(msg types.Message, packet transport.Packet) error {
 			time.Sleep(time.Millisecond * 100)
 			select {
 			case <-stopChan:
-				n.logger.Debug().Msg("stop sending packets")
 				return
 			default:
 				callMsg := n.GetNextCallDataMessage()
@@ -454,7 +453,6 @@ func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) e
 				time.Sleep(time.Millisecond * 100)
 				select {
 				case <-stopChan:
-					n.logger.Debug().Msg("stop sending packets")
 					return
 				default:
 					callMsg := n.GetNextCallDataMessage()
@@ -510,7 +508,6 @@ func (n *node) ReceiveDialResponse(msg types.Message, packet transport.Packet) e
 				time.Sleep(time.Millisecond * 100)
 				select {
 				case <-stopChan:
-					n.logger.Debug().Msg("stop sending packets")
 					return
 				default:
 					callMsg := n.GetNextCallDataMessage()
@@ -561,7 +558,6 @@ func (n *node) EndCall() {
 		}
 
 		if n.guiReady() {
-			n.logger.Debug().Msg("rating call")
 			rating := n.gui.PromptRating("Please rate your experience with this call based on the peer who called you. Options: {2 = good, 1 = bad}")
 			originPeer := n.peerCord.currentDial.leader
 
@@ -569,7 +565,6 @@ func (n *node) EndCall() {
 		}
 	}
 
-	n.logger.Debug().Msg("reset call")
 	n.peerCord.members = newSafeMap[string, struct{}]()
 	n.peerCord.currentDial.ResponseChannel = newResponseChannel()
 
@@ -589,8 +584,6 @@ func (n *node) receiveHangUp(msg types.Message, packet transport.Packet) error {
 	if !ok {
 		panic("not a hang up message")
 	}
-
-	n.logger.Debug().Msg("hang up received")
 
 	n.peerCord.currentDial.Lock()
 
