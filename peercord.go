@@ -25,7 +25,7 @@ func (testing) FailNow() {
 func main() {
 	transp := udp.NewUDP()
 
-	bootstrap := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithBootstrap())
+	bootstrap := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0", z.WithBootstrap(), z.WithStartTrust())
 	node := z.NewTestNode(t, impl.NewPeer, transp, "127.0.0.1:0",
 		z.WithAntiEntropy(time.Millisecond*500),
 		z.WithContinueMongering(1),
