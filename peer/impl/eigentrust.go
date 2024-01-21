@@ -51,6 +51,9 @@ type EigenTrust struct {
 
 func NewEigenTrust(totalPeers uint) EigenTrust {
 	tempP := 1 / float64(totalPeers)
+	if totalPeers > 3 {
+		tempP = 0
+	}
 	return EigenTrust{
 		IncomingCallRatingSum: newSafeMap[string, int](),
 		CallsOutgoingTo:       newSafeMap[string, int](),
@@ -262,15 +265,13 @@ func (n *node) SendTrustValueRequest(includeLocalTrust bool, dest string) error 
 }
 
 func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
-	n.eigenTrust.GlobalTrustValueMutex.Lock()
-	trust := n.eigenTrust.GlobalTrustValue
-	n.eigenTrust.GlobalTrustValueMutex.Unlock()
+	trust := 1.0
 
 	// trust, err := n.GetTrust(n.GetAddress())
 	// if err != nil {
 	// 	return err
 	// }
-
+	isP := false
 	if includeLocal {
 
 		internalMap := n.eigenTrust.IncomingCallRatingSum.internalMap()
@@ -291,9 +292,11 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 		localTrustValue := float64(0)
 		if count != 0 {
 			localTrustValue = float64(rating) / float64(count)
+		} else {
+			isP = true
 		}
 
-		trust *= localTrustValue
+		trust = localTrustValue
 
 	}
 	n.eigenTrust.kMutex.Lock()
@@ -303,6 +306,7 @@ func (n *node) SendTrustValueResponse(source string, includeLocal bool) error {
 		KStep:  kval,
 		Source: n.conf.Socket.GetAddress(),
 		Value:  trust,
+		IsPVal: isP,
 	}
 	err := n.marshalAndUnicast(source, eigenResponseMsg)
 	return err
@@ -341,8 +345,17 @@ func (n *node) ExecEigenTrustResponseMessage(Msg types.Message, pkt transport.Pa
 	if !ok {
 		panic("not a data reply message")
 	}
+	peerTrustVal, err := n.GetTrust(eigenRspnMsg.Source)
+	if err != nil {
+		return err
+	}
 
-	n.eigenTrust.ReceivedTrustValues.set(eigenRspnMsg.Source, eigenRspnMsg.Value)
+	localTrust := eigenRspnMsg.Value
+	if eigenRspnMsg.IsPVal {
+		localTrust = n.eigenTrust.p
+	}
+
+	n.eigenTrust.ReceivedTrustValues.set(eigenRspnMsg.Source, localTrust*peerTrustVal)
 	return nil
 }
 
