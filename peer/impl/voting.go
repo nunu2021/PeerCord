@@ -178,7 +178,7 @@ func (n *node) CompleteVoteAction(voteType types.VoteType, voteMeta string) {
 			n.peerCord.members.delete(voteMeta)
 
 			if n.peerCord.members.len() == 2 {
-				// We are entering individual calls again. TODO: Make sure we the other users PK
+				// We are entering individual calls again.
 			} else {
 				err := n.GroupCallRemove(voteMeta)
 				if err != nil {

@@ -306,7 +306,7 @@ func (gui *PeercordGUI) Show(addr, pubID string, audioThroughput, videoThroughpu
 	// }()
 
 	gui.mainWindow.SetContent(content)
-	gui.mainWindow.Resize(fyne.NewSize(500, 700))
+	gui.mainWindow.Resize(fyne.NewSize(500, 800))
 	gui.mainWindow.ShowAndRun() // Blocking
 }
 
