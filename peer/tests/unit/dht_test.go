@@ -543,19 +543,20 @@ func Test_DHT_Time_Trusts(t *testing.T) {
 	// transp := channel.NewTransport()
 	transp := udpFac()
 
-	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap())
+	nodeB := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrap(), z.WithStartTrust())
 	defer nodeB.Stop()
 
     nodeBAddr := nodeB.GetAddr()
 
     numNodes := []int{2, 4, 6, 8, 10, 12}
-    // IPAddrs := []string{"643.764.23.75:44", "17.47.242.59:3253", "206.97.54.49:43", "785.197.193.203:3884", "232.132.61.226:4", "5.38.10.20:23", "10.1.4.82:1234", "130.43.1.8:2389", "123.134.929.238:12394", "1.59.134.4:245", "256.378.45.2:3167", "52.5673.6.358:2456"}
     for _, num := range numNodes {
         var nodeList []z.TestNode
+        var IPAddrs []string
         startNodes := time.Now()
         for i := 0; i < num; i++ {
             node := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0", z.WithBootstrapAddrs([]string{nodeBAddr}), z.WithStartTrust())
             nodeList = append(nodeList, node)
+            IPAddrs = append(IPAddrs, node.GetAddr())
         }
         startSet := time.Now()
         for i := 0; i < num; i++ {

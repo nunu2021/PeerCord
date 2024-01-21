@@ -69,11 +69,13 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 	// Set a random initialized public ID
 	n.SetPublicID(RandomPubId())
 
-	if conf.IsBootstrap {
-		n.bootstrap = NewBootstrap()
-	} else if conf.StartTrust {
-		n.dht = NewDHT(conf.BootstrapAddrs)
-	}
+    if conf.StartTrust {
+        if conf.IsBootstrap {
+            n.bootstrap = NewBootstrap()
+        } else {
+            n.dht = NewDHT(conf.BootstrapAddrs)
+        }
+    }
 
 	// Register the different kinds of messages
 	conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.receiveChatMessage)
@@ -283,8 +285,7 @@ func loop(n *node) {
 	}(rumorsPackets)
 
 	// TOD: comment this back in for periodic eigentrust updates
-	if !n.conf.IsBootstrap {
-
+	if !n.conf.IsBootstrap && n.conf.StartTrust {
 		go n.InitiateEigenTrust()
 	}
 

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"encoding/binary"
+	"net"
 
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -23,7 +25,7 @@ import (
 var MAXX uint16 = 0xFFFF
 var MAXY uint16 = 0xFFFF
 var MAXZ uint16 = 0xFFFF
-var NUM_REALITIES int = 1
+var NUM_REALITIES int = 5
 
 type Reality struct {
 	mu            *sync.Mutex
@@ -39,7 +41,7 @@ type DHT struct {
 	BootstrapAddrs  []string
 	BootstrapChan   chan struct{}
 	BootstrapUpdate map[string]struct{}
-	Realities       [1]Reality
+	Realities       [5]Reality
 }
 
 type TimeoutError struct{}
@@ -78,7 +80,7 @@ func NewReality(bootstrapAddrs []string) Reality {
 func NewDHT(bootstrapAddrs []string) DHT {
 	d := DHT{
 		mu:              &sync.Mutex{},
-		Realities:       *new([1]Reality),
+		Realities:       *new([5]Reality),
 		BootstrapAddrs:  bootstrapAddrs,
 		BootstrapChan:   make(chan struct{}),
 		BootstrapUpdate: make(map[string]struct{}),
@@ -93,6 +95,53 @@ func NewDHT(bootstrapAddrs []string) DHT {
 //             Helper Functions
 // *******************************************
 
+func ipAndPortToBytes(ipPort string) ([]byte, error) {
+	// Split the input string into IP and port
+	parts := strings.Split(ipPort, ":")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("Invalid IP and port format")
+	}
+
+	// Parse the IP address
+	ip := parts[0]
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return nil, fmt.Errorf("Invalid IP address")
+	}
+
+	// Get the IPv4 bytes
+	ipBytes := parsedIP.To4()
+	if ipBytes == nil {
+		return nil, fmt.Errorf("IPv6 addresses are not supported")
+	}
+
+	// Parse the port
+	portStr := parts[1]
+	port, err := strconv.ParseUint(portStr, 10, 16)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid port: %v", err)
+	}
+
+	// Combine IP and port into a 6-byte slice
+	result := append(ipBytes, make([]byte, 2)...)
+	binary.BigEndian.PutUint16(result[4:], uint16(port))
+
+	return result, nil
+}
+
+func extractBitsWithOffsets(input []byte, offset int) uint16 {
+	var result uint16
+
+	for i := offset; i < len(input)*8; i += 3 {
+		// Extract every third bit (starting from the specified offset) and add it to the result
+		byteIndex := i / 8
+		bitIndex := i % 8
+		result |= uint16((input[byteIndex] >> (7 - bitIndex) & 0x01)) << (uint(i-offset) % 16)
+	}
+
+	return result
+}
+
 // Given an IP and port of the form A.B.C.D:E
 // where A, B, C, and D are 8-bit integers
 // and E is a 16 bit integer, we can create a
@@ -103,37 +152,46 @@ func NewDHT(bootstrapAddrs []string) DHT {
 // Y will be B then the first 8 bits of E
 // Z will be C then the last 8 bits of E
 func (n *node) Hash(ip string) types.Point {
-	splitString := strings.Split(ip, ":")
-	ips := strings.Split(splitString[0], ".")
+	// splitString := strings.Split(ip, ":")
+	// ips := strings.Split(splitString[0], ".")
 
-	port, err := strconv.ParseUint(splitString[1], 10, 16)
+	// port, err := strconv.ParseUint(splitString[1], 10, 16)
+	// if err != nil {
+	// 	n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
+	// }
+
+	ipPortBytes, err := ipAndPortToBytes(ip)
 	if err != nil {
-		n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
+		return types.Point([3]uint16{0, 0, 0})
 	}
 
-	x1, err := strconv.ParseUint(ips[0], 10, 16)
-	if err != nil {
-		n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
-	}
-	x2, err := strconv.ParseUint(ips[3], 10, 16)
-	if err != nil {
-		n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
-	}
-	x := (x1 << 8) | x2
+	x := extractBitsWithOffsets(ipPortBytes, 0)
+	y := extractBitsWithOffsets(ipPortBytes, 1)
+	z := extractBitsWithOffsets(ipPortBytes, 2)
 
-	y1, err := strconv.ParseUint(ips[1], 10, 16)
-	if err != nil {
-		n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
-	}
-	y2 := (port >> 8) & 0xFF
-	y := (y1 << 8) | y2
+	// x1, err := strconv.ParseUint(ips[0], 10, 16)
+	// if err != nil {
+	// 	n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
+	// }
+	// x2, err := strconv.ParseUint(ips[3], 10, 16)
+	// if err != nil {
+	// 	n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
+	// }
+	// x := (x1 << 8) | x2
 
-	z1, err := strconv.ParseUint(ips[2], 10, 16)
-	if err != nil {
-		n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
-	}
-	z2 := port & 0xFF
-	z := (z1 << 8) | z2
+	// y1, err := strconv.ParseUint(ips[1], 10, 16)
+	// if err != nil {
+	// 	n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
+	// }
+	// y2 := (port >> 8) & 0xFF
+	// y := (y1 << 8) | y2
+
+	// z1, err := strconv.ParseUint(ips[2], 10, 16)
+	// if err != nil {
+	// 	n.logger.Warn().Err(err).Msg("failed to parse port number into uint")
+	// }
+	// z2 := port & 0xFF
+	// z := (z1 << 8) | z2
 
 	return types.Point([]uint16{uint16(x), uint16(y), uint16(z)})
 }
